@@ -491,7 +491,8 @@ def check_admin_permission(permission: str):
 
 # ==================== UTILITY FUNCTIONS ====================
 
-SNAPSHOTS_DIR = Path("snapshots")
+BASE_DIR = Path(__file__).parent
+SNAPSHOTS_DIR = BASE_DIR / "snapshots"
 live_processors = {}
 
 def save_snapshot(frame: np.ndarray, detection_data: dict) -> tuple[str, str]:
