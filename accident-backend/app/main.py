@@ -29,7 +29,7 @@ from sqlalchemy.sql import func
 from pydantic import BaseModel
 
 # Import your existing detection service
-from app.services.detection import accident_model, analyze_image, LiveStreamProcessor
+from services.detection import accident_model, analyze_image, LiveStreamProcessor
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
