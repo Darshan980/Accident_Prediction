@@ -5,3 +5,7 @@ frontend/node_modules/
 *.log 
 dist/ 
 build/ 
+.next/ 
+node_modules/ 
+.env.local 
+*.log 
