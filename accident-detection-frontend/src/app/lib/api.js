@@ -280,12 +280,33 @@ class ApiClient {
     throw new Error(errorMessage);
   }
 
-  // Health check with enhanced error handling
+  // Health check with enhanced error handling (NO CREDENTIALS)
   async healthCheck() {
     try {
-      const response = await this.request('/api/health')
-      console.log('Health check successful:', response);
-      return response;
+      // Health check without credentials to avoid CORS issues
+      const response = await fetch(`${this.baseURL}/api/health`, {
+        method: 'GET',
+        mode: 'cors',
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json'
+        }
+        // NO credentials: 'include' for health check
+      });
+      
+      console.log('Health check response:', {
+        status: response.status,
+        ok: response.ok,
+        statusText: response.statusText
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        console.log('Health check successful:', data);
+        return data;
+      } else {
+        throw new Error(`Health check failed: ${response.status} ${response.statusText}`);
+      }
     } catch (error) {
       console.warn('Backend health check failed:', error.message);
       
@@ -302,14 +323,17 @@ class ApiClient {
     }
   }
 
-  // Test connection method
+  // Test connection method (NO CREDENTIALS)
   async testConnection() {
     try {
       console.log('Testing connection to backend...');
       const response = await fetch(`${this.baseURL}/`, {
         method: 'GET',
         mode: 'cors',
-        credentials: 'include'
+        headers: {
+          'Accept': 'application/json'
+        }
+        // NO credentials: 'include' for basic connection test
       });
       
       console.log('Connection test response:', {
