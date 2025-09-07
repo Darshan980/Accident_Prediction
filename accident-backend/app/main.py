@@ -1,5 +1,5 @@
-# Enhanced main.py with CORS fixes and timeout handling for deployment
-from fastapi import FastAPI, UploadFile, File, HTTPException, WebSocket, WebSocketDisconnect, Depends, Query, status, BackgroundTasks
+# Enhanced main.py with COMPREHENSIVE CORS fixes and timeout handling for deployment
+from fastapi import FastAPI, UploadFile, File, HTTPException, WebSocket, WebSocketDisconnect, Depends, Query, status, BackgroundTasks, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -44,7 +44,6 @@ except ImportError:
     accident_model = DummyModel()
     
     async def analyze_image(file_contents, content_type, filename):
-        # Dummy implementation for testing
         return {
             "accident_detected": False,
             "confidence": 0.1,
@@ -67,27 +66,51 @@ except ImportError:
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# CORS Configuration - Define allowed origins
+# ==================== CORS CONFIGURATION - COMPREHENSIVE FIX ====================
+
+# Environment-based configuration
+ENVIRONMENT = os.getenv("ENVIRONMENT", "development")
+FRONTEND_URL = os.getenv("FRONTEND_URL", "")
+RENDER_EXTERNAL_URL = os.getenv("RENDER_EXTERNAL_URL", "")
+
+# Base allowed origins
 ALLOWED_ORIGINS = [
-    # Development origins
     "http://localhost:3000",
-    "http://localhost:5173", 
+    "http://localhost:3001",
+    "http://localhost:5173",
+    "http://localhost:8080",
     "http://127.0.0.1:3000",
+    "http://127.0.0.1:3001", 
     "http://127.0.0.1:5173",
-    
-    # Your Vercel frontend URLs
-    "https://accident-prediction-1fnp-bc57hroy1-darshan-ss-projects-39372c06.vercel.app",
-    "https://accident-prediction-frontend.vercel.app",
-    
-    # Add more Vercel URLs as needed
-    "https://*.vercel.app",
+    "http://127.0.0.1:8080",
 ]
 
-# For debugging - temporarily allow all origins
-CORS_DEBUG_MODE = True  # Set to False in production
+# Add production URLs
+if FRONTEND_URL:
+    ALLOWED_ORIGINS.append(FRONTEND_URL)
+    if FRONTEND_URL.startswith("http://"):
+        ALLOWED_ORIGINS.append(FRONTEND_URL.replace("http://", "https://"))
 
-if CORS_DEBUG_MODE:
-    ALLOWED_ORIGINS = ["*"]  # Allow all origins for debugging
+# Add common deployment patterns
+VERCEL_PATTERNS = [
+    "https://*.vercel.app",
+    "https://accident-prediction-frontend.vercel.app",
+    "https://accident-prediction-1fnp-bc57hroy1-darshan-ss-projects-39372c06.vercel.app",
+]
+
+NETLIFY_PATTERNS = [
+    "https://*.netlify.app",
+    "https://*.netlify.com",
+]
+
+ALL_ORIGINS = ALLOWED_ORIGINS + VERCEL_PATTERNS + NETLIFY_PATTERNS
+
+# CORS debug mode
+CORS_DEBUG_MODE = os.getenv("CORS_DEBUG_MODE", "true").lower() == "true"
+
+logger.info(f"CORS Configuration - Environment: {ENVIRONMENT}, Debug: {CORS_DEBUG_MODE}")
+logger.info(f"Frontend URL: {FRONTEND_URL}")
+logger.info(f"Allowed Origins: {ALLOWED_ORIGINS}")
 
 # Database setup
 SQLALCHEMY_DATABASE_URL = "sqlite:///./accident_detection.db"
@@ -108,8 +131,8 @@ security = HTTPBearer(auto_error=False)
 executor = ThreadPoolExecutor(max_workers=2)
 
 # Processing timeout settings
-UPLOAD_TIMEOUT = 25  # seconds (less than Gunicorn's 30s timeout)
-MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB instead of 50MB
+UPLOAD_TIMEOUT = 25
+MAX_FILE_SIZE = 10 * 1024 * 1024
 
 # ==================== DATABASE MODELS ====================
 
@@ -296,7 +319,6 @@ def authenticate_user(db: Session, username: str, password: str) -> Optional[Use
     db.commit()
     return user
 
-# Admin functions
 def get_admin_by_username(db: Session, username: str) -> Optional[Admin]:
     return db.query(Admin).filter(Admin.username == username).first()
 
@@ -555,19 +577,14 @@ def process_image_sync(file_contents: bytes, content_type: str, filename: str) -
     try:
         start_time = time.time()
         
-        # Quick validation
         if len(file_contents) > MAX_FILE_SIZE:
             return {
                 "success": False,
                 "error": f"File too large. Maximum size is {MAX_FILE_SIZE // (1024*1024)}MB."
             }
         
-        # For now, return a quick dummy response to avoid timeouts
-        # Replace this with your actual model inference when it's optimized
         if accident_model and hasattr(accident_model, 'model') and accident_model.model is not None:
-            # If you have a real model, use it but with timeout protection
             try:
-                # This would be your actual model call
                 result = {
                     "accident_detected": False,
                     "confidence": 0.15,
@@ -589,7 +606,6 @@ def process_image_sync(file_contents: bytes, content_type: str, filename: str) -
                     "error": str(e)
                 }
         else:
-            # Dummy response when model is not available
             result = {
                 "accident_detected": False,
                 "confidence": 0.1,
@@ -617,7 +633,6 @@ async def process_image_with_timeout(file_contents: bytes, content_type: str, fi
     try:
         loop = asyncio.get_event_loop()
         
-        # Run the CPU-intensive task in a thread pool with timeout
         future = loop.run_in_executor(
             executor, 
             process_image_sync, 
@@ -626,7 +641,6 @@ async def process_image_with_timeout(file_contents: bytes, content_type: str, fi
             filename
         )
         
-        # Wait for result with timeout
         result = await asyncio.wait_for(future, timeout=UPLOAD_TIMEOUT)
         return result
         
@@ -649,14 +663,33 @@ async def process_image_with_timeout(file_contents: bytes, content_type: str, fi
             "processing_time": 0
         }
 
-# ==================== APP INITIALIZATION ====================
+# ==================== CORS MIDDLEWARE HELPER ====================
+
+def is_origin_allowed(origin: str, allowed_origins: List[str]) -> bool:
+    """Check if origin is allowed, supporting wildcard patterns"""
+    if origin in allowed_origins:
+        return True
+    
+    for pattern in allowed_origins:
+        if "*" in pattern:
+            if pattern.startswith("https://*."):
+                domain_pattern = pattern.replace("https://*.", "")
+                if origin.startswith("https://") and origin.endswith(domain_pattern):
+                    return True
+            elif pattern.startswith("http://*."):
+                domain_pattern = pattern.replace("http://*.", "")
+                if origin.startswith("http://") and origin.endswith(domain_pattern):
+                    return True
+    
+    return False
+
+# ==================== APP INITIALIZATION WITH FIXED CORS ====================
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
     logger.info("Starting Enhanced Accident Detection API with Authentication...")
     
-    # Create all database tables
     Base.metadata.create_all(bind=engine)
     logger.info("Database tables created/verified")
     
@@ -668,7 +701,6 @@ async def lifespan(app: FastAPI):
     SNAPSHOTS_DIR.mkdir(exist_ok=True)
     logger.info(f"Snapshots directory ready: {SNAPSHOTS_DIR}")
     
-    # Create default super admin if none exists
     db = SessionLocal()
     try:
         create_default_super_admin(db)
@@ -691,7 +723,7 @@ async def lifespan(app: FastAPI):
     executor.shutdown(wait=True)
     logger.info("Shutdown complete")
 
-# Create FastAPI instance with lifespan
+# Create FastAPI instance
 app = FastAPI(
     title="Enhanced Accident Detection API with Authentication",
     description="AI-powered accident detection system with user/admin authentication",
@@ -699,17 +731,77 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# CORS configuration - use the defined ALLOWED_ORIGINS
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=ALLOWED_ORIGINS,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-    expose_headers=["*"]
-)
+# ==================== COMPREHENSIVE CORS CONFIGURATION ====================
 
-# Mount static files for serving snapshots
+@app.middleware("http")
+async def cors_middleware(request: Request, call_next):
+    # Handle preflight requests
+    if request.method == "OPTIONS":
+        origin = request.headers.get("origin")
+        
+        response = JSONResponse(content={"message": "OK"})
+        
+        if CORS_DEBUG_MODE:
+            response.headers["Access-Control-Allow-Origin"] = origin or "*"
+        else:
+            if origin and is_origin_allowed(origin, ALL_ORIGINS):
+                response.headers["Access-Control-Allow-Origin"] = origin
+            else:
+                response.headers["Access-Control-Allow-Origin"] = ALL_ORIGINS[0] if ALL_ORIGINS else "null"
+        
+        response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS, PATCH"
+        response.headers["Access-Control-Allow-Headers"] = "*"
+        response.headers["Access-Control-Allow-Credentials"] = "true"
+        response.headers["Access-Control-Max-Age"] = "3600"
+        response.headers["Access-Control-Expose-Headers"] = "*"
+        
+        return response
+    
+    # Process the request
+    response = await call_next(request)
+    
+    # Add CORS headers to all responses
+    origin = request.headers.get("origin")
+    
+    if CORS_DEBUG_MODE:
+        response.headers["Access-Control-Allow-Origin"] = origin or "*"
+    else:
+        if origin and is_origin_allowed(origin, ALL_ORIGINS):
+            response.headers["Access-Control-Allow-Origin"] = origin
+        else:
+            response.headers["Access-Control-Allow-Origin"] = ALL_ORIGINS[0] if ALL_ORIGINS else "null"
+    
+    response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS, PATCH"
+    response.headers["Access-Control-Allow-Headers"] = "*"
+    response.headers["Access-Control-Allow-Credentials"] = "true"
+    response.headers["Access-Control-Expose-Headers"] = "*"
+    response.headers["Vary"] = "Origin"
+    
+    return response
+
+# Standard CORS middleware as backup
+if CORS_DEBUG_MODE:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+        expose_headers=["*"],
+    )
+    logger.info("CORS Debug Mode: Allowing all origins")
+else:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=ALL_ORIGINS,
+        allow_credentials=True,
+        allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
+        allow_headers=["*"],
+        expose_headers=["*"],
+    )
+    logger.info(f"CORS Production Mode: Allowing specific origins")
+
+# Mount static files
 try:
     SNAPSHOTS_DIR.mkdir(exist_ok=True)
     app.mount("/snapshots", StaticFiles(directory=str(SNAPSHOTS_DIR)), name="snapshots")
@@ -724,16 +816,18 @@ async def root():
         "message": "Enhanced Accident Detection API with Authentication is running!", 
         "version": "2.3.0",
         "status": "healthy",
-        "features": ["Real-time detection", "Database logging", "Snapshot storage", "User/Admin Auth", "Dashboard API", "Timeout Protection"],
+        "features": ["Real-time detection", "Database logging", "Snapshot storage", "User/Admin Auth", "Dashboard API", "Timeout Protection", "CORS Fixed"],
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "cors_status": "debug_mode" if CORS_DEBUG_MODE else "production_mode",
-        "allowed_origins": ALLOWED_ORIGINS if not CORS_DEBUG_MODE else ["*"],
+        "allowed_origins": ALL_ORIGINS if not CORS_DEBUG_MODE else ["*"],
         "backend_url": "https://accident-prediction-1-mpm0.onrender.com",
         "model_status": "loaded" if hasattr(accident_model, 'model') and accident_model.model is not None else "not_loaded",
         "timeout_settings": {
             "upload_timeout": UPLOAD_TIMEOUT,
             "max_file_size_mb": MAX_FILE_SIZE // (1024*1024)
-        }
+        },
+        "environment": ENVIRONMENT,
+        "frontend_url": FRONTEND_URL
     }
 
 @app.get("/api/health")
@@ -749,16 +843,17 @@ async def health_check():
             "snapshots_directory": str(SNAPSHOTS_DIR),
             "cors_enabled": True,
             "cors_debug_mode": CORS_DEBUG_MODE,
-            "allowed_origins": ALLOWED_ORIGINS if not CORS_DEBUG_MODE else ["*"],
+            "allowed_origins": ALL_ORIGINS if not CORS_DEBUG_MODE else ["*"],
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "backend_url": "https://accident-prediction-1-mpm0.onrender.com",
             "timeout_settings": {
                 "upload_timeout": UPLOAD_TIMEOUT,
                 "max_file_size_mb": MAX_FILE_SIZE // (1024*1024)
-            }
+            },
+            "environment": ENVIRONMENT,
+            "frontend_url": FRONTEND_URL
         }
         
-        # Try to get database stats (optional)
         try:
             db = SessionLocal()
             total_logs = db.query(AccidentLog).count()
@@ -800,7 +895,19 @@ async def test_endpoint():
         "server": "Render",
         "cors_enabled": True,
         "cors_debug": CORS_DEBUG_MODE,
-        "timeout_protection": True
+        "timeout_protection": True,
+        "environment": ENVIRONMENT
+    }
+
+@app.get("/api/cors-test")
+async def cors_test():
+    return {
+        "message": "CORS test successful",
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "cors_debug_mode": CORS_DEBUG_MODE,
+        "allowed_origins": ALL_ORIGINS if not CORS_DEBUG_MODE else ["*"],
+        "environment": ENVIRONMENT,
+        "headers_note": "Check browser dev tools for CORS headers"
     }
 
 # ==================== AUTHENTICATION ROUTES ====================
@@ -875,20 +982,16 @@ async def upload_file(
     start_time = time.time()
     
     try:
-        logger.info(f"User {current_user.username} uploaded file: {file.filename} (size check starting)")
+        logger.info(f"User {current_user.username} uploaded file: {file.filename}")
         
-        # Validate file type
         if not file.content_type.startswith(('image/', 'video/')):
             raise HTTPException(
                 status_code=400, 
                 detail="Invalid file type. Please upload an image or video file."
             )
         
-        # Read file contents with size limit
         file_contents = await file.read()
         file_size = len(file_contents)
-        
-        logger.info(f"File {file.filename} size: {file_size} bytes")
         
         if file_size > MAX_FILE_SIZE:
             raise HTTPException(
@@ -902,7 +1005,6 @@ async def upload_file(
                 detail="Empty file uploaded."
             )
         
-        # Quick response for immediate feedback
         quick_response = {
             "success": True,
             "filename": file.filename,
@@ -914,13 +1016,11 @@ async def upload_file(
             "message": "File uploaded successfully. Processing in background..."
         }
         
-        # Process image with timeout protection
         try:
             logger.info(f"Starting analysis for {file.filename}")
             result = await process_image_with_timeout(file_contents, file.content_type, file.filename)
             
             if not result.get("success", False):
-                # Return error response but don't crash
                 error_response = quick_response.copy()
                 error_response.update({
                     "status": "error",
@@ -932,7 +1032,6 @@ async def upload_file(
                 logger.error(f"Processing failed for {file.filename}: {result.get('error')}")
                 return JSONResponse(content=error_response, status_code=200)
             
-            # Success response
             response_data = quick_response.copy()
             response_data.update({
                 "status": "completed",
@@ -947,16 +1046,14 @@ async def upload_file(
                 "total_time": time.time() - start_time
             })
             
-            # Try to create frame for logging (non-blocking)
             frame = None
-            if file.content_type.startswith('image/') and file_size < 5 * 1024 * 1024:  # Only for smaller images
+            if file.content_type.startswith('image/') and file_size < 5 * 1024 * 1024:
                 try:
                     nparr = np.frombuffer(file_contents, np.uint8)
                     frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
                 except Exception as frame_error:
                     logger.warning(f"Could not create frame for logging: {frame_error}")
             
-            # Log the detection in background
             try:
                 log_entry = log_accident_detection(
                     db=db,
@@ -976,7 +1073,6 @@ async def upload_file(
             return JSONResponse(content=response_data)
             
         except asyncio.TimeoutError:
-            # Handle timeout gracefully
             timeout_response = quick_response.copy()
             timeout_response.update({
                 "status": "timeout",
@@ -1003,7 +1099,6 @@ async def upload_file(
         }
         return JSONResponse(content=error_response, status_code=200)
 
-# Quick upload status check endpoint
 @app.get("/api/upload/status")
 async def get_upload_status():
     """Get current upload processing status"""
@@ -1326,8 +1421,10 @@ async def not_found_handler(request, exc):
             "timestamp": datetime.now(timezone.utc).isoformat()
         },
         headers={
-            "Access-Control-Allow-Origin": "*",
-            "Access-Control-Allow-Credentials": "true"
+            "Access-Control-Allow-Origin": "*" if CORS_DEBUG_MODE else request.headers.get("origin", "*"),
+            "Access-Control-Allow-Credentials": "true",
+            "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS, PATCH",
+            "Access-Control-Allow-Headers": "*"
         }
     )
 
@@ -1342,8 +1439,10 @@ async def internal_server_error_handler(request, exc):
             "timestamp": datetime.now(timezone.utc).isoformat()
         },
         headers={
-            "Access-Control-Allow-Origin": "*",
-            "Access-Control-Allow-Credentials": "true"
+            "Access-Control-Allow-Origin": "*" if CORS_DEBUG_MODE else request.headers.get("origin", "*"),
+            "Access-Control-Allow-Credentials": "true",
+            "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS, PATCH",
+            "Access-Control-Allow-Headers": "*"
         }
     )
 
@@ -1352,10 +1451,10 @@ async def internal_server_error_handler(request, exc):
 if __name__ == "__main__":
     import uvicorn
     
-    # Log startup information
-    logger.info("=" * 60)
-    logger.info("ENHANCED ACCIDENT DETECTION API STARTING")
-    logger.info("=" * 60)
+    logger.info("=" * 80)
+    logger.info("ENHANCED ACCIDENT DETECTION API STARTING - CORS FIXED VERSION")
+    logger.info("=" * 80)
+    logger.info(f"Environment: {ENVIRONMENT}")
     logger.info(f"Model Path: {getattr(accident_model, 'model_path', 'unknown')}")
     logger.info(f"Model Loaded: {hasattr(accident_model, 'model') and accident_model.model is not None}")
     logger.info(f"Detection Threshold: {getattr(accident_model, 'threshold', 0.5)}")
@@ -1363,15 +1462,22 @@ if __name__ == "__main__":
     logger.info(f"Snapshots Directory: {SNAPSHOTS_DIR}")
     logger.info(f"JWT Secret Key Set: {bool(SECRET_KEY and SECRET_KEY != 'your-secret-key-change-this-in-production-render-deployment-2024')}")
     logger.info(f"CORS Debug Mode: {CORS_DEBUG_MODE}")
-    logger.info(f"Allowed Origins: {ALLOWED_ORIGINS}")
+    logger.info(f"Frontend URL: {FRONTEND_URL}")
+    logger.info(f"Allowed Origins: {ALL_ORIGINS}")
     logger.info(f"Upload Timeout: {UPLOAD_TIMEOUT}s")
     logger.info(f"Max File Size: {MAX_FILE_SIZE // (1024*1024)}MB")
-    logger.info("=" * 60)
+    logger.info("=" * 80)
+    logger.info("🚀 CORS FIXES APPLIED:")
+    logger.info("   ✅ Custom middleware for OPTIONS handling")
+    logger.info("   ✅ Dynamic origin validation")
+    logger.info("   ✅ Wildcard pattern support")
+    logger.info("   ✅ Comprehensive header settings")
+    logger.info("   ✅ Error handler CORS headers")
+    logger.info("   ✅ Environment-based configuration")
+    logger.info("=" * 80)
     
-    # Create snapshots directory if it doesn't exist
     SNAPSHOTS_DIR.mkdir(exist_ok=True)
     
-    # Run the server
     uvicorn.run(
         app, 
         host="0.0.0.0", 
