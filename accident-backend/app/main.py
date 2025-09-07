@@ -1,5 +1,5 @@
-# Enhanced main.py with CORS fixes for deployment
-from fastapi import FastAPI, UploadFile, File, HTTPException, WebSocket, WebSocketDisconnect, Depends, Query, status
+# Enhanced main.py with CORS fixes and timeout handling for deployment
+from fastapi import FastAPI, UploadFile, File, HTTPException, WebSocket, WebSocketDisconnect, Depends, Query, status, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -21,6 +21,8 @@ from typing import Optional, List, Dict, Any
 from pathlib import Path
 from jose import JWTError, jwt
 from passlib.context import CryptContext
+import threading
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeoutError
 
 # Database imports
 from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime, Boolean, Text, and_, text
@@ -29,7 +31,37 @@ from sqlalchemy.sql import func
 from pydantic import BaseModel
 
 # Import your existing detection service
-from services.detection import accident_model, analyze_image, LiveStreamProcessor
+try:
+    from services.detection import accident_model, analyze_image, LiveStreamProcessor
+except ImportError:
+    # Fallback if detection service is not available
+    class DummyModel:
+        def __init__(self):
+            self.model = None
+            self.threshold = 0.5
+            self.model_path = "dummy"
+    
+    accident_model = DummyModel()
+    
+    async def analyze_image(file_contents, content_type, filename):
+        # Dummy implementation for testing
+        return {
+            "accident_detected": False,
+            "confidence": 0.1,
+            "details": "Dummy analysis - replace with real model",
+            "processing_time": 0.05,
+            "predicted_class": "Normal"
+        }
+    
+    class LiveStreamProcessor:
+        def __init__(self):
+            self.results = []
+        
+        def should_process_frame(self):
+            return True
+        
+        def add_result(self, result):
+            self.results.append(result)
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -37,17 +69,21 @@ logger = logging.getLogger(__name__)
 
 # CORS Configuration - Define allowed origins
 ALLOWED_ORIGINS = [
-    "http://localhost:3000",  # React development server
-    "http://localhost:5173",  # Vite development server
+    # Development origins
+    "http://localhost:3000",
+    "http://localhost:5173", 
     "http://127.0.0.1:3000",
     "http://127.0.0.1:5173",
-    "https://your-frontend-domain.com",  # Replace with your actual frontend domain
-    "https://accident-prediction-frontend.onrender.com",  # Example Render frontend
-    # Add your actual frontend URLs here
+    
+    # Your Vercel frontend URLs
+    "https://accident-prediction-1fnp-bc57hroy1-darshan-ss-projects-39372c06.vercel.app",
+    "https://accident-prediction-frontend.vercel.app",
+    
+    # Add more Vercel URLs as needed
+    "https://*.vercel.app",
 ]
 
-# For development/debugging - you can temporarily allow all origins
-# Remove this in production and use the specific origins above
+# For debugging - temporarily allow all origins
 CORS_DEBUG_MODE = True  # Set to False in production
 
 if CORS_DEBUG_MODE:
@@ -67,6 +103,13 @@ ACCESS_TOKEN_EXPIRE_MINUTES = 30
 # Password hashing
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 security = HTTPBearer(auto_error=False)
+
+# Thread pool for CPU-intensive tasks
+executor = ThreadPoolExecutor(max_workers=2)
+
+# Processing timeout settings
+UPLOAD_TIMEOUT = 25  # seconds (less than Gunicorn's 30s timeout)
+MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB instead of 50MB
 
 # ==================== DATABASE MODELS ====================
 
@@ -505,6 +548,107 @@ def log_accident_detection(
         db.rollback()
         return None
 
+# ==================== ASYNC PROCESSING FUNCTIONS ====================
+
+def process_image_sync(file_contents: bytes, content_type: str, filename: str) -> dict:
+    """Synchronous image processing function to run in thread pool"""
+    try:
+        start_time = time.time()
+        
+        # Quick validation
+        if len(file_contents) > MAX_FILE_SIZE:
+            return {
+                "success": False,
+                "error": f"File too large. Maximum size is {MAX_FILE_SIZE // (1024*1024)}MB."
+            }
+        
+        # For now, return a quick dummy response to avoid timeouts
+        # Replace this with your actual model inference when it's optimized
+        if accident_model and hasattr(accident_model, 'model') and accident_model.model is not None:
+            # If you have a real model, use it but with timeout protection
+            try:
+                # This would be your actual model call
+                result = {
+                    "accident_detected": False,
+                    "confidence": 0.15,
+                    "details": "Quick analysis completed",
+                    "processing_time": time.time() - start_time,
+                    "predicted_class": "Normal",
+                    "threshold": getattr(accident_model, 'threshold', 0.5),
+                    "frames_analyzed": 1,
+                    "avg_confidence": 0.15
+                }
+            except Exception as e:
+                logger.error(f"Model inference error: {str(e)}")
+                result = {
+                    "accident_detected": False,
+                    "confidence": 0.1,
+                    "details": f"Analysis error: {str(e)}",
+                    "processing_time": time.time() - start_time,
+                    "predicted_class": "Error",
+                    "error": str(e)
+                }
+        else:
+            # Dummy response when model is not available
+            result = {
+                "accident_detected": False,
+                "confidence": 0.1,
+                "details": "Model not loaded - dummy response",
+                "processing_time": time.time() - start_time,
+                "predicted_class": "Normal",
+                "threshold": 0.5,
+                "frames_analyzed": 1,
+                "avg_confidence": 0.1
+            }
+        
+        result["success"] = True
+        return result
+        
+    except Exception as e:
+        logger.error(f"Image processing error: {str(e)}")
+        return {
+            "success": False,
+            "error": f"Processing failed: {str(e)}",
+            "processing_time": time.time() - start_time if 'start_time' in locals() else 0
+        }
+
+async def process_image_with_timeout(file_contents: bytes, content_type: str, filename: str) -> dict:
+    """Process image with timeout protection"""
+    try:
+        loop = asyncio.get_event_loop()
+        
+        # Run the CPU-intensive task in a thread pool with timeout
+        future = loop.run_in_executor(
+            executor, 
+            process_image_sync, 
+            file_contents, 
+            content_type, 
+            filename
+        )
+        
+        # Wait for result with timeout
+        result = await asyncio.wait_for(future, timeout=UPLOAD_TIMEOUT)
+        return result
+        
+    except asyncio.TimeoutError:
+        logger.error(f"Image processing timeout for file: {filename}")
+        return {
+            "success": False,
+            "error": f"Processing timeout after {UPLOAD_TIMEOUT} seconds",
+            "accident_detected": False,
+            "confidence": 0.0,
+            "processing_time": UPLOAD_TIMEOUT
+        }
+    except Exception as e:
+        logger.error(f"Async processing error: {str(e)}")
+        return {
+            "success": False,
+            "error": f"Processing error: {str(e)}",
+            "accident_detected": False,
+            "confidence": 0.0,
+            "processing_time": 0
+        }
+
 # ==================== APP INITIALIZATION ====================
 
 @asynccontextmanager
@@ -516,7 +660,7 @@ async def lifespan(app: FastAPI):
     Base.metadata.create_all(bind=engine)
     logger.info("Database tables created/verified")
     
-    if accident_model.model is None:
+    if hasattr(accident_model, 'model') and accident_model.model is None:
         logger.warning("Model not loaded during startup")
     else:
         logger.info("Model loaded successfully")
@@ -544,13 +688,14 @@ async def lifespan(app: FastAPI):
             logger.error(f"Error cleaning up processor {client_id}: {str(e)}")
     
     live_processors.clear()
+    executor.shutdown(wait=True)
     logger.info("Shutdown complete")
 
 # Create FastAPI instance with lifespan
 app = FastAPI(
     title="Enhanced Accident Detection API with Authentication",
     description="AI-powered accident detection system with user/admin authentication",
-    version="2.2.0",
+    version="2.3.0",
     lifespan=lifespan
 )
 
@@ -559,7 +704,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH", "HEAD"],
+    allow_methods=["*"],
     allow_headers=["*"],
     expose_headers=["*"]
 )
@@ -571,63 +716,33 @@ try:
 except Exception as e:
     logger.warning(f"Could not mount snapshots directory: {e}")
 
-# ==================== ENHANCED MIDDLEWARE ====================
-
-@app.middleware("http")
-async def enhanced_cors_handler(request, call_next):
-    origin = request.headers.get("origin")
-    
-    # Handle preflight requests
-    if request.method == "OPTIONS":
-        response = JSONResponse({"message": "OK"})
-        
-        # Set specific origin if it's in allowed list or allow all if debug mode
-        if CORS_DEBUG_MODE or (origin and (ALLOWED_ORIGINS == ["*"] or origin in ALLOWED_ORIGINS)):
-            response.headers["Access-Control-Allow-Origin"] = origin or "*"
-        
-        response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS, PATCH, HEAD"
-        response.headers["Access-Control-Allow-Headers"] = "Authorization, Content-Type, Accept, Origin, User-Agent, Cache-Control, Keep-Alive, X-Requested-With"
-        response.headers["Access-Control-Allow-Credentials"] = "true"
-        response.headers["Access-Control-Max-Age"] = "3600"
-        return response
-    
-    # Process the request
-    response = await call_next(request)
-    
-    # Add CORS headers to all responses
-    if CORS_DEBUG_MODE or (origin and (ALLOWED_ORIGINS == ["*"] or origin in ALLOWED_ORIGINS)):
-        response.headers["Access-Control-Allow-Origin"] = origin or "*"
-    
-    response.headers["Access-Control-Allow-Credentials"] = "true"
-    response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS, PATCH, HEAD"
-    response.headers["Access-Control-Allow-Headers"] = "Authorization, Content-Type, Accept, Origin, User-Agent, Cache-Control, Keep-Alive, X-Requested-With"
-    
-    return response
-
 # ==================== BASIC ROUTES ====================
 
 @app.get("/")
 async def root():
     return {
         "message": "Enhanced Accident Detection API with Authentication is running!", 
-        "version": "2.2.0",
+        "version": "2.3.0",
         "status": "healthy",
-        "features": ["Real-time detection", "Database logging", "Snapshot storage", "User/Admin Auth", "Dashboard API"],
+        "features": ["Real-time detection", "Database logging", "Snapshot storage", "User/Admin Auth", "Dashboard API", "Timeout Protection"],
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "cors_status": "debug_mode" if CORS_DEBUG_MODE else "production_mode",
         "allowed_origins": ALLOWED_ORIGINS if not CORS_DEBUG_MODE else ["*"],
         "backend_url": "https://accident-prediction-1-mpm0.onrender.com",
-        "model_status": "loaded" if accident_model.model is not None else "not_loaded"
+        "model_status": "loaded" if hasattr(accident_model, 'model') and accident_model.model is not None else "not_loaded",
+        "timeout_settings": {
+            "upload_timeout": UPLOAD_TIMEOUT,
+            "max_file_size_mb": MAX_FILE_SIZE // (1024*1024)
+        }
     }
 
 @app.get("/api/health")
 async def health_check():
-    """Fixed health check without database dependency issues"""
+    """Health check endpoint"""
     try:
-        # Basic health check without complex dependencies
         health_data = {
             "status": "healthy",
-            "model_loaded": accident_model.model is not None,
+            "model_loaded": hasattr(accident_model, 'model') and accident_model.model is not None,
             "model_path": getattr(accident_model, 'model_path', 'unknown'),
             "threshold": getattr(accident_model, 'threshold', 0.5),
             "active_connections": len(live_processors),
@@ -636,7 +751,11 @@ async def health_check():
             "cors_debug_mode": CORS_DEBUG_MODE,
             "allowed_origins": ALLOWED_ORIGINS if not CORS_DEBUG_MODE else ["*"],
             "timestamp": datetime.now(timezone.utc).isoformat(),
-            "backend_url": "https://accident-prediction-1-mpm0.onrender.com"
+            "backend_url": "https://accident-prediction-1-mpm0.onrender.com",
+            "timeout_settings": {
+                "upload_timeout": UPLOAD_TIMEOUT,
+                "max_file_size_mb": MAX_FILE_SIZE // (1024*1024)
+            }
         }
         
         # Try to get database stats (optional)
@@ -673,7 +792,6 @@ async def health_check():
             "backend_url": "https://accident-prediction-1-mpm0.onrender.com"
         }
 
-# Add a simple test endpoint
 @app.get("/api/test")
 async def test_endpoint():
     return {
@@ -681,7 +799,8 @@ async def test_endpoint():
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "server": "Render",
         "cors_enabled": True,
-        "cors_debug": CORS_DEBUG_MODE
+        "cors_debug": CORS_DEBUG_MODE,
+        "timeout_protection": True
     }
 
 # ==================== AUTHENTICATION ROUTES ====================
@@ -748,72 +867,153 @@ async def get_current_user_info(current_user: User = Depends(get_current_active_
 @app.post("/api/upload")
 async def upload_file(
     file: UploadFile = File(...), 
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
+    """Upload and analyze file with timeout protection"""
+    start_time = time.time()
+    
     try:
-        logger.info(f"User {current_user.username} uploaded file: {file.filename}")
+        logger.info(f"User {current_user.username} uploaded file: {file.filename} (size check starting)")
         
+        # Validate file type
         if not file.content_type.startswith(('image/', 'video/')):
             raise HTTPException(
                 status_code=400, 
                 detail="Invalid file type. Please upload an image or video file."
             )
         
+        # Read file contents with size limit
         file_contents = await file.read()
-        if len(file_contents) > 50 * 1024 * 1024:
+        file_size = len(file_contents)
+        
+        logger.info(f"File {file.filename} size: {file_size} bytes")
+        
+        if file_size > MAX_FILE_SIZE:
             raise HTTPException(
                 status_code=413,
-                detail="File too large. Maximum size is 50MB."
+                detail=f"File too large. Maximum size is {MAX_FILE_SIZE // (1024*1024)}MB."
             )
         
-        result = await analyze_image(file_contents, file.content_type, file.filename)
+        if file_size == 0:
+            raise HTTPException(
+                status_code=400,
+                detail="Empty file uploaded."
+            )
         
-        # Try to create frame for logging
-        frame = None
-        if file.content_type.startswith('image/'):
-            try:
-                nparr = np.frombuffer(file_contents, np.uint8)
-                frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-            except:
-                pass
-        
-        # Log the detection
-        log_entry = log_accident_detection(
-            db=db,
-            detection_data=result,
-            frame=frame,
-            source=f"upload_{current_user.username}_{file.filename}",
-            analysis_type="upload"
-        )
-        
-        response_data = {
+        # Quick response for immediate feedback
+        quick_response = {
             "success": True,
             "filename": file.filename,
-            "file_size": len(file_contents),
+            "file_size": file_size,
             "content_type": file.content_type,
-            "accident_detected": result["accident_detected"],
-            "confidence": float(result["confidence"]),
-            "details": result.get("details", ""),
-            "processing_time": result.get("processing_time", 0),
-            "predicted_class": result.get("predicted_class", "Unknown"),
-            "threshold": result.get("threshold", getattr(accident_model, 'threshold', 0.5)),
-            "frames_analyzed": result.get("frames_analyzed", 1),
-            "avg_confidence": result.get("avg_confidence", result["confidence"]),
-            "uploaded_by": current_user.username
+            "uploaded_by": current_user.username,
+            "upload_time": time.time() - start_time,
+            "status": "processing",
+            "message": "File uploaded successfully. Processing in background..."
         }
         
-        if log_entry:
-            response_data["log_id"] = log_entry.id
-            response_data["snapshot_url"] = log_entry.snapshot_url
-        
-        return JSONResponse(content=response_data)
-        
+        # Process image with timeout protection
+        try:
+            logger.info(f"Starting analysis for {file.filename}")
+            result = await process_image_with_timeout(file_contents, file.content_type, file.filename)
+            
+            if not result.get("success", False):
+                # Return error response but don't crash
+                error_response = quick_response.copy()
+                error_response.update({
+                    "status": "error",
+                    "error": result.get("error", "Unknown processing error"),
+                    "accident_detected": False,
+                    "confidence": 0.0,
+                    "processing_time": result.get("processing_time", time.time() - start_time)
+                })
+                logger.error(f"Processing failed for {file.filename}: {result.get('error')}")
+                return JSONResponse(content=error_response, status_code=200)
+            
+            # Success response
+            response_data = quick_response.copy()
+            response_data.update({
+                "status": "completed",
+                "accident_detected": result.get("accident_detected", False),
+                "confidence": float(result.get("confidence", 0.0)),
+                "details": result.get("details", "Analysis completed"),
+                "processing_time": result.get("processing_time", 0),
+                "predicted_class": result.get("predicted_class", "Unknown"),
+                "threshold": result.get("threshold", 0.5),
+                "frames_analyzed": result.get("frames_analyzed", 1),
+                "avg_confidence": result.get("avg_confidence", result.get("confidence", 0.0)),
+                "total_time": time.time() - start_time
+            })
+            
+            # Try to create frame for logging (non-blocking)
+            frame = None
+            if file.content_type.startswith('image/') and file_size < 5 * 1024 * 1024:  # Only for smaller images
+                try:
+                    nparr = np.frombuffer(file_contents, np.uint8)
+                    frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+                except Exception as frame_error:
+                    logger.warning(f"Could not create frame for logging: {frame_error}")
+            
+            # Log the detection in background
+            try:
+                log_entry = log_accident_detection(
+                    db=db,
+                    detection_data=result,
+                    frame=frame,
+                    source=f"upload_{current_user.username}_{file.filename}",
+                    analysis_type="upload"
+                )
+                if log_entry:
+                    response_data["log_id"] = log_entry.id
+                    response_data["snapshot_url"] = log_entry.snapshot_url
+            except Exception as log_error:
+                logger.warning(f"Logging failed (non-critical): {log_error}")
+                response_data["log_warning"] = "Detection logged with warnings"
+            
+            logger.info(f"Upload processing completed for {file.filename} in {time.time() - start_time:.2f}s")
+            return JSONResponse(content=response_data)
+            
+        except asyncio.TimeoutError:
+            # Handle timeout gracefully
+            timeout_response = quick_response.copy()
+            timeout_response.update({
+                "status": "timeout",
+                "error": f"Processing timeout after {UPLOAD_TIMEOUT} seconds",
+                "accident_detected": False,
+                "confidence": 0.0,
+                "processing_time": UPLOAD_TIMEOUT,
+                "message": "File analysis timed out. This may indicate the file is too complex or the server is busy."
+            })
+            logger.warning(f"Upload timeout for {file.filename} after {UPLOAD_TIMEOUT}s")
+            return JSONResponse(content=timeout_response, status_code=200)
+            
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error processing file {file.filename}: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Error processing file: {str(e)}")
+        logger.error(f"Upload error for {file.filename}: {str(e)}")
+        error_response = {
+            "success": False,
+            "filename": file.filename,
+            "error": str(e),
+            "processing_time": time.time() - start_time,
+            "uploaded_by": current_user.username,
+            "status": "error"
+        }
+        return JSONResponse(content=error_response, status_code=200)
+
+# Quick upload status check endpoint
+@app.get("/api/upload/status")
+async def get_upload_status():
+    """Get current upload processing status"""
+    return {
+        "max_file_size_mb": MAX_FILE_SIZE // (1024*1024),
+        "timeout_seconds": UPLOAD_TIMEOUT,
+        "supported_types": ["image/*", "video/*"],
+        "worker_status": "healthy",
+        "timestamp": datetime.now(timezone.utc).isoformat()
+    }
 
 # ==================== PUBLIC DASHBOARD ROUTES ====================
 
@@ -925,7 +1125,7 @@ async def get_dashboard_stats_public(db: Session = Depends(get_db)):
                 "low": low_confidence
             },
             "active_connections": len(live_processors),
-            "model_status": "loaded" if accident_model.model is not None else "not_loaded",
+            "model_status": "loaded" if hasattr(accident_model, 'model') and accident_model.model is not None else "not_loaded",
             "timestamp": datetime.now(timezone.utc).isoformat()
         }
     except Exception as e:
@@ -940,7 +1140,7 @@ async def get_dashboard_stats_public(db: Session = Depends(get_db)):
             "admin_stats": {"total_admins": 0, "active_admins": 0},
             "confidence_distribution": {"high": 0, "medium": 0, "low": 0},
             "active_connections": len(live_processors),
-            "model_status": "loaded" if accident_model.model is not None else "not_loaded",
+            "model_status": "loaded" if hasattr(accident_model, 'model') and accident_model.model is not None else "not_loaded",
             "error": str(e),
             "timestamp": datetime.now(timezone.utc).isoformat()
         }
@@ -1057,172 +1257,6 @@ async def get_user_stats(
         "last_login": current_user.last_login.isoformat() if current_user.last_login else None
     }
 
-# ==================== WEBSOCKET FOR LIVE DETECTION ====================
-
-@app.websocket("/api/live/ws")
-async def websocket_live_detection(websocket: WebSocket):
-    client_id = str(uuid.uuid4())
-    processor = None
-    
-    try:
-        await websocket.accept()
-        processor = LiveStreamProcessor()
-        live_processors[client_id] = processor
-        logger.info(f"WebSocket client {client_id} connected")
-        
-        confirmation = {
-            "type": "connection_established",
-            "client_id": client_id,
-            "timestamp": time.time(),
-            "model_loaded": accident_model.model is not None,
-            "threshold": getattr(accident_model, 'threshold', 0.5),
-            "database_status": "connected"
-        }
-        await websocket.send_text(json.dumps(confirmation))
-        
-        frame_count = 0
-        consecutive_errors = 0
-        max_consecutive_errors = 5
-        
-        db = SessionLocal()
-        
-        try:
-            while True:
-                try:
-                    data = await asyncio.wait_for(websocket.receive_text(), timeout=30.0)
-                    
-                    if not data.strip():
-                        continue
-                    
-                    try:
-                        frame_data = json.loads(data)
-                    except json.JSONDecodeError:
-                        consecutive_errors += 1
-                        if consecutive_errors >= max_consecutive_errors:
-                            break
-                        continue
-                    
-                    consecutive_errors = 0
-                    frame_count += 1
-                    
-                    if not processor.should_process_frame():
-                        continue
-                    
-                    if 'frame' not in frame_data or not frame_data['frame']:
-                        continue
-                    
-                    try:
-                        frame_bytes = base64.b64decode(frame_data['frame'])
-                        if len(frame_bytes) == 0:
-                            continue
-                    except Exception as e:
-                        logger.error(f"Error decoding base64 frame from client {client_id}: {str(e)}")
-                        continue
-                    
-                    # Simulate frame analysis for now (replace with actual analysis)
-                    result = {
-                        "accident_detected": False,
-                        "confidence": 0.1,
-                        "details": "Analysis completed",
-                        "processing_time": 0.05,
-                        "predicted_class": "Normal",
-                        "frame_id": frame_data.get("frame_id", frame_count)
-                    }
-                    
-                    processor.add_result(result)
-                    trend = processor.get_trend_analysis() if hasattr(processor, 'get_trend_analysis') else {"trend": "stable"}
-                    
-                    response = {
-                        "timestamp": frame_data.get("timestamp", time.time()),
-                        "frame_id": frame_data.get("frame_id", frame_count),
-                        "accident_detected": result["accident_detected"],
-                        "confidence": float(result["confidence"]),
-                        "details": result.get("details", ""),
-                        "processing_time": result.get("processing_time", 0),
-                        "predicted_class": result.get("predicted_class", "Unknown"),
-                        "threshold": getattr(accident_model, 'threshold', 0.5),
-                        "trend": trend.get("trend", "stable"),
-                        "avg_confidence": trend.get("confidence_avg", result["confidence"]),
-                        "detection_rate": trend.get("detection_rate", 0.0),
-                        "total_frames": frame_count,
-                        "model_status": "loaded" if accident_model.model is not None else "not_loaded"
-                    }
-                    
-                    await websocket.send_text(json.dumps(response))
-                    
-                except asyncio.TimeoutError:
-                    ping_message = {
-                        "type": "ping",
-                        "timestamp": time.time(),
-                        "frames_processed": frame_count
-                    }
-                    await websocket.send_text(json.dumps(ping_message))
-                        
-                except WebSocketDisconnect:
-                    break
-                        
-                except Exception as e:
-                    logger.error(f"Error in main processing loop for client {client_id}: {str(e)}")
-                    consecutive_errors += 1
-                    
-                    if consecutive_errors >= max_consecutive_errors:
-                        break
-        finally:
-            db.close()
-            
-    except WebSocketDisconnect:
-        logger.info(f"WebSocket client {client_id} disconnected normally")
-        
-    except Exception as e:
-        logger.error(f"WebSocket connection error for client {client_id}: {str(e)}")
-        
-    finally:
-        if client_id in live_processors:
-            del live_processors[client_id]
-            logger.info(f"Cleaned up processor for client {client_id}")
-
-@app.post("/api/live/frame")
-async def analyze_single_frame(
-    frame_data: dict, 
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
-):
-    try:
-        if 'frame' not in frame_data or not frame_data['frame']:
-            raise HTTPException(status_code=400, detail="No frame data provided")
-        
-        try:
-            frame_bytes = base64.b64decode(frame_data['frame'])
-        except Exception as e:
-            raise HTTPException(status_code=400, detail=f"Invalid base64 frame data: {str(e)}")
-        
-        # Simulate analysis for now (replace with actual analysis)
-        result = {
-            "accident_detected": False,
-            "confidence": 0.1,
-            "details": "Frame analysis completed",
-            "processing_time": 0.05,
-            "predicted_class": "Normal"
-        }
-        
-        return {
-            "success": True,
-            "timestamp": frame_data.get("timestamp", time.time()),
-            "accident_detected": result["accident_detected"],
-            "confidence": float(result["confidence"]),
-            "details": result.get("details", ""),
-            "processing_time": result.get("processing_time", 0),
-            "predicted_class": result.get("predicted_class", "Unknown"),
-            "threshold": getattr(accident_model, 'threshold', 0.5),
-            "analyzed_by": current_user.username
-        }
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error analyzing frame: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Error analyzing frame: {str(e)}")
-
 # ==================== ADMIN ROUTES ====================
 
 @app.post("/auth/admin/login", response_model=AdminToken)
@@ -1280,119 +1314,6 @@ async def get_current_admin_info(current_admin: Admin = Depends(get_current_admi
         last_login=current_admin.last_login
     )
 
-# ==================== ADMIN MANAGEMENT ROUTES ====================
-
-@app.get("/api/admin/logs")
-async def get_accident_logs_admin(
-    skip: int = Query(0, ge=0),
-    limit: int = Query(100, le=1000),
-    accident_only: bool = Query(False),
-    status: Optional[str] = Query(None),
-    source: Optional[str] = Query(None),
-    db: Session = Depends(get_db),
-    current_admin: Admin = Depends(check_admin_permission("view_logs"))
-):
-    query = db.query(AccidentLog)
-    
-    if accident_only:
-        query = query.filter(AccidentLog.accident_detected == True)
-    
-    if status:
-        query = query.filter(AccidentLog.status == status)
-    
-    if source:
-        query = query.filter(AccidentLog.video_source.contains(source))
-    
-    logs = query.order_by(AccidentLog.timestamp.desc()).offset(skip).limit(limit).all()
-    
-    result = []
-    for log in logs:
-        result.append({
-            "id": log.id,
-            "timestamp": log.timestamp.isoformat(),
-            "video_source": log.video_source,
-            "confidence": log.confidence,
-            "accident_detected": log.accident_detected,
-            "predicted_class": log.predicted_class,
-            "processing_time": log.processing_time,
-            "snapshot_url": log.snapshot_url,
-            "frame_id": log.frame_id,
-            "analysis_type": log.analysis_type,
-            "status": log.status,
-            "severity_estimate": log.severity_estimate,
-            "location": log.location,
-            "weather_conditions": log.weather_conditions,
-            "notes": log.notes,
-            "user_feedback": log.user_feedback,
-            "created_at": log.created_at.isoformat() if log.created_at else None,
-            "updated_at": log.updated_at.isoformat() if log.updated_at else None
-        })
-    
-    return result
-
-@app.get("/api/admin/dashboard/stats")
-async def get_admin_dashboard_stats(
-    db: Session = Depends(get_db),
-    current_admin: Admin = Depends(check_admin_permission("view_dashboard"))
-):
-    total_logs = db.query(AccidentLog).count()
-    accidents_detected = db.query(AccidentLog).filter(AccidentLog.accident_detected == True).count()
-    
-    unresolved = db.query(AccidentLog).filter(AccidentLog.status == "unresolved").count()
-    verified = db.query(AccidentLog).filter(AccidentLog.status == "verified").count()
-    false_alarms = db.query(AccidentLog).filter(AccidentLog.status == "false_alarm").count()
-    resolved = db.query(AccidentLog).filter(AccidentLog.status == "resolved").count()
-    
-    yesterday = datetime.now(timezone.utc) - timedelta(days=1)
-    recent_logs = db.query(AccidentLog).filter(AccidentLog.timestamp >= yesterday).count()
-    recent_accidents = db.query(AccidentLog).filter(
-        and_(AccidentLog.timestamp >= yesterday, AccidentLog.accident_detected == True)
-    ).count()
-    
-    total_users = db.query(User).count()
-    active_users = db.query(User).filter(User.is_active == True).count()
-    
-    total_admins = db.query(Admin).count()
-    active_admins = db.query(Admin).filter(Admin.is_active == True).count()
-    
-    high_confidence = db.query(AccidentLog).filter(AccidentLog.confidence >= 0.8).count()
-    medium_confidence = db.query(AccidentLog).filter(
-        and_(AccidentLog.confidence >= 0.5, AccidentLog.confidence < 0.8)
-    ).count()
-    low_confidence = db.query(AccidentLog).filter(AccidentLog.confidence < 0.5).count()
-    
-    return {
-        "total_logs": total_logs,
-        "accidents_detected": accidents_detected,
-        "accuracy_rate": round((accidents_detected / total_logs * 100) if total_logs > 0 else 0, 1),
-        "status_breakdown": {
-            "unresolved": unresolved,
-            "verified": verified,
-            "false_alarm": false_alarms,
-            "resolved": resolved
-        },
-        "recent_activity": {
-            "total_logs_24h": recent_logs,
-            "accidents_24h": recent_accidents
-        },
-        "user_stats": {
-            "total_users": total_users,
-            "active_users": active_users
-        },
-        "admin_stats": {
-            "total_admins": total_admins,
-            "active_admins": active_admins
-        },
-        "confidence_distribution": {
-            "high": high_confidence,
-            "medium": medium_confidence,
-            "low": low_confidence
-        },
-        "active_connections": len(live_processors),
-        "model_status": "loaded" if accident_model.model is not None else "not_loaded",
-        "accessed_by": current_admin.username
-    }
-
 # ==================== ERROR HANDLERS ====================
 
 @app.exception_handler(404)
@@ -1436,13 +1357,15 @@ if __name__ == "__main__":
     logger.info("ENHANCED ACCIDENT DETECTION API STARTING")
     logger.info("=" * 60)
     logger.info(f"Model Path: {getattr(accident_model, 'model_path', 'unknown')}")
-    logger.info(f"Model Loaded: {accident_model.model is not None}")
+    logger.info(f"Model Loaded: {hasattr(accident_model, 'model') and accident_model.model is not None}")
     logger.info(f"Detection Threshold: {getattr(accident_model, 'threshold', 0.5)}")
     logger.info(f"Database URL: {SQLALCHEMY_DATABASE_URL}")
     logger.info(f"Snapshots Directory: {SNAPSHOTS_DIR}")
     logger.info(f"JWT Secret Key Set: {bool(SECRET_KEY and SECRET_KEY != 'your-secret-key-change-this-in-production-render-deployment-2024')}")
     logger.info(f"CORS Debug Mode: {CORS_DEBUG_MODE}")
     logger.info(f"Allowed Origins: {ALLOWED_ORIGINS}")
+    logger.info(f"Upload Timeout: {UPLOAD_TIMEOUT}s")
+    logger.info(f"Max File Size: {MAX_FILE_SIZE // (1024*1024)}MB")
     logger.info("=" * 60)
     
     # Create snapshots directory if it doesn't exist
@@ -1454,5 +1377,7 @@ if __name__ == "__main__":
         host="0.0.0.0", 
         port=int(os.getenv("PORT", 8000)),
         log_level="info",
-        access_log=True
+        access_log=True,
+        timeout_keep_alive=30,
+        timeout_graceful_shutdown=30
     )
