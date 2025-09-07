@@ -12,8 +12,8 @@ const useAuth = () => {
   return context;
 };
 
-// API configuration
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+// FIXED: API configuration with correct Render URL
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://accident-prediction-1-mpm0.onrender.com';
 
 // Auth Provider Component
 const AuthProvider = ({ children }) => {
@@ -23,7 +23,7 @@ const AuthProvider = ({ children }) => {
   // Derive isAuthenticated from user state
   const isAuthenticated = !!user;
 
-  // FIXED: Better token storage and retrieval
+  // Better token storage and retrieval
   const storeAuthData = (userData, token) => {
     try {
       // Store token separately (primary location for API client)
@@ -63,25 +63,24 @@ const AuthProvider = ({ children }) => {
   useEffect(() => {
     const checkStoredAuth = () => {
       try {
-        // First check for separate token
         const storedToken = localStorage.getItem('token');
         const storedUser = localStorage.getItem('user');
         
         console.log('Checking stored auth:', {
           hasToken: !!storedToken,
           hasUser: !!storedUser,
-          tokenPreview: storedToken ? `${storedToken.substring(0, 10)}...` : 'none'
+          tokenPreview: storedToken ? `${storedToken.substring(0, 10)}...` : 'none',
+          apiUrl: API_BASE_URL
         });
         
         if (storedToken && storedUser && storedUser !== 'null') {
           const userData = JSON.parse(storedUser);
-          // Ensure token is in user data
           userData.token = storedToken;
           setUser(userData);
           console.log('Auth restored from storage:', userData.username);
         } else {
           console.log('No valid auth data found in storage');
-          clearAuthData(); // Clean up any partial data
+          clearAuthData();
         }
       } catch (error) {
         console.error('Error parsing stored auth data:', error);
@@ -97,20 +96,27 @@ const AuthProvider = ({ children }) => {
   const login = async (credentials) => {
     setIsLoading(true);
     try {
-      console.log('Attempting login for:', credentials.username);
+      console.log('Attempting login for:', credentials.username, 'to API:', API_BASE_URL);
       
-      // Try API login first
+      // Enhanced fetch with timeout and error handling
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 15000);
+      
       try {
         const response = await fetch(`${API_BASE_URL}/auth/login`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
+            'Accept': 'application/json'
           },
           body: JSON.stringify({
             username: credentials.username,
             password: credentials.password
-          })
+          }),
+          signal: controller.signal
         });
+
+        clearTimeout(timeoutId);
 
         console.log('Login API response:', response.status, response.ok);
 
@@ -150,12 +156,20 @@ const AuthProvider = ({ children }) => {
           
           return userData;
         } else {
-          // If API login fails, get error details
           const errorData = await response.json().catch(() => ({ detail: 'Login failed' }));
           throw new Error(errorData.detail || 'API login failed');
         }
       } catch (apiError) {
-        console.log('API login failed, trying demo login:', apiError.message);
+        clearTimeout(timeoutId);
+        
+        // Check if it's a timeout or network error
+        if (apiError.name === 'AbortError') {
+          console.log('Login request timed out, trying demo login');
+        } else if (apiError.message.includes('NetworkError') || apiError.message.includes('fetch')) {
+          console.log('Network error during login, trying demo login:', apiError.message);
+        } else {
+          console.log('API login failed:', apiError.message);
+        }
         
         // Fallback to demo login
         await new Promise(resolve => setTimeout(resolve, 1000));
@@ -171,14 +185,14 @@ const AuthProvider = ({ children }) => {
             isDemo: true
           };
           
-          // Create a demo token
           const demoToken = 'demo-token-' + Date.now();
           
           setUser(userData);
           storeAuthData(userData, demoToken);
           return userData;
         } else {
-          throw new Error('Invalid username or password');
+          // If not demo credentials and API failed, throw the original error
+          throw new Error(apiError.message || 'Login failed');
         }
       }
     } catch (error) {
@@ -192,21 +206,26 @@ const AuthProvider = ({ children }) => {
   const adminLogin = async (credentials) => {
     setIsLoading(true);
     try {
-      console.log('Attempting admin login for:', credentials.username);
+      console.log('Attempting admin login for:', credentials.username, 'to API:', API_BASE_URL);
       
-      // Try API admin login first
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 15000);
+      
       try {
         const response = await fetch(`${API_BASE_URL}/auth/admin/login`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
+            'Accept': 'application/json'
           },
           body: JSON.stringify({
             username: credentials.username,
             password: credentials.password
-          })
+          }),
+          signal: controller.signal
         });
 
+        clearTimeout(timeoutId);
         console.log('Admin login API response:', response.status, response.ok);
 
         if (response.ok) {
@@ -251,7 +270,15 @@ const AuthProvider = ({ children }) => {
           throw new Error(errorData.detail || 'API admin login failed');
         }
       } catch (apiError) {
-        console.log('API admin login failed, trying demo login:', apiError.message);
+        clearTimeout(timeoutId);
+        
+        if (apiError.name === 'AbortError') {
+          console.log('Admin login request timed out, trying demo login');
+        } else if (apiError.message.includes('NetworkError') || apiError.message.includes('fetch')) {
+          console.log('Network error during admin login, trying demo login:', apiError.message);
+        } else {
+          console.log('API admin login failed:', apiError.message);
+        }
         
         // Fallback to demo admin login
         await new Promise(resolve => setTimeout(resolve, 1000));
@@ -268,14 +295,13 @@ const AuthProvider = ({ children }) => {
             isDemo: true
           };
           
-          // Create a demo admin token
           const demoToken = 'demo-admin-token-' + Date.now();
           
           setUser(userData);
           storeAuthData(userData, demoToken);
           return userData;
         } else {
-          throw new Error('Invalid admin credentials');
+          throw new Error(apiError.message || 'Invalid admin credentials');
         }
       }
     } catch (error) {
@@ -289,23 +315,28 @@ const AuthProvider = ({ children }) => {
   const register = async (userData) => {
     setIsLoading(true);
     try {
-      console.log('Attempting registration for:', userData.username);
+      console.log('Attempting registration for:', userData.username, 'to API:', API_BASE_URL);
       
-      // Try API registration first
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 15000);
+      
       try {
         const response = await fetch(`${API_BASE_URL}/auth/register`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
+            'Accept': 'application/json'
           },
           body: JSON.stringify({
             username: userData.username,
             email: userData.email,
             password: userData.password,
             department: userData.department || 'General'
-          })
+          }),
+          signal: controller.signal
         });
 
+        clearTimeout(timeoutId);
         console.log('Registration API response:', response.status, response.ok);
 
         if (response.ok) {
@@ -313,7 +344,7 @@ const AuthProvider = ({ children }) => {
           console.log('Registration successful');
           
           const newUser = {
-            id: data.user_id || Date.now(),
+            id: data.id || Date.now(),
             username: userData.username,
             email: userData.email,
             role: 'user',
@@ -321,14 +352,21 @@ const AuthProvider = ({ children }) => {
             loginTime: new Date().toISOString(),
           };
           
-          // Don't auto-login after registration, just return success
           return newUser;
         } else {
           const errorData = await response.json().catch(() => ({ detail: 'Registration failed' }));
           throw new Error(errorData.detail || 'API registration failed');
         }
       } catch (apiError) {
-        console.log('API registration failed, using demo registration:', apiError.message);
+        clearTimeout(timeoutId);
+        
+        if (apiError.name === 'AbortError') {
+          console.log('Registration request timed out, using demo registration');
+        } else if (apiError.message.includes('NetworkError') || apiError.message.includes('fetch')) {
+          console.log('Network error during registration, using demo registration:', apiError.message);
+        } else {
+          console.log('API registration failed:', apiError.message);
+        }
         
         // Fallback to demo registration
         await new Promise(resolve => setTimeout(resolve, 1000));
@@ -371,7 +409,6 @@ const AuthProvider = ({ children }) => {
     setUser(null);
     clearAuthData();
     
-    // Optional: redirect to home page
     if (typeof window !== 'undefined') {
       window.location.href = '/auth';
     }
@@ -385,7 +422,6 @@ const AuthProvider = ({ children }) => {
     }
   };
 
-  // FIXED: Enhanced updateProfile with better token handling
   const updateProfile = async (profileData) => {
     console.log('Updating profile with data:', profileData);
     
@@ -398,7 +434,6 @@ const AuthProvider = ({ children }) => {
         console.log('Attempting password change...');
         
         if (user?.token && !user?.isDemo) {
-          // Try API password update
           try {
             const endpoint = user.role === 'admin' ? '/auth/admin/change-password' : '/auth/change-password';
             
@@ -417,7 +452,6 @@ const AuthProvider = ({ children }) => {
             if (response.ok) {
               const result = await response.json();
               console.log('Password changed successfully via API');
-              // Update last password change timestamp
               updatedUser.last_password_change = result.last_password_change;
               shouldStoreAuth = true;
             } else {
@@ -426,10 +460,9 @@ const AuthProvider = ({ children }) => {
             }
           } catch (apiError) {
             console.log('API password change failed:', apiError.message);
-            throw apiError; // Don't fallback for password changes - security risk
+            throw apiError;
           }
         } else {
-          // Demo mode password change
           console.log('Demo password change successful');
           updatedUser.last_password_change = new Date().toISOString();
           shouldStoreAuth = true;
@@ -453,7 +486,6 @@ const AuthProvider = ({ children }) => {
         console.log('Updating profile fields:', profileUpdates);
         
         if (user?.token && !user?.isDemo) {
-          // Try API profile update
           try {
             const endpoint = user.role === 'admin' ? '/auth/admin/me' : '/auth/me';
             
@@ -470,48 +502,39 @@ const AuthProvider = ({ children }) => {
               const apiUpdatedData = await response.json();
               console.log('Profile updated successfully via API');
               
-              // Check if username changed and new token provided
               if (apiUpdatedData.new_token && apiUpdatedData.username_changed) {
                 console.log('Username changed, updating token');
                 updatedUser.token = apiUpdatedData.new_token;
                 
-                // Clear old auth data and store new data with new token
                 clearAuthData();
                 storeAuthData(updatedUser, apiUpdatedData.new_token);
                 
-                // Force page refresh to ensure all components use new token
                 setTimeout(() => {
                   window.location.reload();
                 }, 1000);
               }
               
-              // Merge API response with our updates
               updatedUser = { ...updatedUser, ...apiUpdatedData };
               shouldStoreAuth = true;
             } else {
               const errorData = await response.json().catch(() => ({ detail: 'Profile update failed' }));
               console.log('API profile update failed:', errorData.detail);
-              // Continue with local update for non-critical fields
               shouldStoreAuth = true;
             }
           } catch (apiError) {
             console.log('API profile update failed:', apiError.message);
-            // Continue with local update
             shouldStoreAuth = true;
           }
         } else {
-          // Demo mode or no token - update locally
           console.log('Updating profile locally (demo mode)');
           shouldStoreAuth = true;
         }
       }
 
       if (shouldStoreAuth) {
-        // Update the user state
         updatedUser.last_updated = new Date().toISOString();
         setUser(updatedUser);
         
-        // Store updated data in localStorage (unless new token was provided)
         if (user?.token && !profileUpdates.username) {
           storeAuthData(updatedUser, user.token);
         }
@@ -528,7 +551,6 @@ const AuthProvider = ({ children }) => {
     }
   };
 
-  // NEW: Force refresh user data from storage
   const refreshUserFromStorage = () => {
     try {
       const storedUser = localStorage.getItem('user');
@@ -544,13 +566,14 @@ const AuthProvider = ({ children }) => {
     return null;
   };
 
-  // Debug logging (remove in production)
+  // Debug logging
   useEffect(() => {
     console.log('Auth State Changed:', { 
       user: user ? { username: user.username, role: user.role, id: user.id } : null,
       isAuthenticated: isAuthenticated, 
       isLoading: isLoading,
       hasToken: !!user?.token,
+      apiUrl: API_BASE_URL,
       timestamp: new Date().toISOString()
     });
   }, [user, isAuthenticated, isLoading]);
