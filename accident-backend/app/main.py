@@ -706,8 +706,8 @@ async def root():
         "status": "healthy",
         "features": ["Real-time detection", "Database logging", "Snapshot storage", "User/Admin Auth", "Dashboard API"],
         "timestamp": datetime.now(timezone.utc).isoformat(),
-        "cors_status": "enabled_for_vercel",
-        "allowed_origins": len(ALLOWED_ORIGINS)
+        "cors_status": "emergency_wildcard_enabled",
+        "allowed_origins": "all_origins_allowed"
     }
 
 @app.get("/api/health")
