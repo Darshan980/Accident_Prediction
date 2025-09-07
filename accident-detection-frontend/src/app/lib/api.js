@@ -1,15 +1,15 @@
-// src/lib/api.js - FIXED API client with proper token handling
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+// src/lib/api.js - FIXED API client with proper backend URL configuration
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://accident-prediction-1-mpm0.onrender.com'
 
 class ApiClient {
   constructor() {
     this.baseURL = API_BASE_URL
     this.timeout = 30000 // 30 seconds
+    console.log('ApiClient initialized with baseURL:', this.baseURL)
   }
 
-  // FIXED: More robust token retrieval with fallback hierarchy
+  // Enhanced token retrieval with better error handling
   getAuthToken() {
-    // Try different storage locations in order of preference
     const tokenSources = [
       () => localStorage.getItem('token'),
       () => sessionStorage.getItem('token'), 
@@ -46,16 +46,19 @@ class ApiClient {
     return null;
   }
 
-  // FIXED: Better error handling and token validation
+  // Enhanced request method with better CORS and error handling
   async request(endpoint, options = {}) {
     const url = `${this.baseURL}${endpoint}`
     const token = this.getAuthToken();
     
     const config = {
       timeout: this.timeout,
+      mode: 'cors', // Explicitly set CORS mode
+      credentials: 'include', // Include credentials for cross-origin requests
       headers: {
         'Accept': 'application/json',
         'Content-Type': 'application/json',
+        'Origin': 'https://accident-prediction-wt8k-git-main-darshan-ss-projects-39372c06.vercel.app',
         // Add Authorization header if token exists
         ...(token && { 'Authorization': `Bearer ${token}` }),
         ...options.headers
@@ -72,7 +75,8 @@ class ApiClient {
       console.log(`Making request to: ${url}`, {
         method: config.method || 'GET',
         hasToken: !!token,
-        tokenPreview: token ? `${token.substring(0, 10)}...` : 'none'
+        tokenPreview: token ? `${token.substring(0, 10)}...` : 'none',
+        headers: config.headers
       });
 
       const response = await fetch(url, config)
@@ -80,13 +84,19 @@ class ApiClient {
       console.log(`Response from ${url}:`, {
         status: response.status,
         ok: response.ok,
+        statusText: response.statusText,
         headers: Object.fromEntries(response.headers.entries())
       });
       
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ 
-          detail: `HTTP ${response.status}: ${response.statusText}` 
-        }))
+        let errorData;
+        try {
+          errorData = await response.json();
+        } catch (e) {
+          errorData = { 
+            detail: `HTTP ${response.status}: ${response.statusText}` 
+          };
+        }
         
         // Handle authentication errors
         if (response.status === 401) {
@@ -95,18 +105,37 @@ class ApiClient {
           throw new Error('Authentication required. Please log in again.');
         }
         
-        throw new Error(errorData.detail || `HTTP ${response.status}`)
+        // Handle CORS errors
+        if (response.status === 0 || response.type === 'opaque') {
+          throw new Error('CORS error: Unable to connect to backend. Please check the server configuration.');
+        }
+        
+        throw new Error(errorData.detail || `HTTP ${response.status}: ${response.statusText}`)
       }
 
-      const data = await response.json()
-      console.log(`Success response from ${url}:`, data);
-      return data
+      const contentType = response.headers.get('content-type');
+      if (contentType && contentType.includes('application/json')) {
+        const data = await response.json();
+        console.log(`Success response from ${url}:`, data);
+        return data;
+      } else {
+        // Handle non-JSON responses
+        const text = await response.text();
+        console.log(`Non-JSON response from ${url}:`, text);
+        return { message: text };
+      }
+      
     } catch (error) {
       console.error(`Request failed for ${url}:`, error);
       
       if (error.name === 'TypeError' && error.message.includes('fetch')) {
-        throw new Error('Network error: Unable to connect to server. Check if the backend is running on ' + this.baseURL)
+        throw new Error(`Network error: Unable to connect to backend server at ${this.baseURL}. Please check if the backend is running and accessible.`)
       }
+      
+      if (error.message.includes('CORS')) {
+        throw new Error(`CORS error: The frontend at ${window.location.origin} cannot access the backend at ${this.baseURL}. Please check the backend CORS configuration.`)
+      }
+      
       throw error
     }
   }
@@ -120,41 +149,39 @@ class ApiClient {
     });
   }
 
-  // FIXED: Upload file with both XMLHttpRequest and fetch fallback
+  // Enhanced file upload with better error handling and progress tracking
   async uploadFile(file, onProgress = null) {
-    // Debug the file object thoroughly
     console.log('=== FILE UPLOAD DEBUG ===');
     console.log('File object:', file);
-    console.log('File constructor:', file.constructor.name);
-    console.log('File instanceof File:', file instanceof File);
-    console.log('File instanceof Blob:', file instanceof Blob);
     console.log('File properties:', {
       name: file.name,
       size: file.size,
       type: file.type,
       lastModified: file.lastModified
     });
-    console.log('File keys:', Object.keys(file));
-    console.log('File prototype:', Object.getPrototypeOf(file));
+
+    // Validate file
+    if (!file || !(file instanceof File)) {
+      throw new Error('Invalid file object provided');
+    }
+
+    if (file.size > 50 * 1024 * 1024) {
+      throw new Error('File too large. Maximum size is 50MB.');
+    }
+
+    const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp', 
+                       'video/mp4', 'video/avi', 'video/mov', 'video/quicktime'];
+    if (!validTypes.includes(file.type.toLowerCase())) {
+      throw new Error(`Invalid file type. Supported types: ${validTypes.join(', ')}`);
+    }
 
     const formData = new FormData()
     formData.append('file', file)
 
-    // Debug FormData
-    console.log('FormData created');
-    console.log('FormData entries:');
-    for (let [key, value] of formData.entries()) {
-      console.log(`  ${key}:`, value);
-      console.log(`  ${key} type:`, typeof value);
-      console.log(`  ${key} constructor:`, value.constructor.name);
-      console.log(`  ${key} instanceof File:`, value instanceof File);
-      console.log(`  ${key} instanceof Blob:`, value instanceof Blob);
-    }
-
     const token = this.getAuthToken();
     
     if (!token) {
-      throw new Error('Authentication required for file upload');
+      throw new Error('Authentication required for file upload. Please log in first.');
     }
 
     console.log('Starting file upload:', {
@@ -166,7 +193,7 @@ class ApiClient {
     });
 
     // Try XMLHttpRequest first (for progress tracking)
-    if (onProgress) {
+    if (onProgress && typeof onProgress === 'function') {
       return this.uploadFileWithXHR(file, formData, token, onProgress);
     } else {
       // Use fetch as fallback (simpler, more reliable)
@@ -174,7 +201,7 @@ class ApiClient {
     }
   }
 
-  // XMLHttpRequest method (with progress tracking)
+  // XMLHttpRequest method with progress tracking
   async uploadFileWithXHR(file, formData, token, onProgress) {
     const xhr = new XMLHttpRequest()
     
@@ -190,8 +217,7 @@ class ApiClient {
         console.log('XHR Upload completed:', {
           status: xhr.status,
           statusText: xhr.statusText,
-          responseLength: xhr.responseText?.length || 0,
-          responsePreview: xhr.responseText?.substring(0, 200) || 'No response'
+          responseLength: xhr.responseText?.length || 0
         });
 
         if (xhr.status >= 200 && xhr.status < 300) {
@@ -201,61 +227,15 @@ class ApiClient {
             resolve(result)
           } catch (parseError) {
             console.error('Failed to parse XHR upload response:', parseError);
-            console.error('Raw XHR response:', xhr.responseText);
             reject(new Error(`Invalid JSON response from server: ${parseError.message}`))
           }
         } else {
-          let errorMessage = `Upload failed with status ${xhr.status}`;
-          
-          try {
-            const errorData = JSON.parse(xhr.responseText)
-            console.log('Parsed error data:', errorData);
-            
-            // Handle different error response formats
-            if (errorData.detail) {
-              if (Array.isArray(errorData.detail)) {
-                // FastAPI validation errors are arrays
-                errorMessage = errorData.detail.map(err => 
-                  `${err.loc ? err.loc.join('.') + ': ' : ''}${err.msg || err.message || err}`
-                ).join(', ');
-              } else if (typeof errorData.detail === 'string') {
-                errorMessage = errorData.detail;
-              } else {
-                errorMessage = JSON.stringify(errorData.detail);
-              }
-            } else if (errorData.message) {
-              errorMessage = errorData.message;
-            } else if (errorData.error) {
-              errorMessage = errorData.error;
-            } else {
-              errorMessage = JSON.stringify(errorData);
-            }
-            
-            if (xhr.status === 401) {
-              console.warn('Authentication failed during XHR upload');
-              this.clearTokens();
-              errorMessage = 'Authentication required. Please log in again.';
-            }
-          } catch (parseError) {
-            console.error('Failed to parse XHR error response:', parseError);
-            console.error('Raw error response:', xhr.responseText);
-            errorMessage = `${errorMessage}: ${xhr.statusText}. Raw response: ${xhr.responseText.substring(0, 200)}`;
-          }
-          
-          console.error('XHR Upload failed:', errorMessage);
-          reject(new Error(errorMessage))
+          this.handleXHRError(xhr, reject);
         }
       })
 
-      xhr.addEventListener('error', (event) => {
-        console.error('XHR Network error during upload. Trying fetch fallback...', {
-          type: event.type,
-          readyState: xhr.readyState,
-          status: xhr.status,
-          statusText: xhr.statusText
-        });
-        
-        // Try fetch as fallback
+      xhr.addEventListener('error', () => {
+        console.error('XHR Network error during upload. Trying fetch fallback...');
         this.uploadFileWithFetch(file, formData, token)
           .then(resolve)
           .catch(fetchError => {
@@ -269,46 +249,80 @@ class ApiClient {
         this.uploadFileWithFetch(file, formData, token)
           .then(resolve)
           .catch(fetchError => {
-            console.error('Fetch fallback also failed:', fetchError);
             reject(new Error(`Upload timeout: ${fetchError.message}`))
           });
       })
 
       xhr.addEventListener('abort', () => {
-        console.error('XHR Upload aborted');
         reject(new Error('Upload was aborted'))
       })
 
       try {
         xhr.open('POST', `${this.baseURL}/api/upload`)
         xhr.setRequestHeader('Authorization', `Bearer ${token}`)
+        xhr.setRequestHeader('Origin', window.location.origin)
         xhr.timeout = 60000 // 60 seconds for file uploads
+        xhr.withCredentials = true; // Include credentials for CORS
         
         console.log('Sending XHR upload request...');
         xhr.send(formData)
       } catch (error) {
-        console.error('Error setting up XHR upload request, trying fetch fallback:', error);
-        // Try fetch as fallback
+        console.error('Error setting up XHR upload request:', error);
         this.uploadFileWithFetch(file, formData, token)
           .then(resolve)
-          .catch(fetchError => {
-            console.error('Fetch fallback also failed:', fetchError);
-            reject(new Error(`Failed to initiate upload: ${fetchError.message}`))
-          });
+          .catch(reject);
       }
     })
   }
 
-  // Fetch method (more reliable, no progress tracking)
+  // Handle XHR errors
+  handleXHRError(xhr, reject) {
+    let errorMessage = `Upload failed with status ${xhr.status}`;
+    
+    try {
+      const errorData = JSON.parse(xhr.responseText)
+      console.log('Parsed error data:', errorData);
+      
+      if (errorData.detail) {
+        if (Array.isArray(errorData.detail)) {
+          errorMessage = errorData.detail.map(err => 
+            `${err.loc ? err.loc.join('.') + ': ' : ''}${err.msg || err.message || err}`
+          ).join(', ');
+        } else if (typeof errorData.detail === 'string') {
+          errorMessage = errorData.detail;
+        } else {
+          errorMessage = JSON.stringify(errorData.detail);
+        }
+      } else if (errorData.message) {
+        errorMessage = errorData.message;
+      }
+      
+      if (xhr.status === 401) {
+        console.warn('Authentication failed during XHR upload');
+        this.clearTokens();
+        errorMessage = 'Authentication required. Please log in again.';
+      }
+    } catch (parseError) {
+      console.error('Failed to parse XHR error response:', parseError);
+      errorMessage = `${errorMessage}: ${xhr.statusText}`;
+    }
+    
+    console.error('XHR Upload failed:', errorMessage);
+    reject(new Error(errorMessage))
+  }
+
+  // Fetch method for file upload
   async uploadFileWithFetch(file, formData, token) {
     console.log('Using fetch for file upload...');
     
     try {
       const response = await fetch(`${this.baseURL}/api/upload`, {
         method: 'POST',
+        mode: 'cors',
+        credentials: 'include',
         headers: {
-          'Authorization': `Bearer ${token}`
-          // Don't set Content-Type, let browser set it with boundary for FormData
+          'Authorization': `Bearer ${token}`,
+          'Origin': window.location.origin
         },
         body: formData
       });
@@ -316,50 +330,11 @@ class ApiClient {
       console.log('Fetch upload response:', {
         status: response.status,
         statusText: response.statusText,
-        ok: response.ok,
-        headers: Object.fromEntries(response.headers.entries())
+        ok: response.ok
       });
 
       if (!response.ok) {
-        let errorMessage = `Upload failed with status ${response.status}`;
-        
-        try {
-          const errorData = await response.json();
-          console.log('Fetch parsed error data:', errorData);
-          
-          // Handle different error response formats
-          if (errorData.detail) {
-            if (Array.isArray(errorData.detail)) {
-              // FastAPI validation errors are arrays
-              errorMessage = errorData.detail.map(err => 
-                `${err.loc ? err.loc.join('.') + ': ' : ''}${err.msg || err.message || err}`
-              ).join(', ');
-            } else if (typeof errorData.detail === 'string') {
-              errorMessage = errorData.detail;
-            } else {
-              errorMessage = JSON.stringify(errorData.detail);
-            }
-          } else if (errorData.message) {
-            errorMessage = errorData.message;
-          } else if (errorData.error) {
-            errorMessage = errorData.error;
-          } else {
-            errorMessage = JSON.stringify(errorData);
-          }
-          
-          if (response.status === 401) {
-            console.warn('Authentication failed during fetch upload');
-            this.clearTokens();
-            errorMessage = 'Authentication required. Please log in again.';
-          }
-        } catch (parseError) {
-          console.error('Failed to parse fetch error response:', parseError);
-          const responseText = await response.text().catch(() => 'Unable to read response');
-          console.error('Raw fetch error response:', responseText);
-          errorMessage = `${errorMessage}: ${response.statusText}. Raw response: ${responseText.substring(0, 200)}`;
-        }
-        
-        throw new Error(errorMessage);
+        await this.handleFetchError(response);
       }
 
       const result = await response.json();
@@ -370,26 +345,111 @@ class ApiClient {
       console.error('Fetch upload failed:', error);
       
       if (error.name === 'TypeError' && error.message.includes('fetch')) {
-        throw new Error('Network error: Unable to connect to server. Check if the backend is running on ' + this.baseURL);
+        throw new Error(`Network error: Unable to connect to backend server at ${this.baseURL}. Please check if the backend is running and accessible.`);
       }
       
       throw error;
     }
   }
 
-  // Health check with fallback
+  // Handle fetch errors
+  async handleFetchError(response) {
+    let errorMessage = `Upload failed with status ${response.status}`;
+    
+    try {
+      const errorData = await response.json();
+      console.log('Fetch parsed error data:', errorData);
+      
+      if (errorData.detail) {
+        if (Array.isArray(errorData.detail)) {
+          errorMessage = errorData.detail.map(err => 
+            `${err.loc ? err.loc.join('.') + ': ' : ''}${err.msg || err.message || err}`
+          ).join(', ');
+        } else if (typeof errorData.detail === 'string') {
+          errorMessage = errorData.detail;
+        } else {
+          errorMessage = JSON.stringify(errorData.detail);
+        }
+      } else if (errorData.message) {
+        errorMessage = errorData.message;
+      }
+      
+      if (response.status === 401) {
+        console.warn('Authentication failed during fetch upload');
+        this.clearTokens();
+        errorMessage = 'Authentication required. Please log in again.';
+      }
+    } catch (parseError) {
+      console.error('Failed to parse fetch error response:', parseError);
+      const responseText = await response.text().catch(() => 'Unable to read response');
+      errorMessage = `${errorMessage}: ${response.statusText}. Response: ${responseText.substring(0, 200)}`;
+    }
+    
+    throw new Error(errorMessage);
+  }
+
+  // Health check with enhanced error handling
   async healthCheck() {
     try {
-      return await this.request('/api/health')
+      const response = await this.request('/api/health')
+      console.log('Health check successful:', response);
+      return response;
     } catch (error) {
-      console.warn('Backend health check failed, using fallback:', error.message);
-      // Return a fallback response for development
+      console.warn('Backend health check failed:', error.message);
+      
+      // Return detailed fallback response for debugging
       return {
         status: 'offline',
         model_loaded: false,
-        message: 'Backend server is not running. Please start the Python backend.',
-        fallback: true
+        message: 'Backend server is not accessible.',
+        error: error.message,
+        backend_url: this.baseURL,
+        fallback: true,
+        timestamp: new Date().toISOString()
       }
+    }
+  }
+
+  // Test connection method
+  async testConnection() {
+    try {
+      console.log('Testing connection to backend...');
+      const response = await fetch(`${this.baseURL}/`, {
+        method: 'GET',
+        mode: 'cors',
+        credentials: 'include',
+        headers: {
+          'Origin': window.location.origin
+        }
+      });
+      
+      console.log('Connection test response:', {
+        status: response.status,
+        ok: response.ok,
+        statusText: response.statusText
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        return {
+          success: true,
+          data: data,
+          backend_url: this.baseURL
+        };
+      } else {
+        return {
+          success: false,
+          error: `HTTP ${response.status}: ${response.statusText}`,
+          backend_url: this.baseURL
+        };
+      }
+    } catch (error) {
+      console.error('Connection test failed:', error);
+      return {
+        success: false,
+        error: error.message,
+        backend_url: this.baseURL
+      };
     }
   }
 
@@ -402,9 +462,6 @@ class ApiClient {
   async configureModel(config) {
     return this.request('/api/configure', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
       body: JSON.stringify(config)
     })
   }
@@ -418,9 +475,6 @@ class ApiClient {
   async analyzeFrame(frameData) {
     return this.request('/api/live/frame', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
       body: JSON.stringify(frameData)
     })
   }
@@ -458,16 +512,11 @@ class ApiClient {
   async updateLogStatus(logId, statusData) {
     return this.request(`/api/logs/${logId}/status`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
       body: JSON.stringify(statusData)
     })
   }
 
-  // ADMIN ROUTES - these require admin authentication
-  
-  // Get admin logs
+  // ADMIN ROUTES
   async getAdminLogs(skip = 0, limit = 100, accidentOnly = false, status = null, source = null) {
     let params = new URLSearchParams({
       skip: skip.toString(),
@@ -481,108 +530,109 @@ class ApiClient {
     return this.request(`/api/admin/logs?${params.toString()}`)
   }
 
-  // Get admin dashboard stats
   async getAdminDashboardStats() {
     return this.request('/api/admin/dashboard/stats')
   }
 
-  // Update log status (admin route)
   async updateAdminLogStatus(logId, statusData) {
     return this.request(`/api/admin/logs/${logId}/status`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
       body: JSON.stringify(statusData)
     })
   }
 
-  // Delete log (admin only)
   async deleteLog(logId) {
     return this.request(`/api/admin/logs/${logId}`, {
       method: 'DELETE'
     })
   }
 
-  // Get all users (admin only)
   async getAllUsers() {
     return this.request('/api/admin/users')
   }
 
-  // Get all admins (super admin only)
   async getAllAdmins() {
     return this.request('/api/admin/admins')
   }
 
-  // Update user status (admin only)
   async updateUserStatus(userId, statusData) {
     return this.request(`/api/admin/users/${userId}/status`, {
       method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json'
-      },
       body: JSON.stringify(statusData)
     })
   }
 
-  // Create new admin (super admin only)
   async createAdmin(adminData) {
     return this.request('/auth/admin/create', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
       body: JSON.stringify(adminData)
     })
   }
 
-  // AUTHENTICATION ROUTES - these don't need /api prefix
-
-  // User registration
+  // AUTHENTICATION ROUTES
   async register(userData) {
     return this.request('/auth/register', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
       body: JSON.stringify(userData)
     })
   }
 
-  // User login
   async login(credentials) {
     return this.request('/auth/login', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
       body: JSON.stringify(credentials)
     })
   }
 
-  // Admin login
   async adminLogin(credentials) {
     return this.request('/auth/admin/login', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
       body: JSON.stringify(credentials)
     })
   }
 
-  // Get current user info
   async getCurrentUser() {
     return this.request('/auth/me')
   }
 
-  // Get current admin info
   async getCurrentAdmin() {
     return this.request('/auth/admin/me')
   }
+
+  // Update user profile
+  async updateProfile(profileData) {
+    return this.request('/auth/me', {
+      method: 'PUT',
+      body: JSON.stringify(profileData)
+    })
+  }
+
+  // Change password
+  async changePassword(passwordData) {
+    return this.request('/auth/change-password', {
+      method: 'PUT',
+      body: JSON.stringify(passwordData)
+    })
+  }
+
+  // Update admin profile
+  async updateAdminProfile(profileData) {
+    return this.request('/auth/admin/me', {
+      method: 'PUT',
+      body: JSON.stringify(profileData)
+    })
+  }
+
+  // Change admin password
+  async changeAdminPassword(passwordData) {
+    return this.request('/auth/admin/change-password', {
+      method: 'PUT',
+      body: JSON.stringify(passwordData)
+    })
+  }
 }
 
-// WebSocket manager for live detection
+// Enhanced WebSocket manager for live detection
 class LiveDetectionWebSocket {
   constructor() {
     this.ws = null
@@ -595,7 +645,6 @@ class LiveDetectionWebSocket {
     this.connectionHandlers = new Set()
   }
 
-  // Get auth token for WebSocket authentication
   getAuthToken() {
     return localStorage.getItem('token') || 
            sessionStorage.getItem('token') || 
@@ -616,11 +665,14 @@ class LiveDetectionWebSocket {
   connect() {
     return new Promise((resolve, reject) => {
       try {
-        const wsURL = API_BASE_URL.replace('http', 'ws') + '/api/live/ws'
+        // Convert HTTP URL to WebSocket URL
+        const wsURL = API_BASE_URL.replace('https://', 'wss://').replace('http://', 'ws://') + '/api/live/ws'
+        console.log('Connecting to WebSocket:', wsURL);
+        
         this.ws = new WebSocket(wsURL)
 
         this.ws.onopen = () => {
-          console.log('WebSocket connected')
+          console.log('WebSocket connected successfully')
           this.isConnected = true
           this.reconnectAttempts = 0
           this.connectionHandlers.forEach(handler => handler('connected'))
@@ -628,6 +680,7 @@ class LiveDetectionWebSocket {
           // Send auth token if available
           const token = this.getAuthToken();
           if (token) {
+            console.log('Sending auth token to WebSocket...');
             this.ws.send(JSON.stringify({
               type: 'auth',
               token: token
@@ -640,6 +693,7 @@ class LiveDetectionWebSocket {
         this.ws.onmessage = (event) => {
           try {
             const data = JSON.parse(event.data)
+            console.log('WebSocket message received:', data);
             this.messageHandlers.forEach(handler => handler(data))
           } catch (error) {
             console.error('Error parsing WebSocket message:', error)
@@ -652,6 +706,7 @@ class LiveDetectionWebSocket {
           this.connectionHandlers.forEach(handler => handler('disconnected'))
           
           if (!event.wasClean && this.reconnectAttempts < this.maxReconnectAttempts) {
+            console.log('WebSocket closed unexpectedly, attempting reconnection...');
             this.attemptReconnect()
           }
         }
@@ -659,10 +714,15 @@ class LiveDetectionWebSocket {
         this.ws.onerror = (error) => {
           console.error('WebSocket error:', error)
           this.errorHandlers.forEach(handler => handler(error))
-          reject(error)
+          
+          // Don't reject immediately, let onclose handle reconnection
+          if (this.reconnectAttempts === 0) {
+            reject(error)
+          }
         }
 
       } catch (error) {
+        console.error('Failed to create WebSocket connection:', error);
         reject(error)
       }
     })
@@ -670,12 +730,13 @@ class LiveDetectionWebSocket {
 
   attemptReconnect() {
     this.reconnectAttempts++
-    console.log(`Attempting reconnection ${this.reconnectAttempts}/${this.maxReconnectAttempts}...`)
+    console.log(`Attempting WebSocket reconnection ${this.reconnectAttempts}/${this.maxReconnectAttempts}...`)
     
     setTimeout(() => {
       this.connect().catch(error => {
-        console.error('Reconnection failed:', error)
+        console.error(`Reconnection attempt ${this.reconnectAttempts} failed:`, error)
         if (this.reconnectAttempts >= this.maxReconnectAttempts) {
+          console.error('Max WebSocket reconnection attempts reached');
           this.errorHandlers.forEach(handler => 
             handler(new Error('Max reconnection attempts reached'))
           )
@@ -686,7 +747,11 @@ class LiveDetectionWebSocket {
 
   sendFrame(frameData) {
     if (this.isConnected && this.ws) {
-      this.ws.send(JSON.stringify(frameData))
+      try {
+        this.ws.send(JSON.stringify(frameData))
+      } catch (error) {
+        console.error('Failed to send frame data:', error);
+      }
     } else {
       console.warn('WebSocket not connected, cannot send frame')
     }
@@ -709,38 +774,48 @@ class LiveDetectionWebSocket {
 
   disconnect() {
     if (this.ws) {
+      console.log('Disconnecting WebSocket...');
       this.ws.close(1000, 'Client disconnect')
       this.ws = null
     }
     this.isConnected = false
   }
+
+  getConnectionStatus() {
+    return {
+      isConnected: this.isConnected,
+      reconnectAttempts: this.reconnectAttempts,
+      maxReconnectAttempts: this.maxReconnectAttempts,
+      wsUrl: this.ws ? this.ws.url : null
+    }
+  }
 }
 
-// Utility functions
+// Enhanced utility functions
 export const utils = {
   // Convert canvas to base64
-  canvasToBase64(canvas) {
-    return canvas.toDataURL('image/jpeg', 0.8).split(',')[1]
+  canvasToBase64(canvas, quality = 0.8) {
+    return canvas.toDataURL('image/jpeg', quality).split(',')[1]
   },
 
   // Convert video frame to base64
-  videoFrameToBase64(video) {
+  videoFrameToBase64(video, quality = 0.8) {
     const canvas = document.createElement('canvas')
     const ctx = canvas.getContext('2d')
     
-    canvas.width = video.videoWidth
-    canvas.height = video.videoHeight
+    canvas.width = video.videoWidth || video.width || 640
+    canvas.height = video.videoHeight || video.height || 480
     
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
     
-    return canvas.toDataURL('image/jpeg', 0.8).split(',')[1]
+    return canvas.toDataURL('image/jpeg', quality).split(',')[1]
   },
 
   // Format file size
   formatFileSize(bytes) {
     if (bytes === 0) return '0 Bytes'
     const k = 1024
-    const sizes = ['Bytes', 'KB', 'MB', 'GB']
+    const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB']
     const i = Math.floor(Math.log(bytes) / Math.log(k))
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
   },
@@ -748,10 +823,10 @@ export const utils = {
   // Validate file type
   isValidFileType(file) {
     const validTypes = [
-      'image/jpeg', 'image/png', 'image/gif',
-      'video/mp4', 'video/avi', 'video/mov', 'video/quicktime'
+      'image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp',
+      'video/mp4', 'video/avi', 'video/mov', 'video/quicktime', 'video/x-msvideo'
     ]
-    return validTypes.includes(file.type)
+    return validTypes.includes(file.type.toLowerCase())
   },
 
   // Get confidence color
@@ -760,11 +835,94 @@ export const utils = {
     if (confidence >= 0.6) return '#fd7e14' // Medium risk - orange
     if (confidence >= 0.4) return '#ffc107' // Low risk - yellow
     return '#28a745' // Very low risk - green
+  },
+
+  // Get status badge color
+  getStatusColor(status) {
+    switch (status?.toLowerCase()) {
+      case 'verified': return '#28a745' // green
+      case 'resolved': return '#007bff' // blue
+      case 'false_alarm': return '#6c757d' // gray
+      case 'unresolved': return '#dc3545' // red
+      default: return '#ffc107' // yellow
+    }
+  },
+
+  // Format timestamp
+  formatTimestamp(timestamp, options = {}) {
+    const date = new Date(timestamp);
+    const defaultOptions = {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      ...options
+    };
+    
+    return date.toLocaleDateString('en-US', defaultOptions);
+  },
+
+  // Debounce function
+  debounce(func, wait, immediate = false) {
+    let timeout;
+    return function executedFunction(...args) {
+      const later = () => {
+        timeout = null;
+        if (!immediate) func(...args);
+      };
+      const callNow = immediate && !timeout;
+      clearTimeout(timeout);
+      timeout = setTimeout(later, wait);
+      if (callNow) func(...args);
+    };
+  },
+
+  // Throttle function
+  throttle(func, limit) {
+    let inThrottle;
+    return function(...args) {
+      if (!inThrottle) {
+        func.apply(this, args);
+        inThrottle = true;
+        setTimeout(() => inThrottle = false, limit);
+      }
+    }
+  },
+
+  // Retry function with exponential backoff
+  async retry(fn, maxAttempts = 3, baseDelay = 1000) {
+    let attempt = 1;
+    
+    while (attempt <= maxAttempts) {
+      try {
+        return await fn();
+      } catch (error) {
+        if (attempt === maxAttempts) {
+          throw error;
+        }
+        
+        const delay = baseDelay * Math.pow(2, attempt - 1);
+        console.warn(`Attempt ${attempt} failed, retrying in ${delay}ms...`, error.message);
+        
+        await new Promise(resolve => setTimeout(resolve, delay));
+        attempt++;
+      }
+    }
   }
 }
 
 // Create singleton instances
 export const apiClient = new ApiClient()
 export const liveDetectionWS = new LiveDetectionWebSocket()
+
+// Export connection test function
+export const testBackendConnection = async () => {
+  console.log('Testing backend connection...');
+  const result = await apiClient.testConnection();
+  console.log('Connection test result:', result);
+  return result;
+}
 
 export default apiClient
