@@ -1,4 +1,4 @@
-// src/lib/api.js - FIXED API client with proper backend URL configuration
+// src/lib/api.js - FIXED API client with correct Render URL configuration
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://accident-prediction-1-mpm0.onrender.com'
 
 class ApiClient {
@@ -53,12 +53,11 @@ class ApiClient {
     
     const config = {
       timeout: this.timeout,
-      mode: 'cors', // Explicitly set CORS mode
-      credentials: 'include', // Include credentials for cross-origin requests
+      mode: 'cors',
+      credentials: 'include',
       headers: {
         'Accept': 'application/json',
         'Content-Type': 'application/json',
-        'Origin': 'https://accident-prediction-wt8k-git-main-darshan-ss-projects-39372c06.vercel.app',
         // Add Authorization header if token exists
         ...(token && { 'Authorization': `Bearer ${token}` }),
         ...options.headers
@@ -76,7 +75,7 @@ class ApiClient {
         method: config.method || 'GET',
         hasToken: !!token,
         tokenPreview: token ? `${token.substring(0, 10)}...` : 'none',
-        headers: config.headers
+        headers: Object.keys(config.headers)
       });
 
       const response = await fetch(url, config)
@@ -84,8 +83,7 @@ class ApiClient {
       console.log(`Response from ${url}:`, {
         status: response.status,
         ok: response.ok,
-        statusText: response.statusText,
-        headers: Object.fromEntries(response.headers.entries())
+        statusText: response.statusText
       });
       
       if (!response.ok) {
@@ -133,7 +131,7 @@ class ApiClient {
       }
       
       if (error.message.includes('CORS')) {
-        throw new Error(`CORS error: The frontend at ${window.location.origin} cannot access the backend at ${this.baseURL}. Please check the backend CORS configuration.`)
+        throw new Error(`CORS error: The frontend cannot access the backend at ${this.baseURL}. Please check the backend CORS configuration.`)
       }
       
       throw error
@@ -192,140 +190,34 @@ class ApiClient {
       endpoint: `${this.baseURL}/api/upload`
     });
 
-    // Try XMLHttpRequest first (for progress tracking)
-    if (onProgress && typeof onProgress === 'function') {
-      return this.uploadFileWithXHR(file, formData, token, onProgress);
-    } else {
-      // Use fetch as fallback (simpler, more reliable)
-      return this.uploadFileWithFetch(file, formData, token);
-    }
+    // Use fetch for file upload (more reliable than XMLHttpRequest for CORS)
+    return this.uploadFileWithFetch(file, formData, token, onProgress);
   }
 
-  // XMLHttpRequest method with progress tracking
-  async uploadFileWithXHR(file, formData, token, onProgress) {
-    const xhr = new XMLHttpRequest()
-    
-    return new Promise((resolve, reject) => {
-      xhr.upload.addEventListener('progress', (event) => {
-        if (event.lengthComputable && onProgress) {
-          const percentComplete = (event.loaded / event.total) * 100
-          onProgress(Math.round(percentComplete))
-        }
-      })
-
-      xhr.addEventListener('load', () => {
-        console.log('XHR Upload completed:', {
-          status: xhr.status,
-          statusText: xhr.statusText,
-          responseLength: xhr.responseText?.length || 0
-        });
-
-        if (xhr.status >= 200 && xhr.status < 300) {
-          try {
-            const result = JSON.parse(xhr.responseText)
-            console.log('XHR Upload successful:', result);
-            resolve(result)
-          } catch (parseError) {
-            console.error('Failed to parse XHR upload response:', parseError);
-            reject(new Error(`Invalid JSON response from server: ${parseError.message}`))
-          }
-        } else {
-          this.handleXHRError(xhr, reject);
-        }
-      })
-
-      xhr.addEventListener('error', () => {
-        console.error('XHR Network error during upload. Trying fetch fallback...');
-        this.uploadFileWithFetch(file, formData, token)
-          .then(resolve)
-          .catch(fetchError => {
-            console.error('Fetch fallback also failed:', fetchError);
-            reject(new Error(`Upload failed: ${fetchError.message}`))
-          });
-      })
-
-      xhr.addEventListener('timeout', () => {
-        console.error('XHR Upload timeout, trying fetch fallback...');
-        this.uploadFileWithFetch(file, formData, token)
-          .then(resolve)
-          .catch(fetchError => {
-            reject(new Error(`Upload timeout: ${fetchError.message}`))
-          });
-      })
-
-      xhr.addEventListener('abort', () => {
-        reject(new Error('Upload was aborted'))
-      })
-
-      try {
-        xhr.open('POST', `${this.baseURL}/api/upload`)
-        xhr.setRequestHeader('Authorization', `Bearer ${token}`)
-        xhr.setRequestHeader('Origin', window.location.origin)
-        xhr.timeout = 60000 // 60 seconds for file uploads
-        xhr.withCredentials = true; // Include credentials for CORS
-        
-        console.log('Sending XHR upload request...');
-        xhr.send(formData)
-      } catch (error) {
-        console.error('Error setting up XHR upload request:', error);
-        this.uploadFileWithFetch(file, formData, token)
-          .then(resolve)
-          .catch(reject);
-      }
-    })
-  }
-
-  // Handle XHR errors
-  handleXHRError(xhr, reject) {
-    let errorMessage = `Upload failed with status ${xhr.status}`;
-    
-    try {
-      const errorData = JSON.parse(xhr.responseText)
-      console.log('Parsed error data:', errorData);
-      
-      if (errorData.detail) {
-        if (Array.isArray(errorData.detail)) {
-          errorMessage = errorData.detail.map(err => 
-            `${err.loc ? err.loc.join('.') + ': ' : ''}${err.msg || err.message || err}`
-          ).join(', ');
-        } else if (typeof errorData.detail === 'string') {
-          errorMessage = errorData.detail;
-        } else {
-          errorMessage = JSON.stringify(errorData.detail);
-        }
-      } else if (errorData.message) {
-        errorMessage = errorData.message;
-      }
-      
-      if (xhr.status === 401) {
-        console.warn('Authentication failed during XHR upload');
-        this.clearTokens();
-        errorMessage = 'Authentication required. Please log in again.';
-      }
-    } catch (parseError) {
-      console.error('Failed to parse XHR error response:', parseError);
-      errorMessage = `${errorMessage}: ${xhr.statusText}`;
-    }
-    
-    console.error('XHR Upload failed:', errorMessage);
-    reject(new Error(errorMessage))
-  }
-
-  // Fetch method for file upload
-  async uploadFileWithFetch(file, formData, token) {
+  // Fetch method for file upload with progress simulation
+  async uploadFileWithFetch(file, formData, token, onProgress) {
     console.log('Using fetch for file upload...');
     
     try {
+      // Simulate progress if callback provided
+      if (onProgress && typeof onProgress === 'function') {
+        onProgress(0);
+      }
+
       const response = await fetch(`${this.baseURL}/api/upload`, {
         method: 'POST',
         mode: 'cors',
         credentials: 'include',
         headers: {
-          'Authorization': `Bearer ${token}`,
-          'Origin': window.location.origin
+          'Authorization': `Bearer ${token}`
         },
         body: formData
       });
+
+      // Simulate progress completion
+      if (onProgress && typeof onProgress === 'function') {
+        onProgress(100);
+      }
 
       console.log('Fetch upload response:', {
         status: response.status,
@@ -417,10 +309,7 @@ class ApiClient {
       const response = await fetch(`${this.baseURL}/`, {
         method: 'GET',
         mode: 'cors',
-        credentials: 'include',
-        headers: {
-          'Origin': window.location.origin
-        }
+        credentials: 'include'
       });
       
       console.log('Connection test response:', {
