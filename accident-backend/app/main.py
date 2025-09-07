@@ -557,10 +557,20 @@ except Exception as e:
 
 @app.middleware("http")
 async def enhanced_cors_handler(request, call_next):
+    origin = request.headers.get("origin")
+    
     # Handle preflight requests
     if request.method == "OPTIONS":
         response = JSONResponse({"message": "OK"})
-        response.headers["Access-Control-Allow-Origin"] = "*"
+        
+        # Set specific origin if it's in allowed list
+        if origin and origin in ALLOWED_ORIGINS:
+            response.headers["Access-Control-Allow-Origin"] = origin
+        elif origin:
+            # For development/debugging - log unknown origins
+            logger.warning(f"Unknown origin attempted access: {origin}")
+            response.headers["Access-Control-Allow-Origin"] = origin
+        
         response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS, PATCH, HEAD"
         response.headers["Access-Control-Allow-Headers"] = "Authorization, Content-Type, Accept, Origin, User-Agent, Cache-Control, Keep-Alive, X-Requested-With"
         response.headers["Access-Control-Allow-Credentials"] = "true"
@@ -571,7 +581,13 @@ async def enhanced_cors_handler(request, call_next):
     response = await call_next(request)
     
     # Add CORS headers to all responses
-    response.headers["Access-Control-Allow-Origin"] = "*"
+    if origin and origin in ALLOWED_ORIGINS:
+        response.headers["Access-Control-Allow-Origin"] = origin
+    elif origin:
+        # For development/debugging - allow unknown origins but log them
+        logger.warning(f"Unknown origin in response: {origin}")
+        response.headers["Access-Control-Allow-Origin"] = origin
+    
     response.headers["Access-Control-Allow-Credentials"] = "true"
     response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS, PATCH, HEAD"
     response.headers["Access-Control-Allow-Headers"] = "Authorization, Content-Type, Accept, Origin, User-Agent, Cache-Control, Keep-Alive, X-Requested-With"
