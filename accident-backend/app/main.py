@@ -1,4 +1,4 @@
-# Enhanced main.py with fixed authentication and database setup
+# Enhanced main.py with CORS fixes for deployment
 from fastapi import FastAPI, UploadFile, File, HTTPException, WebSocket, WebSocketDisconnect, Depends, Query, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, FileResponse
@@ -320,21 +320,18 @@ def create_default_super_admin(db: Session):
 # ==================== PROFILE UPDATE HELPER FUNCTIONS ====================
 
 def user_exists_by_username_sync(db: Session, username: str, exclude_user_id: int = None) -> bool:
-    """Check if username already exists, optionally excluding a specific user ID"""
     query = db.query(User).filter(User.username == username)
     if exclude_user_id:
         query = query.filter(User.id != exclude_user_id)
     return query.first() is not None
 
 def user_exists_by_email_sync(db: Session, email: str, exclude_user_id: int = None) -> bool:
-    """Check if email already exists, optionally excluding a specific user ID"""
     query = db.query(User).filter(User.email == email)
     if exclude_user_id:
         query = query.filter(User.id != exclude_user_id)
     return query.first() is not None
 
 def update_user_profile_sync(db: Session, user_id: int, updated_fields: dict):
-    """Update user profile fields in database"""
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -348,7 +345,6 @@ def update_user_profile_sync(db: Session, user_id: int, updated_fields: dict):
     return user
 
 def update_user_password_sync(db: Session, user_id: int, new_hashed_password: str):
-    """Update user password in database"""
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -360,48 +356,28 @@ def update_user_password_sync(db: Session, user_id: int, new_hashed_password: st
     return user
 
 def upgrade_database_schema():
-    """Add missing columns to existing tables"""
     try:
-        # Add department column to users table if it doesn't exist
-        try:
-            with engine.begin() as conn:
+        with engine.begin() as conn:
+            try:
                 conn.execute(text('ALTER TABLE users ADD COLUMN department VARCHAR'))
-            logger.info("Added department column to users table")
-        except Exception as e:
-            logger.debug(f"Department column might already exist in users: {e}")
-        
-        # Add role column to users table if it doesn't exist
-        try:
-            with engine.begin() as conn:
+            except Exception:
+                pass
+            try:
                 conn.execute(text('ALTER TABLE users ADD COLUMN role VARCHAR DEFAULT "user"'))
-            logger.info("Added role column to users table")
-        except Exception as e:
-            logger.debug(f"Role column might already exist in users: {e}")
-            
-        # Add last_password_change column to users table if it doesn't exist
-        try:
-            with engine.begin() as conn:
+            except Exception:
+                pass
+            try:
                 conn.execute(text('ALTER TABLE users ADD COLUMN last_password_change DATETIME'))
-            logger.info("Added last_password_change column to users table")
-        except Exception as e:
-            logger.debug(f"Last_password_change column might already exist in users: {e}")
-            
-        # Add department column to admins table if it doesn't exist
-        try:
-            with engine.begin() as conn:
+            except Exception:
+                pass
+            try:
                 conn.execute(text('ALTER TABLE admins ADD COLUMN department VARCHAR'))
-            logger.info("Added department column to admins table")
-        except Exception as e:
-            logger.debug(f"Department column might already exist in admins: {e}")
-            
-        # Add last_password_change column to admins table if it doesn't exist
-        try:
-            with engine.begin() as conn:
+            except Exception:
+                pass
+            try:
                 conn.execute(text('ALTER TABLE admins ADD COLUMN last_password_change DATETIME'))
-            logger.info("Added last_password_change column to admins table")
-        except Exception as e:
-            logger.debug(f"Last_password_change column might already exist in admins: {e}")
-            
+            except Exception:
+                pass
     except Exception as e:
         logger.error(f"Error upgrading database schema: {e}")
 
@@ -663,49 +639,78 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# Add CORS middleware
+# CORS configuration - FIXED for deployment
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://localhost:3001", "http://127.0.0.1:3000"],
+    allow_origins=[
+        "http://localhost:3000",
+        "http://localhost:3001", 
+        "http://127.0.0.1:3000",
+        "https://accident-prediction-wt8k.vercel.app",
+        "https://accident-prediction-wt8k-git-main-darshan-ss-projects-39372c06.vercel.app",
+        "https://*.vercel.app"  # Allow all Vercel subdomains
+    ],
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
+    expose_headers=["*"]
 )
 
 # Mount static files for serving snapshots
 app.mount("/snapshots", StaticFiles(directory="snapshots"), name="snapshots")
 
-# ==================== ROUTES ====================
+# ==================== BASIC ROUTES ====================
 
 @app.get("/")
 async def root():
     return {
         "message": "Enhanced Accident Detection API with Authentication is running!", 
         "version": "2.1.0",
-        "features": ["Real-time detection", "Database logging", "Snapshot storage", "User/Admin Auth", "Dashboard API"]
+        "status": "healthy",
+        "features": ["Real-time detection", "Database logging", "Snapshot storage", "User/Admin Auth", "Dashboard API"],
+        "timestamp": datetime.now(timezone.utc).isoformat()
     }
+
+@app.options("/{full_path:path}")
+async def options_handler(full_path: str):
+    return JSONResponse(
+        content={"message": "OK"}, 
+        headers={
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+            "Access-Control-Allow-Headers": "*",
+        }
+    )
 
 @app.get("/api/health")
 async def health_check(db: Session = Depends(get_db)):
-    total_logs = db.query(AccidentLog).count()
-    accidents_detected = db.query(AccidentLog).filter(AccidentLog.accident_detected == True).count()
-    total_users = db.query(User).count()
-    total_admins = db.query(Admin).count()
-    
-    return {
-        "status": "healthy",
-        "model_loaded": accident_model.model is not None,
-        "model_path": accident_model.model_path,
-        "threshold": accident_model.threshold,
-        "active_connections": len(live_processors),
-        "database_status": "connected",
-        "total_logs": total_logs,
-        "accidents_detected": accidents_detected,
-        "total_users": total_users,
-        "total_admins": total_admins,
-        "snapshots_directory": str(SNAPSHOTS_DIR),
-        "timestamp": time.time()
-    }
+    try:
+        total_logs = db.query(AccidentLog).count()
+        accidents_detected = db.query(AccidentLog).filter(AccidentLog.accident_detected == True).count()
+        total_users = db.query(User).count()
+        total_admins = db.query(Admin).count()
+        
+        return {
+            "status": "healthy",
+            "model_loaded": accident_model.model is not None,
+            "model_path": accident_model.model_path,
+            "threshold": accident_model.threshold,
+            "active_connections": len(live_processors),
+            "database_status": "connected",
+            "total_logs": total_logs,
+            "accidents_detected": accidents_detected,
+            "total_users": total_users,
+            "total_admins": total_admins,
+            "snapshots_directory": str(SNAPSHOTS_DIR),
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+    except Exception as e:
+        logger.error(f"Health check failed: {str(e)}")
+        return {
+            "status": "unhealthy",
+            "error": str(e),
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
 
 # ==================== AUTHENTICATION ROUTES ====================
 
@@ -765,32 +770,22 @@ async def update_profile(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Update user profile information"""
     try:
         updated_fields = {}
         
         if profile_data.username and profile_data.username != current_user.username:
-            # Check if username already exists
             if user_exists_by_username_sync(db, profile_data.username, current_user.id):
-                raise HTTPException(
-                    status_code=400, 
-                    detail="Username already exists"
-                )
+                raise HTTPException(status_code=400, detail="Username already exists")
             updated_fields['username'] = profile_data.username
             
         if profile_data.email and profile_data.email != current_user.email:
-            # Check if email already exists  
             if user_exists_by_email_sync(db, profile_data.email, current_user.id):
-                raise HTTPException(
-                    status_code=400,
-                    detail="Email already exists"
-                )
+                raise HTTPException(status_code=400, detail="Email already exists")
             updated_fields['email'] = profile_data.email
             
         if profile_data.department is not None:
             updated_fields['department'] = profile_data.department
             
-        # Update user in database
         if updated_fields:
             updated_user = update_user_profile_sync(db, current_user.id, updated_fields)
         else:
@@ -805,7 +800,6 @@ async def update_profile(
                 expires_delta=access_token_expires
             )
         
-        # Return updated user data
         response_data = {
             "id": updated_user.id,
             "username": updated_user.username,
@@ -815,7 +809,6 @@ async def update_profile(
             "last_updated": datetime.now(timezone.utc).isoformat()
         }
         
-        # Include new token if username changed
         if new_token:
             response_data["new_token"] = new_token
             response_data["token_type"] = "bearer"
@@ -827,10 +820,7 @@ async def update_profile(
         raise
     except Exception as e:
         db.rollback()
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to update profile: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Failed to update profile: {str(e)}")
 
 @app.put("/auth/change-password")  
 async def change_password(
@@ -838,23 +828,13 @@ async def change_password(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Change user password"""
     try:
-        # Verify current password
         if not verify_password(password_data.current_password, current_user.hashed_password):
-            raise HTTPException(
-                status_code=400,
-                detail="Current password is incorrect"
-            )
+            raise HTTPException(status_code=400, detail="Current password is incorrect")
         
-        # Check if new password is different
         if verify_password(password_data.new_password, current_user.hashed_password):
-            raise HTTPException(
-                status_code=400,
-                detail="New password must be different from current password"
-            )
+            raise HTTPException(status_code=400, detail="New password must be different from current password")
             
-        # Hash new password and update
         new_hashed_password = get_password_hash(password_data.new_password)
         update_user_password_sync(db, current_user.id, new_hashed_password)
         
@@ -867,10 +847,7 @@ async def change_password(
         raise
     except Exception as e:
         db.rollback()
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to change password: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Failed to change password: {str(e)}")
 
 @app.post("/auth/admin/login", response_model=AdminToken)
 async def login_admin(admin_credentials: AdminLogin, db: Session = Depends(get_db)):
@@ -926,105 +903,6 @@ async def get_current_admin_info(current_admin: Admin = Depends(get_current_admi
         created_at=current_admin.created_at,
         last_login=current_admin.last_login
     )
-
-@app.put("/auth/admin/me")
-async def update_admin_profile(
-    profile_data: ProfileUpdateRequest,
-    db: Session = Depends(get_db),
-    current_admin: Admin = Depends(get_current_admin)
-):
-    """Update admin profile information"""
-    try:
-        updated_fields = {}
-        
-        if profile_data.username and profile_data.username != current_admin.username:
-            existing_admin = db.query(Admin).filter(
-                Admin.username == profile_data.username,
-                Admin.id != current_admin.id
-            ).first()
-            
-            if existing_admin:
-                raise HTTPException(status_code=400, detail="Username already exists")
-            updated_fields['username'] = profile_data.username
-            
-        if profile_data.email and profile_data.email != current_admin.email:
-            existing_admin = db.query(Admin).filter(
-                Admin.email == profile_data.email,
-                Admin.id != current_admin.id
-            ).first()
-            
-            if existing_admin:
-                raise HTTPException(status_code=400, detail="Email already exists")
-            updated_fields['email'] = profile_data.email
-            
-        if profile_data.department is not None:
-            updated_fields['department'] = profile_data.department
-            
-        if updated_fields:
-            for field, value in updated_fields.items():
-                setattr(current_admin, field, value)
-            
-            db.commit()
-            db.refresh(current_admin)
-        
-        # Generate new token if username changed
-        new_token = None
-        if 'username' in updated_fields:
-            new_token = create_admin_access_token(current_admin)
-        
-        response_data = {
-            "id": current_admin.id,
-            "username": current_admin.username,
-            "email": current_admin.email,
-            "department": getattr(current_admin, 'department', ''),
-            "is_super_admin": current_admin.is_super_admin,
-            "permissions": current_admin.permissions.split(",") if current_admin.permissions else [],
-            "last_updated": datetime.now(timezone.utc).isoformat()
-        }
-        
-        if new_token:
-            response_data["new_token"] = new_token
-            response_data["token_type"] = "bearer"
-            response_data["username_changed"] = True
-        
-        return response_data
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        db.rollback()
-        raise HTTPException(status_code=500, detail=f"Failed to update admin profile: {str(e)}")
-
-@app.put("/auth/admin/change-password")  
-async def change_admin_password(
-    password_data: PasswordChangeRequest,
-    db: Session = Depends(get_db),
-    current_admin: Admin = Depends(get_current_admin)
-):
-    """Change admin password"""
-    try:
-        if not verify_password(password_data.current_password, current_admin.hashed_password):
-            raise HTTPException(status_code=400, detail="Current password is incorrect")
-        
-        if verify_password(password_data.new_password, current_admin.hashed_password):
-            raise HTTPException(status_code=400, detail="New password must be different from current password")
-            
-        new_hashed_password = get_password_hash(password_data.new_password)
-        current_admin.hashed_password = new_hashed_password
-        current_admin.last_password_change = datetime.now(timezone.utc)
-        db.commit()
-        db.refresh(current_admin)
-        
-        return {
-            "message": "Password changed successfully",
-            "last_password_change": datetime.now(timezone.utc).isoformat()
-        }
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        db.rollback()
-        raise HTTPException(status_code=500, detail=f"Failed to change admin password: {str(e)}")
 
 # ==================== USER PROTECTED ROUTES ====================
 
@@ -1097,7 +975,7 @@ async def upload_file(
         raise HTTPException(status_code=500, detail=f"Error processing file: {str(e)}")
 
 @app.websocket("/api/live/ws")
-async def websocket_live_detection(websocket: WebSocket, db: Session = Depends(get_db)):
+async def websocket_live_detection(websocket: WebSocket):
     client_id = str(uuid.uuid4())
     processor = None
     
@@ -1121,90 +999,96 @@ async def websocket_live_detection(websocket: WebSocket, db: Session = Depends(g
         consecutive_errors = 0
         max_consecutive_errors = 5
         
-        while True:
-            try:
-                data = await asyncio.wait_for(websocket.receive_text(), timeout=30.0)
-                
-                if not data.strip():
-                    continue
-                
+        # Get database session
+        db = SessionLocal()
+        
+        try:
+            while True:
                 try:
-                    frame_data = json.loads(data)
-                except json.JSONDecodeError:
-                    consecutive_errors += 1
-                    if consecutive_errors >= max_consecutive_errors:
-                        break
-                    continue
-                
-                consecutive_errors = 0
-                frame_count += 1
-                
-                if not processor.should_process_frame():
-                    continue
-                
-                if 'frame' not in frame_data or not frame_data['frame']:
-                    continue
-                
-                try:
-                    frame_bytes = base64.b64decode(frame_data['frame'])
-                    if len(frame_bytes) == 0:
+                    data = await asyncio.wait_for(websocket.receive_text(), timeout=30.0)
+                    
+                    if not data.strip():
                         continue
+                    
+                    try:
+                        frame_data = json.loads(data)
+                    except json.JSONDecodeError:
+                        consecutive_errors += 1
+                        if consecutive_errors >= max_consecutive_errors:
+                            break
+                        continue
+                    
+                    consecutive_errors = 0
+                    frame_count += 1
+                    
+                    if not processor.should_process_frame():
+                        continue
+                    
+                    if 'frame' not in frame_data or not frame_data['frame']:
+                        continue
+                    
+                    try:
+                        frame_bytes = base64.b64decode(frame_data['frame'])
+                        if len(frame_bytes) == 0:
+                            continue
+                            
+                    except Exception as e:
+                        logger.error(f"Error decoding base64 frame from client {client_id}: {str(e)}")
+                        continue
+                    
+                    result = await analyze_frame_with_logging(
+                        frame_bytes, 
+                        db,
+                        source=f"live_camera_{client_id}",
+                        frame_id=frame_data.get("frame_id", frame_count)
+                    )
+                    
+                    if result.get("error"):
+                        logger.error(f"Frame analysis failed for client {client_id}: {result.get('details')}")
+                        continue
+                    
+                    processor.add_result(result)
+                    trend = processor.get_trend_analysis()
+                    
+                    response = {
+                        "timestamp": frame_data.get("timestamp", time.time()),
+                        "frame_id": frame_data.get("frame_id", frame_count),
+                        "accident_detected": result["accident_detected"],
+                        "confidence": float(result["confidence"]),
+                        "details": result.get("details", ""),
+                        "processing_time": result.get("processing_time", 0),
+                        "predicted_class": result.get("predicted_class", "Unknown"),
+                        "threshold": accident_model.threshold,
+                        "trend": trend.get("trend", "stable"),
+                        "avg_confidence": trend.get("confidence_avg", result["confidence"]),
+                        "detection_rate": trend.get("detection_rate", 0.0),
+                        "total_frames": frame_count,
+                        "model_status": "loaded" if accident_model.model is not None else "not_loaded",
+                        "log_id": result.get("log_id"),
+                        "snapshot_url": result.get("snapshot_url")
+                    }
+                    
+                    await websocket.send_text(json.dumps(response))
+                    
+                except asyncio.TimeoutError:
+                    ping_message = {
+                        "type": "ping",
+                        "timestamp": time.time(),
+                        "frames_processed": frame_count
+                    }
+                    await websocket.send_text(json.dumps(ping_message))
+                        
+                except WebSocketDisconnect:
+                    break
                         
                 except Exception as e:
-                    logger.error(f"Error decoding base64 frame from client {client_id}: {str(e)}")
-                    continue
-                
-                result = await analyze_frame_with_logging(
-                    frame_bytes, 
-                    db,
-                    source=f"live_camera_{client_id}",
-                    frame_id=frame_data.get("frame_id", frame_count)
-                )
-                
-                if result.get("error"):
-                    logger.error(f"Frame analysis failed for client {client_id}: {result.get('details')}")
-                    continue
-                
-                processor.add_result(result)
-                trend = processor.get_trend_analysis()
-                
-                response = {
-                    "timestamp": frame_data.get("timestamp", time.time()),
-                    "frame_id": frame_data.get("frame_id", frame_count),
-                    "accident_detected": result["accident_detected"],
-                    "confidence": float(result["confidence"]),
-                    "details": result.get("details", ""),
-                    "processing_time": result.get("processing_time", 0),
-                    "predicted_class": result.get("predicted_class", "Unknown"),
-                    "threshold": accident_model.threshold,
-                    "trend": trend.get("trend", "stable"),
-                    "avg_confidence": trend.get("confidence_avg", result["confidence"]),
-                    "detection_rate": trend.get("detection_rate", 0.0),
-                    "total_frames": frame_count,
-                    "model_status": "loaded" if accident_model.model is not None else "not_loaded",
-                    "log_id": result.get("log_id"),
-                    "snapshot_url": result.get("snapshot_url")
-                }
-                
-                await websocket.send_text(json.dumps(response))
-                
-            except asyncio.TimeoutError:
-                ping_message = {
-                    "type": "ping",
-                    "timestamp": time.time(),
-                    "frames_processed": frame_count
-                }
-                await websocket.send_text(json.dumps(ping_message))
+                    logger.error(f"Error in main processing loop for client {client_id}: {str(e)}")
+                    consecutive_errors += 1
                     
-            except WebSocketDisconnect:
-                break
-                    
-            except Exception as e:
-                logger.error(f"Error in main processing loop for client {client_id}: {str(e)}")
-                consecutive_errors += 1
-                
-                if consecutive_errors >= max_consecutive_errors:
-                    break
+                    if consecutive_errors >= max_consecutive_errors:
+                        break
+        finally:
+            db.close()
             
     except WebSocketDisconnect:
         logger.info(f"WebSocket client {client_id} disconnected normally")
@@ -1262,7 +1146,249 @@ async def analyze_single_frame(
         logger.error(f"Error analyzing frame: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error analyzing frame: {str(e)}")
 
-# ==================== ADMIN PROTECTED ROUTES ====================
+# ==================== PUBLIC DASHBOARD ROUTES ====================
+
+@app.get("/api/logs")
+async def get_logs_public(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, le=1000),
+    accident_only: bool = Query(False),
+    status: Optional[str] = Query(None),
+    source: Optional[str] = Query(None),
+    db: Session = Depends(get_db)
+):
+    try:
+        query = db.query(AccidentLog)
+        
+        if accident_only:
+            query = query.filter(AccidentLog.accident_detected == True)
+        
+        if status:
+            query = query.filter(AccidentLog.status == status)
+        
+        if source:
+            query = query.filter(AccidentLog.video_source.contains(source))
+        
+        logs = query.order_by(AccidentLog.timestamp.desc()).offset(skip).limit(limit).all()
+        
+        result = []
+        for log in logs:
+            result.append({
+                "id": log.id,
+                "timestamp": log.timestamp.isoformat(),
+                "video_source": log.video_source,
+                "confidence": log.confidence,
+                "accident_detected": log.accident_detected,
+                "predicted_class": log.predicted_class,
+                "processing_time": log.processing_time,
+                "snapshot_url": log.snapshot_url,
+                "frame_id": log.frame_id,
+                "analysis_type": log.analysis_type,
+                "status": log.status,
+                "severity_estimate": log.severity_estimate,
+                "location": log.location,
+                "weather_conditions": log.weather_conditions,
+                "notes": log.notes,
+                "user_feedback": log.user_feedback,
+                "created_at": log.created_at.isoformat() if log.created_at else None,
+                "updated_at": log.updated_at.isoformat() if log.updated_at else None
+            })
+        
+        return result
+    except Exception as e:
+        logger.error(f"Error fetching logs: {str(e)}")
+        return []
+
+@app.get("/api/dashboard/stats")
+async def get_dashboard_stats_public(db: Session = Depends(get_db)):
+    try:
+        total_logs = db.query(AccidentLog).count()
+        accidents_detected = db.query(AccidentLog).filter(AccidentLog.accident_detected == True).count()
+        
+        unresolved = db.query(AccidentLog).filter(AccidentLog.status == "unresolved").count()
+        verified = db.query(AccidentLog).filter(AccidentLog.status == "verified").count()
+        false_alarms = db.query(AccidentLog).filter(AccidentLog.status == "false_alarm").count()
+        resolved = db.query(AccidentLog).filter(AccidentLog.status == "resolved").count()
+        
+        yesterday = datetime.now(timezone.utc) - timedelta(days=1)
+        recent_logs = db.query(AccidentLog).filter(AccidentLog.timestamp >= yesterday).count()
+        recent_accidents = db.query(AccidentLog).filter(
+            and_(AccidentLog.timestamp >= yesterday, AccidentLog.accident_detected == True)
+        ).count()
+        
+        total_users = db.query(User).count()
+        active_users = db.query(User).filter(User.is_active == True).count()
+        
+        total_admins = db.query(Admin).count()
+        active_admins = db.query(Admin).filter(Admin.is_active == True).count()
+        
+        high_confidence = db.query(AccidentLog).filter(AccidentLog.confidence >= 0.8).count()
+        medium_confidence = db.query(AccidentLog).filter(
+            and_(AccidentLog.confidence >= 0.5, AccidentLog.confidence < 0.8)
+        ).count()
+        low_confidence = db.query(AccidentLog).filter(AccidentLog.confidence < 0.5).count()
+        
+        return {
+            "total_logs": total_logs,
+            "accidents_detected": accidents_detected,
+            "accuracy_rate": round((accidents_detected / total_logs * 100) if total_logs > 0 else 0, 1),
+            "status_breakdown": {
+                "unresolved": unresolved,
+                "verified": verified,
+                "false_alarm": false_alarms,
+                "resolved": resolved
+            },
+            "recent_activity": {
+                "total_logs_24h": recent_logs,
+                "accidents_24h": recent_accidents
+            },
+            "user_stats": {
+                "total_users": total_users,
+                "active_users": active_users
+            },
+            "admin_stats": {
+                "total_admins": total_admins,
+                "active_admins": active_admins
+            },
+            "confidence_distribution": {
+                "high": high_confidence,
+                "medium": medium_confidence,
+                "low": low_confidence
+            },
+            "active_connections": len(live_processors),
+            "model_status": "loaded" if accident_model.model is not None else "not_loaded",
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+    except Exception as e:
+        logger.error(f"Error fetching dashboard stats: {str(e)}")
+        return {
+            "total_logs": 0,
+            "accidents_detected": 0,
+            "accuracy_rate": 0,
+            "status_breakdown": {"unresolved": 0, "verified": 0, "false_alarm": 0, "resolved": 0},
+            "recent_activity": {"total_logs_24h": 0, "accidents_24h": 0},
+            "user_stats": {"total_users": 0, "active_users": 0},
+            "admin_stats": {"total_admins": 0, "active_admins": 0},
+            "confidence_distribution": {"high": 0, "medium": 0, "low": 0},
+            "active_connections": len(live_processors),
+            "model_status": "loaded" if accident_model.model is not None else "not_loaded",
+            "error": str(e),
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+
+@app.post("/api/logs/{log_id}/status")
+async def update_log_status_public(
+    log_id: int, 
+    status_data: dict,
+    db: Session = Depends(get_db)
+):
+    try:
+        log = db.query(AccidentLog).filter(AccidentLog.id == log_id).first()
+        
+        if not log:
+            raise HTTPException(status_code=404, detail="Log not found")
+        
+        valid_statuses = ["unresolved", "verified", "false_alarm", "resolved"]
+        new_status = status_data.get("status", "").lower()
+        
+        if new_status not in valid_statuses:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Invalid status. Must be one of: {', '.join(valid_statuses)}"
+            )
+        
+        log.status = new_status
+        
+        if "notes" in status_data:
+            log.notes = status_data["notes"]
+        
+        if "user_feedback" in status_data:
+            log.user_feedback = status_data["user_feedback"]
+        
+        log.updated_at = datetime.now(timezone.utc)
+        
+        db.commit()
+        db.refresh(log)
+        
+        logger.info(f"Log {log_id} status updated to '{new_status}' via public route")
+        
+        return {
+            "success": True,
+            "message": f"Log {log_id} status updated to '{new_status}'",
+            "log": {
+                "id": log.id,
+                "status": log.status,
+                "notes": log.notes,
+                "user_feedback": log.user_feedback,
+                "updated_at": log.updated_at.isoformat()
+            }
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Failed to update log status: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to update log: {str(e)}")
+
+# ==================== USER ACCESS ROUTES ====================
+
+@app.get("/api/user/logs")
+async def get_user_logs(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, le=100),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    user_source_pattern = f"%{current_user.username}%"
+    logs = db.query(AccidentLog).filter(
+        AccidentLog.video_source.like(user_source_pattern)
+    ).order_by(AccidentLog.timestamp.desc()).offset(skip).limit(limit).all()
+    
+    result = []
+    for log in logs:
+        result.append({
+            "id": log.id,
+            "timestamp": log.timestamp.isoformat(),
+            "confidence": log.confidence,
+            "accident_detected": log.accident_detected,
+            "predicted_class": log.predicted_class,
+            "processing_time": log.processing_time,
+            "snapshot_url": log.snapshot_url,
+            "analysis_type": log.analysis_type,
+            "status": log.status,
+            "severity_estimate": log.severity_estimate,
+            "created_at": log.created_at.isoformat() if log.created_at else None
+        })
+    
+    return result
+
+@app.get("/api/user/stats")
+async def get_user_stats(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    user_source_pattern = f"%{current_user.username}%"
+    
+    total_uploads = db.query(AccidentLog).filter(
+        AccidentLog.video_source.like(user_source_pattern)
+    ).count()
+    
+    accidents_detected = db.query(AccidentLog).filter(
+        and_(
+            AccidentLog.video_source.like(user_source_pattern),
+            AccidentLog.accident_detected == True
+        )
+    ).count()
+    
+    return {
+        "username": current_user.username,
+        "total_uploads": total_uploads,
+        "accidents_detected": accidents_detected,
+        "member_since": current_user.created_at.isoformat(),
+        "last_login": current_user.last_login.isoformat() if current_user.last_login else None
+    }
+
+# ==================== ADMIN ROUTES ====================
 
 @app.get("/api/admin/logs")
 async def get_accident_logs_admin(
@@ -1375,267 +1501,7 @@ async def get_admin_dashboard_stats(
         "accessed_by": current_admin.username
     }
 
-# ==================== PUBLIC DASHBOARD ROUTES (for frontend compatibility) ====================
-
-@app.get("/api/logs")
-async def get_logs_public(
-    skip: int = Query(0, ge=0),
-    limit: int = Query(100, le=1000),
-    accident_only: bool = Query(False),
-    status: Optional[str] = Query(None),
-    source: Optional[str] = Query(None),
-    db: Session = Depends(get_db)
-):
-    """Get accident logs (public route for dashboard compatibility)"""
-    try:
-        query = db.query(AccidentLog)
-        
-        if accident_only:
-            query = query.filter(AccidentLog.accident_detected == True)
-        
-        if status:
-            query = query.filter(AccidentLog.status == status)
-        
-        if source:
-            query = query.filter(AccidentLog.video_source.contains(source))
-        
-        logs = query.order_by(AccidentLog.timestamp.desc()).offset(skip).limit(limit).all()
-        
-        result = []
-        for log in logs:
-            result.append({
-                "id": log.id,
-                "timestamp": log.timestamp.isoformat(),
-                "video_source": log.video_source,
-                "confidence": log.confidence,
-                "accident_detected": log.accident_detected,
-                "predicted_class": log.predicted_class,
-                "processing_time": log.processing_time,
-                "snapshot_url": log.snapshot_url,
-                "frame_id": log.frame_id,
-                "analysis_type": log.analysis_type,
-                "status": log.status,
-                "severity_estimate": log.severity_estimate,
-                "location": log.location,
-                "weather_conditions": log.weather_conditions,
-                "notes": log.notes,
-                "user_feedback": log.user_feedback,
-                "created_at": log.created_at.isoformat() if log.created_at else None,
-                "updated_at": log.updated_at.isoformat() if log.updated_at else None
-            })
-        
-        return result
-    except Exception as e:
-        logger.error(f"Error fetching logs: {str(e)}")
-        return []
-
-@app.get("/api/dashboard/stats")
-async def get_dashboard_stats_public(db: Session = Depends(get_db)):
-    """Get dashboard statistics (public route for frontend compatibility)"""
-    try:
-        total_logs = db.query(AccidentLog).count()
-        accidents_detected = db.query(AccidentLog).filter(AccidentLog.accident_detected == True).count()
-        
-        unresolved = db.query(AccidentLog).filter(AccidentLog.status == "unresolved").count()
-        verified = db.query(AccidentLog).filter(AccidentLog.status == "verified").count()
-        false_alarms = db.query(AccidentLog).filter(AccidentLog.status == "false_alarm").count()
-        resolved = db.query(AccidentLog).filter(AccidentLog.status == "resolved").count()
-        
-        yesterday = datetime.now(timezone.utc) - timedelta(days=1)
-        recent_logs = db.query(AccidentLog).filter(AccidentLog.timestamp >= yesterday).count()
-        recent_accidents = db.query(AccidentLog).filter(
-            and_(AccidentLog.timestamp >= yesterday, AccidentLog.accident_detected == True)
-        ).count()
-        
-        total_users = db.query(User).count()
-        active_users = db.query(User).filter(User.is_active == True).count()
-        
-        total_admins = db.query(Admin).count()
-        active_admins = db.query(Admin).filter(Admin.is_active == True).count()
-        
-        high_confidence = db.query(AccidentLog).filter(AccidentLog.confidence >= 0.8).count()
-        medium_confidence = db.query(AccidentLog).filter(
-            and_(AccidentLog.confidence >= 0.5, AccidentLog.confidence < 0.8)
-        ).count()
-        low_confidence = db.query(AccidentLog).filter(AccidentLog.confidence < 0.5).count()
-        
-        return {
-            "total_logs": total_logs,
-            "accidents_detected": accidents_detected,
-            "accuracy_rate": round((accidents_detected / total_logs * 100) if total_logs > 0 else 0, 1),
-            "status_breakdown": {
-                "unresolved": unresolved,
-                "verified": verified,
-                "false_alarm": false_alarms,
-                "resolved": resolved
-            },
-            "recent_activity": {
-                "total_logs_24h": recent_logs,
-                "accidents_24h": recent_accidents
-            },
-            "user_stats": {
-                "total_users": total_users,
-                "active_users": active_users
-            },
-            "admin_stats": {
-                "total_admins": total_admins,
-                "active_admins": active_admins
-            },
-            "confidence_distribution": {
-                "high": high_confidence,
-                "medium": medium_confidence,
-                "low": low_confidence
-            },
-            "active_connections": len(live_processors),
-            "model_status": "loaded" if accident_model.model is not None else "not_loaded"
-        }
-    except Exception as e:
-        logger.error(f"Error fetching dashboard stats: {str(e)}")
-        # Return default stats if database query fails
-        return {
-            "total_logs": 0,
-            "accidents_detected": 0,
-            "accuracy_rate": 0,
-            "status_breakdown": {
-                "unresolved": 0,
-                "verified": 0,
-                "false_alarm": 0,
-                "resolved": 0
-            },
-            "recent_activity": {
-                "total_logs_24h": 0,
-                "accidents_24h": 0
-            },
-            "user_stats": {
-                "total_users": 0,
-                "active_users": 0
-            },
-            "admin_stats": {
-                "total_admins": 0,
-                "active_admins": 0
-            },
-            "confidence_distribution": {
-                "high": 0,
-                "medium": 0,
-                "low": 0
-            },
-            "active_connections": len(live_processors),
-            "model_status": "loaded" if accident_model.model is not None else "not_loaded"
-        }
-
-@app.post("/api/logs/{log_id}/status")
-async def update_log_status_public(
-    log_id: int, 
-    status_data: dict,
-    db: Session = Depends(get_db)
-):
-    """Update log status (public route for dashboard compatibility)"""
-    try:
-        log = db.query(AccidentLog).filter(AccidentLog.id == log_id).first()
-        
-        if not log:
-            raise HTTPException(status_code=404, detail="Log not found")
-        
-        valid_statuses = ["unresolved", "verified", "false_alarm", "resolved"]
-        new_status = status_data.get("status", "").lower()
-        
-        if new_status not in valid_statuses:
-            raise HTTPException(
-                status_code=400, 
-                detail=f"Invalid status. Must be one of: {', '.join(valid_statuses)}"
-            )
-        
-        log.status = new_status
-        
-        if "notes" in status_data:
-            log.notes = status_data["notes"]
-        
-        if "user_feedback" in status_data:
-            log.user_feedback = status_data["user_feedback"]
-        
-        log.updated_at = datetime.now(timezone.utc)
-        
-        db.commit()
-        db.refresh(log)
-        
-        logger.info(f"Log {log_id} status updated to '{new_status}' via public route")
-        
-        return {
-            "success": True,
-            "message": f"Log {log_id} status updated to '{new_status}'",
-            "log": {
-                "id": log.id,
-                "status": log.status,
-                "notes": log.notes,
-                "user_feedback": log.user_feedback,
-                "updated_at": log.updated_at.isoformat()
-            }
-        }
-    except HTTPException:
-        raise
-    except Exception as e:
-        db.rollback()
-        logger.error(f"Failed to update log status: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Failed to update log: {str(e)}")
-
-# ==================== USER ACCESS ROUTES ====================
-
-
-@app.get("/api/user/logs")
-async def get_user_logs(
-    skip: int = Query(0, ge=0),
-    limit: int = Query(50, le=100),
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
-):
-    user_source_pattern = f"%{current_user.username}%"
-    logs = db.query(AccidentLog).filter(
-        AccidentLog.video_source.like(user_source_pattern)
-    ).order_by(AccidentLog.timestamp.desc()).offset(skip).limit(limit).all()
-    
-    result = []
-    for log in logs:
-        result.append({
-            "id": log.id,
-            "timestamp": log.timestamp.isoformat(),
-            "confidence": log.confidence,
-            "accident_detected": log.accident_detected,
-            "predicted_class": log.predicted_class,
-            "processing_time": log.processing_time,
-            "snapshot_url": log.snapshot_url,
-            "analysis_type": log.analysis_type,
-            "status": log.status,
-            "severity_estimate": log.severity_estimate,
-            "created_at": log.created_at.isoformat() if log.created_at else None
-        })
-    
-    return result
-
-@app.get("/api/user/stats")
-async def get_user_stats(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
-):
-    user_source_pattern = f"%{current_user.username}%"
-    
-    total_uploads = db.query(AccidentLog).filter(
-        AccidentLog.video_source.like(user_source_pattern)
-    ).count()
-    
-    accidents_detected = db.query(AccidentLog).filter(
-        and_(
-            AccidentLog.video_source.like(user_source_pattern),
-            AccidentLog.accident_detected == True
-        )
-    ).count()
-    
-    return {
-        "username": current_user.username,
-        "total_uploads": total_uploads,
-        "accidents_detected": accidents_detected,
-        "member_since": current_user.created_at.isoformat(),
-        "last_login": current_user.last_login.isoformat() if current_user.last_login else None
-    }
+# ==================== SNAPSHOT ROUTES ====================
 
 @app.get("/api/snapshot/{filename}")
 async def get_snapshot(
