@@ -866,8 +866,8 @@ async def get_current_user_info(current_user: User = Depends(get_current_active_
 
 @app.post("/api/upload")
 async def upload_file(
-    file: UploadFile = File(...), 
     background_tasks: BackgroundTasks,
+    file: UploadFile = File(...), 
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
