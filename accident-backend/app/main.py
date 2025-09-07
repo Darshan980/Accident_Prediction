@@ -639,25 +639,62 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# CORS configuration - FIXED for deployment
+# CORS configuration - COMPREHENSIVE FIX for ALL Vercel deployments
+ALLOWED_ORIGINS = [
+    "http://localhost:3000",
+    "http://localhost:3001", 
+    "http://127.0.0.1:3000",
+    "https://accident-prediction-wt8k.vercel.app",
+    "https://accident-prediction-wt8k-git-main-darshan-ss-projects-39372c06.vercel.app", 
+    "https://accident-prediction-1fnp-bc57hroy1-darshan-ss-projects-39372c06.vercel.app",
+    "https://accident-prediction-1fnp.vercel.app",
+    # Add the URL pattern from your error
+    "https://accident-prediction-1fnp-bc57hroy1-darshan-ss-projects-39372c06.vercel.app",
+]
+
+# For development, add wildcard support
+if os.getenv("ENVIRONMENT") == "development":
+    ALLOWED_ORIGINS.append("*")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",
-        "http://localhost:3001", 
-        "http://127.0.0.1:3000",
-        "https://accident-prediction-wt8k.vercel.app",
-        "https://accident-prediction-wt8k-git-main-darshan-ss-projects-39372c06.vercel.app",
-        "https://*.vercel.app"  # Allow all Vercel subdomains
-    ],
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
     allow_headers=["*"],
     expose_headers=["*"]
 )
 
 # Mount static files for serving snapshots
-app.mount("/snapshots", StaticFiles(directory="snapshots"), name="snapshots")
+try:
+    SNAPSHOTS_DIR.mkdir(exist_ok=True)
+    app.mount("/snapshots", StaticFiles(directory=str(SNAPSHOTS_DIR)), name="snapshots")
+except Exception as e:
+    logger.warning(f"Could not mount snapshots directory: {e}")
+
+# ==================== MIDDLEWARE FOR BETTER CORS HANDLING ====================
+
+@app.middleware("http")
+async def cors_handler(request, call_next):
+    # Handle preflight requests
+    if request.method == "OPTIONS":
+        response = JSONResponse({"message": "OK"})
+        response.headers["Access-Control-Allow-Origin"] = "*"
+        response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS, PATCH"
+        response.headers["Access-Control-Allow-Headers"] = "Authorization, Content-Type, Accept, Origin, User-Agent, Cache-Control, Keep-Alive"
+        response.headers["Access-Control-Allow-Credentials"] = "true"
+        return response
+    
+    # Process the request
+    response = await call_next(request)
+    
+    # Add CORS headers to response
+    origin = request.headers.get("origin")
+    if origin in ALLOWED_ORIGINS or "*" in ALLOWED_ORIGINS:
+        response.headers["Access-Control-Allow-Origin"] = origin or "*"
+        response.headers["Access-Control-Allow-Credentials"] = "true"
+    
+    return response
 
 # ==================== BASIC ROUTES ====================
 
@@ -668,19 +705,10 @@ async def root():
         "version": "2.1.0",
         "status": "healthy",
         "features": ["Real-time detection", "Database logging", "Snapshot storage", "User/Admin Auth", "Dashboard API"],
-        "timestamp": datetime.now(timezone.utc).isoformat()
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "cors_status": "enabled_for_vercel",
+        "allowed_origins": len(ALLOWED_ORIGINS)
     }
-
-@app.options("/{full_path:path}")
-async def options_handler(full_path: str):
-    return JSONResponse(
-        content={"message": "OK"}, 
-        headers={
-            "Access-Control-Allow-Origin": "*",
-            "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-            "Access-Control-Allow-Headers": "*",
-        }
-    )
 
 @app.get("/api/health")
 async def health_check(db: Session = Depends(get_db)):
@@ -702,6 +730,7 @@ async def health_check(db: Session = Depends(get_db)):
             "total_users": total_users,
             "total_admins": total_admins,
             "snapshots_directory": str(SNAPSHOTS_DIR),
+            "cors_enabled": True,
             "timestamp": datetime.now(timezone.utc).isoformat()
         }
     except Exception as e:
@@ -717,7 +746,9 @@ async def health_check(db: Session = Depends(get_db)):
 @app.post("/auth/register", response_model=UserResponse)
 async def register_user(user: UserCreate, db: Session = Depends(get_db)):
     try:
+        logger.info(f"Registration attempt for username: {user.username}")
         db_user = create_user(db, user)
+        logger.info(f"User {user.username} registered successfully")
         return UserResponse(
             id=db_user.id,
             username=db_user.username,
@@ -726,15 +757,19 @@ async def register_user(user: UserCreate, db: Session = Depends(get_db)):
             created_at=db_user.created_at,
             last_login=db_user.last_login
         )
-    except HTTPException:
-        raise
+    except HTTPException as he:
+        logger.error(f"Registration failed for {user.username}: {he.detail}")
+        raise he
     except Exception as e:
+        logger.error(f"Registration error for {user.username}: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Registration failed: {str(e)}")
 
 @app.post("/auth/login", response_model=Token)
 async def login_user(user_credentials: UserLogin, db: Session = Depends(get_db)):
+    logger.info(f"Login attempt for username: {user_credentials.username}")
     user = authenticate_user(db, user_credentials.username, user_credentials.password)
     if not user:
+        logger.warning(f"Failed login attempt for username: {user_credentials.username}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect username or password",
@@ -747,6 +782,7 @@ async def login_user(user_credentials: UserLogin, db: Session = Depends(get_db))
         expires_delta=access_token_expires
     )
     
+    logger.info(f"User {user.username} logged in successfully")
     return Token(
         access_token=access_token,
         token_type="bearer",
@@ -1527,6 +1563,409 @@ async def get_snapshot_admin(
     
     return FileResponse(file_path)
 
+# ==================== ADMIN USER MANAGEMENT ROUTES ====================
+
+@app.get("/api/admin/users")
+async def get_all_users(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, le=1000),
+    active_only: bool = Query(False),
+    db: Session = Depends(get_db),
+    current_admin: Admin = Depends(check_admin_permission("manage_users"))
+):
+    query = db.query(User)
+    
+    if active_only:
+        query = query.filter(User.is_active == True)
+    
+    users = query.order_by(User.created_at.desc()).offset(skip).limit(limit).all()
+    
+    result = []
+    for user in users:
+        result.append({
+            "id": user.id,
+            "username": user.username,
+            "email": user.email,
+            "department": getattr(user, 'department', ''),
+            "role": getattr(user, 'role', 'user'),
+            "is_active": user.is_active,
+            "created_at": user.created_at.isoformat(),
+            "last_login": user.last_login.isoformat() if user.last_login else None,
+            "last_password_change": getattr(user, 'last_password_change', None)
+        })
+    
+    return result
+
+@app.put("/api/admin/users/{user_id}/status")
+async def update_user_status(
+    user_id: int,
+    status_data: dict,
+    db: Session = Depends(get_db),
+    current_admin: Admin = Depends(check_admin_permission("manage_users"))
+):
+    try:
+        user = db.query(User).filter(User.id == user_id).first()
+        
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        
+        if "is_active" in status_data:
+            user.is_active = status_data["is_active"]
+        
+        if "role" in status_data and status_data["role"] in ["user", "moderator"]:
+            user.role = status_data["role"]
+        
+        db.commit()
+        db.refresh(user)
+        
+        logger.info(f"Admin {current_admin.username} updated user {user.username} status")
+        
+        return {
+            "success": True,
+            "message": f"User {user.username} updated successfully",
+            "user": {
+                "id": user.id,
+                "username": user.username,
+                "is_active": user.is_active,
+                "role": getattr(user, 'role', 'user')
+            }
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Failed to update user status: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to update user: {str(e)}")
+
+@app.delete("/api/admin/users/{user_id}")
+async def delete_user(
+    user_id: int,
+    db: Session = Depends(get_db),
+    current_admin: Admin = Depends(get_current_super_admin)  # Only super admins can delete users
+):
+    try:
+        user = db.query(User).filter(User.id == user_id).first()
+        
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        
+        username = user.username
+        db.delete(user)
+        db.commit()
+        
+        logger.info(f"Super admin {current_admin.username} deleted user {username}")
+        
+        return {
+            "success": True,
+            "message": f"User {username} deleted successfully"
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Failed to delete user: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to delete user: {str(e)}")
+
+# ==================== ADMIN LOG MANAGEMENT ROUTES ====================
+
+@app.put("/api/admin/logs/{log_id}/status")
+async def update_log_status_admin(
+    log_id: int, 
+    status_data: dict,
+    db: Session = Depends(get_db),
+    current_admin: Admin = Depends(check_admin_permission("update_log_status"))
+):
+    try:
+        log = db.query(AccidentLog).filter(AccidentLog.id == log_id).first()
+        
+        if not log:
+            raise HTTPException(status_code=404, detail="Log not found")
+        
+        valid_statuses = ["unresolved", "verified", "false_alarm", "resolved"]
+        new_status = status_data.get("status", "").lower()
+        
+        if new_status not in valid_statuses:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Invalid status. Must be one of: {', '.join(valid_statuses)}"
+            )
+        
+        log.status = new_status
+        
+        if "notes" in status_data:
+            log.notes = status_data["notes"]
+        
+        if "user_feedback" in status_data:
+            log.user_feedback = status_data["user_feedback"]
+            
+        if "location" in status_data:
+            log.location = status_data["location"]
+            
+        if "weather_conditions" in status_data:
+            log.weather_conditions = status_data["weather_conditions"]
+        
+        log.updated_at = datetime.now(timezone.utc)
+        
+        db.commit()
+        db.refresh(log)
+        
+        logger.info(f"Admin {current_admin.username} updated log {log_id} status to '{new_status}'")
+        
+        return {
+            "success": True,
+            "message": f"Log {log_id} status updated to '{new_status}'",
+            "log": {
+                "id": log.id,
+                "status": log.status,
+                "notes": log.notes,
+                "user_feedback": log.user_feedback,
+                "location": log.location,
+                "weather_conditions": log.weather_conditions,
+                "updated_at": log.updated_at.isoformat(),
+                "updated_by": current_admin.username
+            }
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Admin failed to update log status: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to update log: {str(e)}")
+
+@app.delete("/api/admin/logs/{log_id}")
+async def delete_log(
+    log_id: int,
+    db: Session = Depends(get_db),
+    current_admin: Admin = Depends(check_admin_permission("delete_logs"))
+):
+    try:
+        log = db.query(AccidentLog).filter(AccidentLog.id == log_id).first()
+        
+        if not log:
+            raise HTTPException(status_code=404, detail="Log not found")
+        
+        # Delete associated snapshot if exists
+        if log.snapshot_filename:
+            try:
+                snapshot_path = SNAPSHOTS_DIR / log.snapshot_filename
+                if snapshot_path.exists():
+                    snapshot_path.unlink()
+                    logger.info(f"Deleted snapshot file: {log.snapshot_filename}")
+            except Exception as e:
+                logger.warning(f"Could not delete snapshot file {log.snapshot_filename}: {e}")
+        
+        db.delete(log)
+        db.commit()
+        
+        logger.info(f"Admin {current_admin.username} deleted log {log_id}")
+        
+        return {
+            "success": True,
+            "message": f"Log {log_id} deleted successfully"
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Failed to delete log: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to delete log: {str(e)}")
+
+# ==================== SYSTEM SETTINGS ROUTES ====================
+
+@app.get("/api/admin/system/settings")
+async def get_system_settings(
+    current_admin: Admin = Depends(check_admin_permission("system_settings"))
+):
+    return {
+        "model_info": {
+            "model_loaded": accident_model.model is not None,
+            "model_path": accident_model.model_path,
+            "threshold": accident_model.threshold,
+            "last_loaded": getattr(accident_model, 'last_loaded', 'Unknown')
+        },
+        "database_info": {
+            "url": SQLALCHEMY_DATABASE_URL,
+            "engine_info": str(engine.url)
+        },
+        "server_info": {
+            "snapshots_directory": str(SNAPSHOTS_DIR),
+            "active_connections": len(live_processors),
+            "jwt_algorithm": ALGORITHM,
+            "token_expire_minutes": ACCESS_TOKEN_EXPIRE_MINUTES
+        },
+        "environment": {
+            "secret_key_set": bool(SECRET_KEY and SECRET_KEY != "your-secret-key-change-this-in-production"),
+            "environment_mode": os.getenv("ENVIRONMENT", "production")
+        }
+    }
+
+@app.put("/api/admin/system/settings")
+async def update_system_settings(
+    settings_data: dict,
+    current_admin: Admin = Depends(get_current_super_admin)  # Only super admins can change system settings
+):
+    try:
+        updated_settings = {}
+        
+        if "threshold" in settings_data:
+            new_threshold = float(settings_data["threshold"])
+            if 0.0 <= new_threshold <= 1.0:
+                accident_model.threshold = new_threshold
+                updated_settings["threshold"] = new_threshold
+                logger.info(f"Super admin {current_admin.username} updated model threshold to {new_threshold}")
+        
+        return {
+            "success": True,
+            "message": "System settings updated successfully",
+            "updated_settings": updated_settings,
+            "updated_by": current_admin.username,
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+        
+    except Exception as e:
+        logger.error(f"Failed to update system settings: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to update settings: {str(e)}")
+
+# ==================== DATA EXPORT ROUTES ====================
+
+@app.get("/api/admin/export/logs")
+async def export_logs(
+    format: str = Query("json", regex="^(json|csv)$"),
+    start_date: Optional[str] = Query(None),
+    end_date: Optional[str] = Query(None),
+    accident_only: bool = Query(False),
+    db: Session = Depends(get_db),
+    current_admin: Admin = Depends(check_admin_permission("export_data"))
+):
+    try:
+        query = db.query(AccidentLog)
+        
+        if accident_only:
+            query = query.filter(AccidentLog.accident_detected == True)
+        
+        if start_date:
+            start_dt = datetime.fromisoformat(start_date.replace('Z', '+00:00'))
+            query = query.filter(AccidentLog.timestamp >= start_dt)
+            
+        if end_date:
+            end_dt = datetime.fromisoformat(end_date.replace('Z', '+00:00'))
+            query = query.filter(AccidentLog.timestamp <= end_dt)
+        
+        logs = query.order_by(AccidentLog.timestamp.desc()).all()
+        
+        export_data = []
+        for log in logs:
+            export_data.append({
+                "id": log.id,
+                "timestamp": log.timestamp.isoformat(),
+                "video_source": log.video_source,
+                "confidence": log.confidence,
+                "accident_detected": log.accident_detected,
+                "predicted_class": log.predicted_class,
+                "processing_time": log.processing_time,
+                "analysis_type": log.analysis_type,
+                "status": log.status,
+                "severity_estimate": log.severity_estimate,
+                "location": log.location,
+                "weather_conditions": log.weather_conditions,
+                "notes": log.notes,
+                "user_feedback": log.user_feedback,
+                "created_at": log.created_at.isoformat() if log.created_at else None,
+                "updated_at": log.updated_at.isoformat() if log.updated_at else None
+            })
+        
+        filename = f"accident_logs_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        
+        if format == "json":
+            return JSONResponse(
+                content={
+                    "export_info": {
+                        "total_records": len(export_data),
+                        "exported_by": current_admin.username,
+                        "export_timestamp": datetime.now(timezone.utc).isoformat(),
+                        "filters_applied": {
+                            "accident_only": accident_only,
+                            "start_date": start_date,
+                            "end_date": end_date
+                        }
+                    },
+                    "data": export_data
+                },
+                headers={
+                    "Content-Disposition": f"attachment; filename={filename}.json"
+                }
+            )
+        
+        logger.info(f"Admin {current_admin.username} exported {len(export_data)} logs in {format} format")
+        
+        return {"message": "Export completed", "records_exported": len(export_data)}
+        
+    except Exception as e:
+        logger.error(f"Export failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Export failed: {str(e)}")
+
+# ==================== ERROR HANDLERS ====================
+
+@app.exception_handler(404)
+async def not_found_handler(request, exc):
+    return JSONResponse(
+        status_code=404,
+        content={
+            "detail": "Resource not found",
+            "path": str(request.url),
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        },
+        headers={
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Credentials": "true"
+        }
+    )
+
+@app.exception_handler(500)
+async def internal_server_error_handler(request, exc):
+    logger.error(f"Internal server error on {request.url}: {exc}")
+    return JSONResponse(
+        status_code=500,
+        content={
+            "detail": "Internal server error",
+            "path": str(request.url),
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        },
+        headers={
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Credentials": "true"
+        }
+    )
+
+# ==================== MAIN ENTRY POINT ====================
+
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    
+    # Log startup information
+    logger.info("=" * 60)
+    logger.info("ENHANCED ACCIDENT DETECTION API STARTING")
+    logger.info("=" * 60)
+    logger.info(f"Model Path: {accident_model.model_path}")
+    logger.info(f"Model Loaded: {accident_model.model is not None}")
+    logger.info(f"Detection Threshold: {accident_model.threshold}")
+    logger.info(f"Database URL: {SQLALCHEMY_DATABASE_URL}")
+    logger.info(f"Snapshots Directory: {SNAPSHOTS_DIR}")
+    logger.info(f"JWT Secret Key Set: {bool(SECRET_KEY and SECRET_KEY != 'your-secret-key-change-this-in-production')}")
+    logger.info(f"CORS Origins: {len(ALLOWED_ORIGINS)} configured")
+    logger.info("=" * 60)
+    
+    # Create snapshots directory if it doesn't exist
+    SNAPSHOTS_DIR.mkdir(exist_ok=True)
+    
+    # Run the server
+    uvicorn.run(
+        app, 
+        host="0.0.0.0", 
+        port=int(os.getenv("PORT", 8000)),
+        log_level="info",
+        access_log=True
+    )
