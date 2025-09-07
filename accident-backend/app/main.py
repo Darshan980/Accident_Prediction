@@ -35,6 +35,24 @@ from services.detection import accident_model, analyze_image, LiveStreamProcesso
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# CORS Configuration - Define allowed origins
+ALLOWED_ORIGINS = [
+    "http://localhost:3000",  # React development server
+    "http://localhost:5173",  # Vite development server
+    "http://127.0.0.1:3000",
+    "http://127.0.0.1:5173",
+    "https://your-frontend-domain.com",  # Replace with your actual frontend domain
+    "https://accident-prediction-frontend.onrender.com",  # Example Render frontend
+    # Add your actual frontend URLs here
+]
+
+# For development/debugging - you can temporarily allow all origins
+# Remove this in production and use the specific origins above
+CORS_DEBUG_MODE = True  # Set to False in production
+
+if CORS_DEBUG_MODE:
+    ALLOWED_ORIGINS = ["*"]  # Allow all origins for debugging
+
 # Database setup
 SQLALCHEMY_DATABASE_URL = "sqlite:///./accident_detection.db"
 engine = create_engine(SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False})
@@ -536,10 +554,10 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# ENHANCED CORS configuration - ALLOW ALL ORIGINS for debugging
+# CORS configuration - use the defined ALLOWED_ORIGINS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Allow all origins temporarily for debugging
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH", "HEAD"],
     allow_headers=["*"],
@@ -563,13 +581,9 @@ async def enhanced_cors_handler(request, call_next):
     if request.method == "OPTIONS":
         response = JSONResponse({"message": "OK"})
         
-        # Set specific origin if it's in allowed list
-        if origin and origin in ALLOWED_ORIGINS:
-            response.headers["Access-Control-Allow-Origin"] = origin
-        elif origin:
-            # For development/debugging - log unknown origins
-            logger.warning(f"Unknown origin attempted access: {origin}")
-            response.headers["Access-Control-Allow-Origin"] = origin
+        # Set specific origin if it's in allowed list or allow all if debug mode
+        if CORS_DEBUG_MODE or (origin and (ALLOWED_ORIGINS == ["*"] or origin in ALLOWED_ORIGINS)):
+            response.headers["Access-Control-Allow-Origin"] = origin or "*"
         
         response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS, PATCH, HEAD"
         response.headers["Access-Control-Allow-Headers"] = "Authorization, Content-Type, Accept, Origin, User-Agent, Cache-Control, Keep-Alive, X-Requested-With"
@@ -581,12 +595,8 @@ async def enhanced_cors_handler(request, call_next):
     response = await call_next(request)
     
     # Add CORS headers to all responses
-    if origin and origin in ALLOWED_ORIGINS:
-        response.headers["Access-Control-Allow-Origin"] = origin
-    elif origin:
-        # For development/debugging - allow unknown origins but log them
-        logger.warning(f"Unknown origin in response: {origin}")
-        response.headers["Access-Control-Allow-Origin"] = origin
+    if CORS_DEBUG_MODE or (origin and (ALLOWED_ORIGINS == ["*"] or origin in ALLOWED_ORIGINS)):
+        response.headers["Access-Control-Allow-Origin"] = origin or "*"
     
     response.headers["Access-Control-Allow-Credentials"] = "true"
     response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS, PATCH, HEAD"
@@ -604,7 +614,8 @@ async def root():
         "status": "healthy",
         "features": ["Real-time detection", "Database logging", "Snapshot storage", "User/Admin Auth", "Dashboard API"],
         "timestamp": datetime.now(timezone.utc).isoformat(),
-        "cors_status": "fully_open_for_debugging",
+        "cors_status": "debug_mode" if CORS_DEBUG_MODE else "production_mode",
+        "allowed_origins": ALLOWED_ORIGINS if not CORS_DEBUG_MODE else ["*"],
         "backend_url": "https://accident-prediction-1-mpm0.onrender.com",
         "model_status": "loaded" if accident_model.model is not None else "not_loaded"
     }
@@ -622,6 +633,8 @@ async def health_check():
             "active_connections": len(live_processors),
             "snapshots_directory": str(SNAPSHOTS_DIR),
             "cors_enabled": True,
+            "cors_debug_mode": CORS_DEBUG_MODE,
+            "allowed_origins": ALLOWED_ORIGINS if not CORS_DEBUG_MODE else ["*"],
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "backend_url": "https://accident-prediction-1-mpm0.onrender.com"
         }
@@ -667,7 +680,8 @@ async def test_endpoint():
         "message": "Test endpoint working",
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "server": "Render",
-        "cors_enabled": True
+        "cors_enabled": True,
+        "cors_debug": CORS_DEBUG_MODE
     }
 
 # ==================== AUTHENTICATION ROUTES ====================
@@ -1427,7 +1441,8 @@ if __name__ == "__main__":
     logger.info(f"Database URL: {SQLALCHEMY_DATABASE_URL}")
     logger.info(f"Snapshots Directory: {SNAPSHOTS_DIR}")
     logger.info(f"JWT Secret Key Set: {bool(SECRET_KEY and SECRET_KEY != 'your-secret-key-change-this-in-production-render-deployment-2024')}")
-    logger.info(f"CORS: Allow all origins (debugging mode)")
+    logger.info(f"CORS Debug Mode: {CORS_DEBUG_MODE}")
+    logger.info(f"Allowed Origins: {ALLOWED_ORIGINS}")
     logger.info("=" * 60)
     
     # Create snapshots directory if it doesn't exist
