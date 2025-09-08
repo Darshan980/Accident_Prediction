@@ -1,5 +1,9 @@
-// src/lib/api.js - COMPLETELY FIXED API client
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://accident-prediction-1-mpm0.onrender.com'
+// src/lib/api.js - FIXED with consistent URL handling
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+
+// Export the base URL for use in components
+export const getApiBaseUrl = () => API_BASE_URL
+export const getWebSocketUrl = () => API_BASE_URL.replace('https://', 'wss://').replace('http://', 'ws://')
 
 class ApiClient {
   constructor() {
@@ -42,7 +46,7 @@ class ApiClient {
     return null;
   }
 
-  // SIMPLIFIED request method
+  // ENHANCED request method with better error handling
   async request(endpoint, options = {}) {
     const url = `${this.baseURL}${endpoint}`
     const token = this.getAuthToken();
@@ -56,6 +60,7 @@ class ApiClient {
       credentials: 'include',
       headers: {
         'Accept': 'application/json',
+        'Content-Type': 'application/json',
         ...options.headers
       },
       ...options
@@ -66,9 +71,9 @@ class ApiClient {
       config.headers['Authorization'] = `Bearer ${token}`;
     }
 
-    // Add Content-Type for JSON requests
-    if (options.body && !(options.body instanceof FormData)) {
-      config.headers['Content-Type'] = 'application/json';
+    // Handle FormData differently
+    if (options.body && options.body instanceof FormData) {
+      delete config.headers['Content-Type']; // Let browser set it for FormData
     }
 
     try {
@@ -103,8 +108,8 @@ class ApiClient {
         throw new Error(`Request timeout after ${this.timeout}ms. Please check your connection.`);
       }
       
-      if (error.message.includes('fetch')) {
-        throw new Error(`Network error: Cannot connect to ${this.baseURL}. Please check if the backend is running.`);
+      if (error.message.includes('fetch') || error.message.includes('NetworkError')) {
+        throw new Error(`Network error: Cannot connect to ${this.baseURL}. Please check if the backend is running and accessible.`);
       }
       
       throw error;
@@ -238,7 +243,7 @@ class ApiClient {
     }
   }
 
-  // FIXED health check
+  // FIXED health check with dynamic URL
   async healthCheck() {
     try {
       console.log('🏥 Checking API health...');
@@ -271,7 +276,7 @@ class ApiClient {
     }
   }
 
-  // Test connection
+  // Test connection with dynamic URL
   async testConnection() {
     try {
       const response = await fetch(`${this.baseURL}/`, {
@@ -360,7 +365,7 @@ class ApiClient {
   }
 }
 
-// FIXED WebSocket for live detection
+// FIXED WebSocket with dynamic URL
 class LiveDetectionWebSocket {
   constructor() {
     this.ws = null;
@@ -392,9 +397,7 @@ class LiveDetectionWebSocket {
   connect() {
     return new Promise((resolve, reject) => {
       try {
-        const wsURL = API_BASE_URL
-          .replace('https://', 'wss://')
-          .replace('http://', 'ws://') + '/api/live/ws';
+        const wsURL = getWebSocketUrl() + '/api/live/ws';
         
         console.log('🔌 Connecting to WebSocket:', wsURL);
         this.ws = new WebSocket(wsURL);
