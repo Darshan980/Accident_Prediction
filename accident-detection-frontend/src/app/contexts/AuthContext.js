@@ -98,13 +98,14 @@ const AuthProvider = ({ children }) => {
     try {
       console.log('Attempting login for:', credentials.username, 'to API:', API_BASE_URL);
       
-      // Enhanced fetch with timeout and error handling
+      // Enhanced fetch with timeout and error handling - FIXED CORS
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 15000);
       
       try {
         const response = await fetch(`${API_BASE_URL}/auth/login`, {
           method: 'POST',
+          mode: 'cors',
           headers: {
             'Content-Type': 'application/json',
             'Accept': 'application/json'
@@ -126,9 +127,11 @@ const AuthProvider = ({ children }) => {
           
           // Get user details from the /auth/me endpoint
           const userInfoResponse = await fetch(`${API_BASE_URL}/auth/me`, {
+            method: 'GET',
+            mode: 'cors',
             headers: {
               'Authorization': `Bearer ${data.access_token}`,
-              'Content-Type': 'application/json'
+              'Accept': 'application/json'
             }
           });
           
@@ -214,6 +217,7 @@ const AuthProvider = ({ children }) => {
       try {
         const response = await fetch(`${API_BASE_URL}/auth/admin/login`, {
           method: 'POST',
+          mode: 'cors',
           headers: {
             'Content-Type': 'application/json',
             'Accept': 'application/json'
@@ -234,9 +238,11 @@ const AuthProvider = ({ children }) => {
           
           // Get admin info from the /auth/admin/me endpoint
           const adminInfoResponse = await fetch(`${API_BASE_URL}/auth/admin/me`, {
+            method: 'GET',
+            mode: 'cors',
             headers: {
               'Authorization': `Bearer ${data.access_token}`,
-              'Content-Type': 'application/json'
+              'Accept': 'application/json'
             }
           });
           
@@ -323,6 +329,7 @@ const AuthProvider = ({ children }) => {
       try {
         const response = await fetch(`${API_BASE_URL}/auth/register`, {
           method: 'POST',
+          mode: 'cors',
           headers: {
             'Content-Type': 'application/json',
             'Accept': 'application/json'
@@ -439,6 +446,7 @@ const AuthProvider = ({ children }) => {
             
             const response = await fetch(`${API_BASE_URL}${endpoint}`, {
               method: 'PUT',
+              mode: 'cors',
               headers: {
                 'Authorization': `Bearer ${user.token}`,
                 'Content-Type': 'application/json'
@@ -491,6 +499,7 @@ const AuthProvider = ({ children }) => {
             
             const response = await fetch(`${API_BASE_URL}${endpoint}`, {
               method: 'PUT',
+              mode: 'cors',
               headers: {
                 'Authorization': `Bearer ${user.token}`,
                 'Content-Type': 'application/json'
