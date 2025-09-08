@@ -695,6 +695,200 @@ app.add_middleware(
 # Mount static files for serving snapshots
 app.mount("/snapshots", StaticFiles(directory="snapshots"), name="snapshots")
 
+# Add this to your main.py file after the existing routes
+
+# ==================== MISSING UPLOAD ENDPOINT ====================
+
+@app.post("/api/upload")
+async def upload_file(
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db)
+):
+    """Upload and analyze a file for accident detection"""
+    try:
+        logger.info(f"File upload initiated by user: {current_user.username}")
+        logger.info(f"File details: {file.filename}, size: {file.size}, type: {file.content_type}")
+        
+        # Validate file type
+        allowed_types = {
+            'image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp',
+            'video/mp4', 'video/avi', 'video/mov', 'video/quicktime', 'video/x-msvideo'
+        }
+        
+        if file.content_type not in allowed_types:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Invalid file type. Supported types: {', '.join(allowed_types)}"
+            )
+        
+        # Validate file size (50MB limit)
+        if file.size > 50 * 1024 * 1024:
+            raise HTTPException(status_code=400, detail="File too large. Maximum size is 50MB.")
+        
+        # Read file content
+        file_content = await file.read()
+        logger.info(f"File content read: {len(file_content)} bytes")
+        
+        # Analyze the file
+        start_time = time.time()
+        
+        try:
+            # Convert file content to frame for analysis
+            result = await analyze_frame_with_logging(
+                frame_bytes=file_content,
+                db=db,
+                source=f"user_upload_{current_user.username}",
+                frame_id=f"upload_{int(time.time() * 1000)}"
+            )
+            
+            # Add file metadata to result
+            result.update({
+                "filename": file.filename,
+                "file_size": file.size,
+                "content_type": file.content_type,
+                "user_id": current_user.id,
+                "username": current_user.username,
+                "upload_timestamp": time.time(),
+                "analysis_type": "file_upload"
+            })
+            
+            processing_time = time.time() - start_time
+            result["total_processing_time"] = processing_time
+            
+            logger.info(f"File analysis completed for {file.filename}: accident_detected={result.get('accident_detected', False)}")
+            
+            return result
+            
+        except Exception as analysis_error:
+            logger.error(f"Analysis failed for file {file.filename}: {str(analysis_error)}")
+            raise HTTPException(
+                status_code=500, 
+                detail=f"Analysis failed: {str(analysis_error)}"
+            )
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Upload failed for user {current_user.username}: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
+
+# ==================== ADDITIONAL HELPER ROUTES ====================
+
+@app.get("/api/user/uploads")
+async def get_user_uploads(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, le=500),
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db)
+):
+    """Get user's upload history"""
+    try:
+        # Get logs for this specific user (if we track user uploads)
+        logs = db.query(AccidentLog).filter(
+            AccidentLog.video_source.like(f"user_upload_{current_user.username}%")
+        ).order_by(AccidentLog.timestamp.desc()).offset(skip).limit(limit).all()
+        
+        result = []
+        for log in logs:
+            result.append({
+                "id": log.id,
+                "timestamp": log.timestamp.isoformat(),
+                "video_source": log.video_source,
+                "confidence": log.confidence,
+                "accident_detected": log.accident_detected,
+                "predicted_class": log.predicted_class,
+                "processing_time": log.processing_time,
+                "analysis_type": log.analysis_type,
+                "status": log.status,
+                "created_at": log.created_at.isoformat() if log.created_at else None
+            })
+        
+        return result
+    except Exception as e:
+        logger.error(f"Error fetching user uploads: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to fetch upload history")
+
+@app.get("/api/user/stats")
+async def get_user_stats(
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db)
+):
+    """Get user's analysis statistics"""
+    try:
+        # Get user-specific stats
+        total_uploads = db.query(AccidentLog).filter(
+            AccidentLog.video_source.like(f"user_upload_{current_user.username}%")
+        ).count()
+        
+        accidents_detected = db.query(AccidentLog).filter(
+            and_(
+                AccidentLog.video_source.like(f"user_upload_{current_user.username}%"),
+                AccidentLog.accident_detected == True
+            )
+        ).count()
+        
+        return {
+            "total_uploads": total_uploads,
+            "accidents_detected": accidents_detected,
+            "safe_uploads": total_uploads - accidents_detected,
+            "detection_rate": round((accidents_detected / total_uploads * 100) if total_uploads > 0 else 0, 1),
+            "user": current_user.username,
+            "user_id": current_user.id
+        }
+    except Exception as e:
+        logger.error(f"Error fetching user stats: {str(e)}")
+        return {
+            "total_uploads": 0,
+            "accidents_detected": 0,
+            "safe_uploads": 0,
+            "detection_rate": 0,
+            "user": current_user.username,
+            "user_id": current_user.id
+        }
+
+# ==================== UPDATE EXISTING ROUTES ====================
+
+# Update the OPTIONS handler to include the upload endpoint
+@app.options("/api/upload")
+async def options_upload():
+    """Handle CORS preflight for upload endpoint"""
+    return JSONResponse(
+        content={"message": "OK"},
+        headers={
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "POST, OPTIONS",
+            "Access-Control-Allow-Headers": "Authorization, Content-Type, Accept",
+            "Access-Control-Max-Age": "3600"
+        }
+    )
+
+@app.options("/api/user/uploads")
+async def options_user_uploads():
+    """Handle CORS preflight for user uploads endpoint"""
+    return JSONResponse(
+        content={"message": "OK"},
+        headers={
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "GET, OPTIONS",
+            "Access-Control-Allow-Headers": "Authorization, Content-Type, Accept",
+            "Access-Control-Max-Age": "3600"
+        }
+    )
+
+@app.options("/api/user/stats")
+async def options_user_stats():
+    """Handle CORS preflight for user stats endpoint"""
+    return JSONResponse(
+        content={"message": "OK"},
+        headers={
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "GET, OPTIONS",
+            "Access-Control-Allow-Headers": "Authorization, Content-Type, Accept",
+            "Access-Control-Max-Age": "3600"
+        }
+    )
+
 # ==================== EXPLICIT CORS HEADERS FOR ALL ROUTES ====================
 
 @app.middleware("http")
