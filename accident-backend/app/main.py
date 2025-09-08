@@ -1,4 +1,4 @@
-# Enhanced main.py with SIMPLE and RELIABLE CORS fix
+# Enhanced main.py with COMPLETE WebSocket and Authentication fix
 from fastapi import FastAPI, UploadFile, File, HTTPException, WebSocket, WebSocketDisconnect, Depends, Query, status, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, FileResponse
@@ -317,44 +317,6 @@ def create_default_super_admin(db: Session):
     except Exception as e:
         logger.error(f"Error creating default super admin: {str(e)}")
 
-# ==================== PROFILE UPDATE HELPER FUNCTIONS ====================
-
-def user_exists_by_username_sync(db: Session, username: str, exclude_user_id: int = None) -> bool:
-    query = db.query(User).filter(User.username == username)
-    if exclude_user_id:
-        query = query.filter(User.id != exclude_user_id)
-    return query.first() is not None
-
-def user_exists_by_email_sync(db: Session, email: str, exclude_user_id: int = None) -> bool:
-    query = db.query(User).filter(User.email == email)
-    if exclude_user_id:
-        query = query.filter(User.id != exclude_user_id)
-    return query.first() is not None
-
-def update_user_profile_sync(db: Session, user_id: int, updated_fields: dict):
-    user = db.query(User).filter(User.id == user_id).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-    
-    for field, value in updated_fields.items():
-        if hasattr(user, field):
-            setattr(user, field, value)
-    
-    db.commit()
-    db.refresh(user)
-    return user
-
-def update_user_password_sync(db: Session, user_id: int, new_hashed_password: str):
-    user = db.query(User).filter(User.id == user_id).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-    
-    user.hashed_password = new_hashed_password
-    user.last_password_change = datetime.now(timezone.utc)
-    db.commit()
-    db.refresh(user)
-    return user
-
 def upgrade_database_schema():
     try:
         # Add missing columns to existing tables
@@ -485,6 +447,7 @@ def check_admin_permission(permission: str):
 BASE_DIR = Path(__file__).parent
 SNAPSHOTS_DIR = BASE_DIR / "snapshots"
 live_processors = {}
+websocket_connections = {}
 
 def save_snapshot(frame: np.ndarray, detection_data: dict) -> tuple[str, str]:
     try:
@@ -644,6 +607,7 @@ async def lifespan(app: FastAPI):
             logger.error(f"Error cleaning up processor {client_id}: {str(e)}")
     
     live_processors.clear()
+    websocket_connections.clear()
     logger.info("Shutdown complete")
 
 # Create FastAPI instance with lifespan
@@ -656,7 +620,6 @@ app = FastAPI(
 
 # ==================== SIMPLE AND RELIABLE CORS SETUP ====================
 
-# Get allowed origins from environment or use defaults
 def get_cors_origins():
     env_origins = os.getenv("ALLOWED_ORIGINS", "")
     if env_origins:
@@ -669,10 +632,9 @@ def get_cors_origins():
             "http://127.0.0.1:3001",
             "http://localhost:8080",
             "http://127.0.0.1:8080",
-            "https://accident-prediction-1-mpm0.onrender.com"  # Your production URL
+            "https://accident-prediction-1-mpm0.onrender.com"
         ]
     
-    # Always allow all origins for development - this fixes most CORS issues
     if os.getenv("ENVIRONMENT", "development") == "development":
         origins = ["*"]
     
@@ -681,7 +643,6 @@ def get_cors_origins():
 cors_origins = get_cors_origins()
 logger.info(f"CORS origins configured: {cors_origins}")
 
-# Add CORS middleware with comprehensive settings
 app.add_middleware(
     CORSMiddleware,
     allow_origins=cors_origins,
@@ -689,15 +650,144 @@ app.add_middleware(
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"],
     allow_headers=["*"],
     expose_headers=["*"],
-    max_age=3600  # Cache preflight for 1 hour
+    max_age=3600
 )
 
 # Mount static files for serving snapshots
 app.mount("/snapshots", StaticFiles(directory="snapshots"), name="snapshots")
 
-# Add this to your main.py file after the existing routes
+# ==================== WEBSOCKET ENDPOINT (FIXED) ====================
 
-# ==================== MISSING UPLOAD ENDPOINT ====================
+@app.websocket("/api/live/ws")
+async def websocket_endpoint(websocket: WebSocket):
+    """WebSocket endpoint for live detection - NO AUTHENTICATION REQUIRED"""
+    await websocket.accept()
+    
+    client_id = f"client_{int(time.time() * 1000)}"
+    logger.info(f"WebSocket connection established: {client_id}")
+    
+    # Store connection
+    websocket_connections[client_id] = websocket
+    
+    try:
+        # Send connection established message
+        await websocket.send_json({
+            "type": "connection_established",
+            "client_id": client_id,
+            "message": "Connected to live detection service",
+            "timestamp": time.time()
+        })
+        
+        # Initialize processor for this client
+        live_processors[client_id] = LiveStreamProcessor()
+        
+        # Get database session
+        db = SessionLocal()
+        
+        # Message handling loop
+        while True:
+            try:
+                # Wait for message with timeout
+                message = await asyncio.wait_for(websocket.receive_text(), timeout=60.0)
+                
+                try:
+                    data = json.loads(message)
+                except json.JSONDecodeError:
+                    await websocket.send_json({
+                        "error": "Invalid JSON format",
+                        "type": "error"
+                    })
+                    continue
+                
+                # Handle ping messages
+                if data.get("type") == "ping":
+                    await websocket.send_json({
+                        "type": "pong",
+                        "timestamp": time.time()
+                    })
+                    continue
+                
+                # Handle frame data for analysis
+                if "frame" in data:
+                    try:
+                        frame_data = data["frame"]
+                        frame_id = data.get("frame_id", f"frame_{int(time.time() * 1000)}")
+                        timestamp = data.get("timestamp", time.time())
+                        
+                        # Decode base64 frame
+                        frame_bytes = base64.b64decode(frame_data)
+                        
+                        # Analyze the frame
+                        result = await analyze_frame_with_logging(
+                            frame_bytes=frame_bytes,
+                            db=db,
+                            source=f"live_websocket_{client_id}",
+                            frame_id=frame_id
+                        )
+                        
+                        # Add metadata
+                        result.update({
+                            "client_id": client_id,
+                            "received_timestamp": timestamp,
+                            "analysis_timestamp": time.time(),
+                            "type": "detection_result"
+                        })
+                        
+                        # Send result back to client
+                        await websocket.send_json(result)
+                        
+                        logger.info(f"Frame processed for {client_id}: accident={result.get('accident_detected', False)}")
+                        
+                    except Exception as analysis_error:
+                        logger.error(f"Frame analysis error for {client_id}: {str(analysis_error)}")
+                        await websocket.send_json({
+                            "error": f"Analysis failed: {str(analysis_error)}",
+                            "type": "error",
+                            "frame_id": data.get("frame_id", "unknown")
+                        })
+                
+            except asyncio.TimeoutError:
+                # Send ping to keep connection alive
+                await websocket.send_json({
+                    "type": "ping",
+                    "timestamp": time.time()
+                })
+                
+            except WebSocketDisconnect:
+                logger.info(f"WebSocket client {client_id} disconnected normally")
+                break
+                
+            except Exception as e:
+                logger.error(f"WebSocket error for {client_id}: {str(e)}")
+                await websocket.send_json({
+                    "error": f"WebSocket error: {str(e)}",
+                    "type": "error"
+                })
+    
+    except WebSocketDisconnect:
+        logger.info(f"WebSocket client {client_id} disconnected")
+    except Exception as e:
+        logger.error(f"Unexpected WebSocket error for {client_id}: {str(e)}")
+    finally:
+        # Clean up
+        if client_id in websocket_connections:
+            del websocket_connections[client_id]
+        if client_id in live_processors:
+            try:
+                if hasattr(live_processors[client_id], 'cleanup'):
+                    live_processors[client_id].cleanup()
+                del live_processors[client_id]
+            except Exception as e:
+                logger.error(f"Error cleaning up processor {client_id}: {str(e)}")
+        
+        try:
+            db.close()
+        except:
+            pass
+            
+        logger.info(f"WebSocket connection {client_id} cleaned up")
+
+# ==================== UPLOAD ENDPOINT ====================
 
 @app.post("/api/upload")
 async def upload_file(
@@ -773,7 +863,7 @@ async def upload_file(
         logger.error(f"Upload failed for user {current_user.username}: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
 
-# ==================== ADDITIONAL HELPER ROUTES ====================
+# ==================== USER STATS AND UPLOAD HISTORY ====================
 
 @app.get("/api/user/uploads")
 async def get_user_uploads(
@@ -784,7 +874,7 @@ async def get_user_uploads(
 ):
     """Get user's upload history"""
     try:
-        # Get logs for this specific user (if we track user uploads)
+        # Get logs for this specific user
         logs = db.query(AccidentLog).filter(
             AccidentLog.video_source.like(f"user_upload_{current_user.username}%")
         ).order_by(AccidentLog.timestamp.desc()).offset(skip).limit(limit).all()
@@ -847,69 +937,7 @@ async def get_user_stats(
             "user_id": current_user.id
         }
 
-# ==================== UPDATE EXISTING ROUTES ====================
-
-# Update the OPTIONS handler to include the upload endpoint
-@app.options("/api/upload")
-async def options_upload():
-    """Handle CORS preflight for upload endpoint"""
-    return JSONResponse(
-        content={"message": "OK"},
-        headers={
-            "Access-Control-Allow-Origin": "*",
-            "Access-Control-Allow-Methods": "POST, OPTIONS",
-            "Access-Control-Allow-Headers": "Authorization, Content-Type, Accept",
-            "Access-Control-Max-Age": "3600"
-        }
-    )
-
-@app.options("/api/user/uploads")
-async def options_user_uploads():
-    """Handle CORS preflight for user uploads endpoint"""
-    return JSONResponse(
-        content={"message": "OK"},
-        headers={
-            "Access-Control-Allow-Origin": "*",
-            "Access-Control-Allow-Methods": "GET, OPTIONS",
-            "Access-Control-Allow-Headers": "Authorization, Content-Type, Accept",
-            "Access-Control-Max-Age": "3600"
-        }
-    )
-
-@app.options("/api/user/stats")
-async def options_user_stats():
-    """Handle CORS preflight for user stats endpoint"""
-    return JSONResponse(
-        content={"message": "OK"},
-        headers={
-            "Access-Control-Allow-Origin": "*",
-            "Access-Control-Allow-Methods": "GET, OPTIONS",
-            "Access-Control-Allow-Headers": "Authorization, Content-Type, Accept",
-            "Access-Control-Max-Age": "3600"
-        }
-    )
-
-# ==================== EXPLICIT CORS HEADERS FOR ALL ROUTES ====================
-
-@app.middleware("http")
-async def add_cors_header(request: Request, call_next):
-    """Add CORS headers to all responses as a safety net"""
-    response = await call_next(request)
-    
-    origin = request.headers.get("origin")
-    if origin and (origin in cors_origins or "*" in cors_origins):
-        response.headers["Access-Control-Allow-Origin"] = origin
-    elif "*" in cors_origins:
-        response.headers["Access-Control-Allow-Origin"] = "*"
-    
-    response.headers["Access-Control-Allow-Credentials"] = "true"
-    response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, PATCH, DELETE, OPTIONS, HEAD"
-    response.headers["Access-Control-Allow-Headers"] = "*"
-    response.headers["Access-Control-Expose-Headers"] = "*"
-    
-    return response
-
-# ==================== ROUTES ====================
+# ==================== BASIC ROUTES ====================
 
 @app.get("/")
 async def root():
@@ -918,7 +946,9 @@ async def root():
         "version": "2.1.0",
         "features": ["Real-time detection", "Database logging", "Snapshot storage", "User/Admin Auth", "Dashboard API"],
         "cors_status": "enabled",
-        "cors_origins": cors_origins
+        "cors_origins": cors_origins,
+        "active_websocket_connections": len(websocket_connections),
+        "active_processors": len(live_processors)
     }
 
 @app.get("/api/health")
@@ -932,9 +962,10 @@ async def health_check(db: Session = Depends(get_db)):
         return {
             "status": "healthy",
             "model_loaded": accident_model.model is not None,
-            "model_path": accident_model.model_path,
-            "threshold": accident_model.threshold,
-            "active_connections": len(live_processors),
+            "model_path": accident_model.model_path if hasattr(accident_model, 'model_path') else 'unknown',
+            "threshold": accident_model.threshold if hasattr(accident_model, 'threshold') else 0.5,
+            "active_websocket_connections": len(websocket_connections),
+            "active_processors": len(live_processors),
             "database_status": "connected",
             "total_logs": total_logs,
             "accidents_detected": accidents_detected,
@@ -951,8 +982,83 @@ async def health_check(db: Session = Depends(get_db)):
             "status": "unhealthy",
             "error": str(e),
             "model_loaded": accident_model.model is not None if accident_model else False,
-            "cors_status": "enabled"
+            "cors_status": "enabled",
+            "active_websocket_connections": len(websocket_connections),
+            "active_processors": len(live_processors)
         }
+
+@app.get("/api/dashboard/stats")
+async def get_dashboard_stats_public(db: Session = Depends(get_db)):
+    """Get dashboard statistics (public route for frontend compatibility)"""
+    try:
+        total_logs = db.query(AccidentLog).count()
+        accidents_detected = db.query(AccidentLog).filter(AccidentLog.accident_detected == True).count()
+        
+        return {
+            "total_logs": total_logs,
+            "accidents_detected": accidents_detected,
+            "accuracy_rate": round((accidents_detected / total_logs * 100) if total_logs > 0 else 0, 1),
+            "active_connections": len(websocket_connections),
+            "active_processors": len(live_processors),
+            "model_status": "loaded" if accident_model.model is not None else "not_loaded"
+        }
+    except Exception as e:
+        logger.error(f"Error fetching dashboard stats: {str(e)}")
+        return {
+            "total_logs": 0,
+            "accidents_detected": 0,
+            "accuracy_rate": 0,
+            "active_connections": len(websocket_connections),
+            "active_processors": len(live_processors),
+            "model_status": "not_loaded"
+        }
+
+@app.get("/api/logs")
+async def get_logs_public(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, le=500),
+    accident_only: bool = Query(False),
+    status: Optional[str] = Query(None),
+    source: Optional[str] = Query(None),
+    db: Session = Depends(get_db)
+):
+    """Get accident logs with filtering (public route for dashboard compatibility)"""
+    try:
+        query = db.query(AccidentLog)
+        
+        if accident_only:
+            query = query.filter(AccidentLog.accident_detected == True)
+        
+        if status:
+            query = query.filter(AccidentLog.status == status)
+            
+        if source:
+            query = query.filter(AccidentLog.video_source.like(f"%{source}%"))
+        
+        logs = query.order_by(AccidentLog.timestamp.desc()).offset(skip).limit(limit).all()
+        
+        result = []
+        for log in logs:
+            result.append({
+                "id": log.id,
+                "timestamp": log.timestamp.isoformat(),
+                "video_source": log.video_source,
+                "confidence": log.confidence,
+                "accident_detected": log.accident_detected,
+                "predicted_class": log.predicted_class,
+                "processing_time": log.processing_time,
+                "analysis_type": log.analysis_type,
+                "status": log.status,
+                "severity_estimate": log.severity_estimate,
+                "location": log.location,
+                "snapshot_url": log.snapshot_url,
+                "created_at": log.created_at.isoformat() if log.created_at else None
+            })
+        
+        return result
+    except Exception as e:
+        logger.error(f"Error fetching logs: {str(e)}")
+        return []
 
 # ==================== AUTHENTICATION ROUTES ====================
 
@@ -1038,61 +1144,87 @@ async def get_current_admin_info(current_admin: Admin = Depends(get_current_admi
         last_login=current_admin.last_login
     )
 
-# ==================== BASIC ROUTES FOR TESTING ====================
+# ==================== OPTIONS HANDLERS FOR CORS ====================
 
-@app.get("/api/dashboard/stats")
-async def get_dashboard_stats_public(db: Session = Depends(get_db)):
-    """Get dashboard statistics (public route for frontend compatibility)"""
-    try:
-        total_logs = db.query(AccidentLog).count()
-        accidents_detected = db.query(AccidentLog).filter(AccidentLog.accident_detected == True).count()
-        
-        return {
-            "total_logs": total_logs,
-            "accidents_detected": accidents_detected,
-            "accuracy_rate": round((accidents_detected / total_logs * 100) if total_logs > 0 else 0, 1),
-            "active_connections": len(live_processors),
-            "model_status": "loaded" if accident_model.model is not None else "not_loaded"
+@app.options("/api/upload")
+async def options_upload():
+    return JSONResponse(
+        content={"message": "OK"},
+        headers={
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "POST, OPTIONS",
+            "Access-Control-Allow-Headers": "Authorization, Content-Type, Accept",
+            "Access-Control-Max-Age": "3600"
         }
-    except Exception as e:
-        logger.error(f"Error fetching dashboard stats: {str(e)}")
-        return {
-            "total_logs": 0,
-            "accidents_detected": 0,
-            "accuracy_rate": 0,
-            "active_connections": len(live_processors),
-            "model_status": "not_loaded"
-        }
+    )
 
-@app.get("/api/logs")
-async def get_logs_public(
-    skip: int = Query(0, ge=0),
-    limit: int = Query(50, le=500),
-    db: Session = Depends(get_db)
-):
-    """Get accident logs (public route for dashboard compatibility)"""
-    try:
-        logs = db.query(AccidentLog).order_by(AccidentLog.timestamp.desc()).offset(skip).limit(limit).all()
-        
-        result = []
-        for log in logs:
-            result.append({
-                "id": log.id,
-                "timestamp": log.timestamp.isoformat(),
-                "video_source": log.video_source,
-                "confidence": log.confidence,
-                "accident_detected": log.accident_detected,
-                "predicted_class": log.predicted_class,
-                "processing_time": log.processing_time,
-                "analysis_type": log.analysis_type,
-                "status": log.status,
-                "created_at": log.created_at.isoformat() if log.created_at else None
-            })
-        
-        return result
-    except Exception as e:
-        logger.error(f"Error fetching logs: {str(e)}")
-        return []
+@app.options("/api/user/uploads")
+async def options_user_uploads():
+    return JSONResponse(
+        content={"message": "OK"},
+        headers={
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "GET, OPTIONS",
+            "Access-Control-Allow-Headers": "Authorization, Content-Type, Accept",
+            "Access-Control-Max-Age": "3600"
+        }
+    )
+
+@app.options("/api/user/stats")
+async def options_user_stats():
+    return JSONResponse(
+        content={"message": "OK"},
+        headers={
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "GET, OPTIONS",
+            "Access-Control-Allow-Headers": "Authorization, Content-Type, Accept",
+            "Access-Control-Max-Age": "3600"
+        }
+    )
+
+@app.options("/auth/{path:path}")
+async def options_auth():
+    return JSONResponse(
+        content={"message": "OK"},
+        headers={
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+            "Access-Control-Allow-Headers": "Authorization, Content-Type, Accept",
+            "Access-Control-Max-Age": "3600"
+        }
+    )
+
+@app.options("/api/{path:path}")
+async def options_api():
+    return JSONResponse(
+        content={"message": "OK"},
+        headers={
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+            "Access-Control-Allow-Headers": "Authorization, Content-Type, Accept",
+            "Access-Control-Max-Age": "3600"
+        }
+    )
+
+# ==================== CORS MIDDLEWARE ====================
+
+@app.middleware("http")
+async def add_cors_header(request: Request, call_next):
+    """Add CORS headers to all responses as a safety net"""
+    response = await call_next(request)
+    
+    origin = request.headers.get("origin")
+    if origin and (origin in cors_origins or "*" in cors_origins):
+        response.headers["Access-Control-Allow-Origin"] = origin
+    elif "*" in cors_origins:
+        response.headers["Access-Control-Allow-Origin"] = "*"
+    
+    response.headers["Access-Control-Allow-Credentials"] = "true"
+    response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, PATCH, DELETE, OPTIONS, HEAD"
+    response.headers["Access-Control-Allow-Headers"] = "*"
+    response.headers["Access-Control-Expose-Headers"] = "*"
+    
+    return response
 
 # ==================== ERROR HANDLERS ====================
 
@@ -1102,7 +1234,11 @@ async def http_exception_handler(request: Request, exc: HTTPException):
     logger.error(f"HTTP Exception: {exc.status_code} - {exc.detail}")
     return JSONResponse(
         status_code=exc.status_code,
-        content={"detail": exc.detail}
+        content={"detail": exc.detail},
+        headers={
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Credentials": "true"
+        }
     )
 
 @app.exception_handler(Exception)
@@ -1111,7 +1247,11 @@ async def general_exception_handler(request: Request, exc: Exception):
     logger.error(f"Unhandled exception: {str(exc)}")
     return JSONResponse(
         status_code=500,
-        content={"detail": "Internal server error", "error": str(exc)}
+        content={"detail": "Internal server error", "error": str(exc)},
+        headers={
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Credentials": "true"
+        }
     )
 
 # ==================== STARTUP CONFIGURATION ====================
@@ -1120,10 +1260,11 @@ if __name__ == "__main__":
     import uvicorn
     
     print("=" * 60)
-    print("🚀 ACCIDENT DETECTION API STARTING (CORS FIXED)")
+    print("🚀 ACCIDENT DETECTION API STARTING (WEBSOCKET FIXED)")
     print("=" * 60)
     print(f"📍 Server URL: http://0.0.0.0:8000")
     print(f"📍 Production URL: https://accident-prediction-1-mpm0.onrender.com")
+    print(f"🔌 WebSocket URL: wss://accident-prediction-1-mpm0.onrender.com/api/live/ws")
     print(f"📋 API Docs: /docs")
     print(f"🔍 Health Check: /api/health")
     print(f"🌐 CORS Origins: {cors_origins}")
@@ -1132,6 +1273,10 @@ if __name__ == "__main__":
     print("   Username: superadmin")
     print("   Password: admin123")
     print("   ⚠️  CHANGE THESE IN PRODUCTION!")
+    print("=" * 60)
+    print("✅ WebSocket Authentication: DISABLED (Public Access)")
+    print("✅ File Upload: Requires User Authentication")
+    print("✅ Dashboard/Logs: Public Access")
     print("=" * 60)
     
     # Run the server with production settings
