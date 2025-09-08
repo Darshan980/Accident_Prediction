@@ -1,6 +1,7 @@
 'use client';
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import Link from 'next/link';
+import { apiClient, getApiBaseUrl, getWebSocketUrl } from '../lib/api';
 import notificationService from '../lib/notificationService';
 
 const EnhancedLiveDetection = () => {
@@ -16,6 +17,7 @@ const EnhancedLiveDetection = () => {
   const [videoReady, setVideoReady] = useState(false);
   const [savedCount, setSavedCount] = useState(0);
   const [alertsTriggered, setAlertsTriggered] = useState(0);
+  const [apiUrl, setApiUrl] = useState('');
 
   const videoRef = useRef(null);
   const streamRef = useRef(null);
@@ -30,6 +32,10 @@ const EnhancedLiveDetection = () => {
 
   useEffect(() => {
     mountedRef.current = true;
+    
+    // Set API URL for display
+    setApiUrl(getApiBaseUrl());
+    
     checkApiConnection();
     initializeNotificationSystem();
     
@@ -41,21 +47,23 @@ const EnhancedLiveDetection = () => {
 
   const checkApiConnection = async () => {
     try {
-      const response = await fetch('http://localhost:8000/api/health', {
-        signal: AbortSignal.timeout(5000)
-      });
+      console.log('🔍 Checking API connection to:', getApiBaseUrl());
       
-      if (response.ok) {
-        const data = await response.json();
-        setApiConnected(true);
-        console.log('API connected:', data);
+      const health = await apiClient.healthCheck();
+      
+      if (health.fallback) {
+        setApiConnected(false);
+        setCameraError(`Cannot connect to backend server at ${getApiBaseUrl()}. Please ensure the backend is running.`);
+        console.error('API connection failed - fallback response:', health);
       } else {
-        throw new Error(`HTTP ${response.status}`);
+        setApiConnected(true);
+        console.log('✅ API connected successfully:', health);
+        setCameraError(''); // Clear any previous errors
       }
     } catch (error) {
       setApiConnected(false);
-      setCameraError('Cannot connect to AI detection service on port 8000');
-      console.error('API connection failed:', error);
+      setCameraError(`API connection failed: ${error.message}`);
+      console.error('API connection error:', error);
     }
   };
 
@@ -255,7 +263,10 @@ const EnhancedLiveDetection = () => {
   const setupWebSocket = () => {
     return new Promise((resolve, reject) => {
       try {
-        const ws = new WebSocket('ws://localhost:8000/api/live/ws');
+        const wsUrl = getWebSocketUrl() + '/api/live/ws';
+        console.log('🔌 Connecting to WebSocket:', wsUrl);
+        
+        const ws = new WebSocket(wsUrl);
         wsRef.current = ws;
 
         const timeout = setTimeout(() => {
@@ -578,51 +589,39 @@ const EnhancedLiveDetection = () => {
         Live Accident Detection
       </h1>
 
-      {/* Debug Panel (for development) */}
+      {/* API Connection Status */}
       <div style={{ 
-        backgroundColor: '#fff3cd', 
-        border: '1px solid #ffeaa7',
+        backgroundColor: apiConnected ? '#d4edda' : '#f8d7da', 
+        border: `1px solid ${apiConnected ? '#c3e6cb' : '#f5c6cb'}`,
         borderRadius: '6px',
         padding: '1rem',
         marginBottom: '1rem',
-        display: 'none' // Set to 'block' for debugging
+        textAlign: 'center'
       }}>
-        <h4 style={{ color: '#856404', marginBottom: '0.5rem' }}>🔧 Live Detection Debug</h4>
-        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-          <button
-            onClick={testNotificationSystem}
-            style={{
-              backgroundColor: '#dc3545',
-              color: 'white',
-              border: 'none',
-              padding: '6px 12px',
-              borderRadius: '4px',
-              cursor: 'pointer',
-              fontSize: '0.8rem'
-            }}
-          >
-            Test Alert System
-          </button>
-          <button
-            onClick={() => {
-              const alerts = JSON.parse(localStorage.getItem('alertHistory') || '[]');
-              const liveAlerts = alerts.filter(a => a.source && a.source.includes('Live'));
-              console.log('Live camera alerts:', liveAlerts);
-              alert(`Live Alerts: ${liveAlerts.length} total`);
-            }}
-            style={{
-              backgroundColor: '#17a2b8',
-              color: 'white',
-              border: 'none',
-              padding: '6px 12px',
-              borderRadius: '4px',
-              cursor: 'pointer',
-              fontSize: '0.8rem'
-            }}
-          >
-            Check Live Alerts ({alertsTriggered})
-          </button>
-        </div>
+        <h4 style={{ color: apiConnected ? '#155724' : '#721c24', marginBottom: '0.5rem' }}>
+          Backend Connection: {apiConnected ? '✅ Connected' : '❌ Disconnected'}
+        </h4>
+        <p style={{ color: apiConnected ? '#155724' : '#721c24', margin: 0, fontSize: '0.9rem' }}>
+          API URL: {apiUrl}
+        </p>
+        {!apiConnected && (
+          <div style={{ marginTop: '0.5rem' }}>
+            <button
+              onClick={checkApiConnection}
+              style={{
+                backgroundColor: '#007bff',
+                color: 'white',
+                border: 'none',
+                padding: '6px 12px',
+                borderRadius: '4px',
+                cursor: 'pointer',
+                fontSize: '0.8rem'
+              }}
+            >
+              Retry Connection
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Enhanced Status Bar */}
@@ -992,124 +991,6 @@ const EnhancedLiveDetection = () => {
           </div>
         </div>
       )}
-
-      {/* Notification Integration Status */}
-      <div style={{
-        backgroundColor: '#e8f4fd',
-        border: '1px solid #b3d9ff',
-        borderRadius: '8px',
-        padding: '20px',
-        marginBottom: '20px',
-        textAlign: 'center'
-      }}>
-        <h4 style={{ color: '#0056b3', marginBottom: '15px' }}>🔔 Notification Integration Status</h4>
-        
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '15px' }}>
-          <div style={{
-            backgroundColor: 'white',
-            padding: '15px',
-            borderRadius: '8px',
-            border: '1px solid #b3d9ff'
-          }}>
-            <div style={{ fontWeight: 'bold', color: '#0056b3', marginBottom: '8px', fontSize: '1rem' }}>
-              📺 Live Detection
-            </div>
-            <div style={{ fontSize: '0.9rem', color: '#666', marginBottom: '8px' }}>
-              Real-time camera feed analysis with instant alerts
-            </div>
-            <div style={{ 
-              fontSize: '0.8rem', 
-              color: isDetectionActive ? '#28a745' : '#6c757d',
-              fontWeight: 'bold'
-            }}>
-              Status: {isDetectionActive ? 'ACTIVE' : 'INACTIVE'}
-            </div>
-          </div>
-
-          <div style={{
-            backgroundColor: 'white',
-            padding: '15px',
-            borderRadius: '8px',
-            border: '1px solid #b3d9ff'
-          }}>
-            <div style={{ fontWeight: 'bold', color: '#0056b3', marginBottom: '8px', fontSize: '1rem' }}>
-              🚨 Alert System
-            </div>
-            <div style={{ fontSize: '0.9rem', color: '#666', marginBottom: '8px' }}>
-              Cross-platform notification alerts
-            </div>
-            <div style={{ 
-              fontSize: '0.8rem', 
-              color: window.GlobalNotificationSystem ? '#28a745' : '#dc3545',
-              fontWeight: 'bold'
-            }}>
-              Status: {window.GlobalNotificationSystem ? 'CONNECTED' : 'DISCONNECTED'}
-            </div>
-          </div>
-
-          <div style={{
-            backgroundColor: 'white',
-            padding: '15px',
-            borderRadius: '8px',
-            border: '1px solid #b3d9ff'
-          }}>
-            <div style={{ fontWeight: 'bold', color: '#0056b3', marginBottom: '8px', fontSize: '1rem' }}>
-              💾 Data Storage
-            </div>
-            <div style={{ fontSize: '0.9rem', color: '#666', marginBottom: '8px' }}>
-              Results & alerts saved permanently
-            </div>
-            <div style={{ 
-              fontSize: '0.8rem', 
-              color: '#28a745',
-              fontWeight: 'bold'
-            }}>
-              Status: OPERATIONAL
-            </div>
-          </div>
-        </div>
-
-        <div style={{ 
-          marginTop: '15px', 
-          padding: '12px', 
-          backgroundColor: 'rgba(255,255,255,0.5)', 
-          borderRadius: '6px' 
-        }}>
-          <div style={{ fontSize: '0.9rem', color: '#0056b3' }}>
-            <strong>Live Detection Features:</strong>
-          </div>
-          <div style={{ fontSize: '0.8rem', color: '#666', marginTop: '5px' }}>
-            • Real-time accident detection with instant alerts<br/>
-            • All detections automatically saved to Results page<br/>
-            • High-confidence detections trigger notification alerts<br/>
-            • Cross-tab synchronization for multi-window usage<br/>
-            • Persistent storage with full history tracking
-          </div>
-        </div>
-      </div>
-
-      {/* Performance Information */}
-      <div style={{
-        backgroundColor: '#f8f9fa',
-        padding: '15px',
-        borderRadius: '8px',
-        border: '1px solid #dee2e6',
-        marginBottom: '20px',
-        fontSize: '0.9rem',
-        color: '#495057'
-      }}>
-        <div style={{ textAlign: 'center', marginBottom: '10px' }}>
-          <strong>🤖 Live Detection System Information</strong>
-        </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '10px' }}>
-          <div><strong>Model:</strong> MobileNetV2-based accident detection</div>
-          <div><strong>Input Size:</strong> 128x128 pixels</div>
-          <div><strong>Frame Rate:</strong> 1 FPS (1 frame per second)</div>
-          <div><strong>Threshold:</strong> 50% confidence</div>
-          <div><strong>Processing:</strong> Real-time WebSocket streaming</div>
-          <div><strong>Storage:</strong> localStorage with 100 result limit</div>
-        </div>
-      </div>
 
       {/* Back to home link */}
       <div style={{ textAlign: 'center', marginTop: '20px' }}>
