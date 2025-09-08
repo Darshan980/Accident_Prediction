@@ -28,6 +28,10 @@ const EnhancedLiveDetection = () => {
   const resultIdRef = useRef(0);
   const lastAlertTimeRef = useRef(0);
 
+  // Fix API URL to match your backend
+  const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://accident-prediction-1-mpm0.onrender.com';
+  const WS_BASE_URL = API_BASE_URL.replace('https://', 'wss://').replace('http://', 'ws://');
+
   useEffect(() => {
     mountedRef.current = true;
     checkApiConnection();
@@ -41,27 +45,26 @@ const EnhancedLiveDetection = () => {
 
   const checkApiConnection = async () => {
     try {
-      const response = await fetch('http://localhost:8000/api/health', {
-        signal: AbortSignal.timeout(5000)
+      console.log('🔍 Checking API connection to:', API_BASE_URL);
+      const response = await fetch(`${API_BASE_URL}/api/health`, {
+        signal: AbortSignal.timeout(10000)
       });
       
       if (response.ok) {
         const data = await response.json();
         setApiConnected(true);
-        console.log('API connected:', data);
+        console.log('✅ API connected:', data);
       } else {
         throw new Error(`HTTP ${response.status}`);
       }
     } catch (error) {
       setApiConnected(false);
-      setCameraError('Cannot connect to AI detection service on port 8000');
-      console.error('API connection failed:', error);
+      setCameraError(`Cannot connect to AI detection service: ${error.message}`);
+      console.error('❌ API connection failed:', error);
     }
   };
 
-  // Initialize notification system integration
   const initializeNotificationSystem = () => {
-    // Wait for GlobalNotificationSystem to be available
     const checkForNotificationSystem = () => {
       if (window.GlobalNotificationSystem) {
         console.log('✅ GlobalNotificationSystem found and connected');
@@ -71,7 +74,6 @@ const EnhancedLiveDetection = () => {
     };
 
     if (!checkForNotificationSystem()) {
-      // Retry every 1 second for up to 10 seconds
       let attempts = 0;
       const retryInterval = setInterval(() => {
         attempts++;
@@ -85,7 +87,6 @@ const EnhancedLiveDetection = () => {
     }
   };
 
-  // Enhanced function to save detection result to localStorage for results page
   const saveToResultsHistory = (data) => {
     try {
       console.log('💾 [LIVE] Saving detection result to history:', data);
@@ -112,25 +113,12 @@ const EnhancedLiveDetection = () => {
         detection_source: 'live_camera'
       };
       
-      console.log('📝 [LIVE] Created history item:', historyItem);
-      
-      // Get existing history
       const existingHistory = JSON.parse(localStorage.getItem('detectionHistory') || '[]');
-      console.log('📋 [LIVE] Current history count:', existingHistory.length);
-      
-      // Add new item to beginning
       existingHistory.unshift(historyItem);
-      
-      // Keep only last 100 results
       const trimmedHistory = existingHistory.slice(0, 100);
-      
-      // Save back to localStorage
       localStorage.setItem('detectionHistory', JSON.stringify(trimmedHistory));
-      console.log('✅ [LIVE] Saved to detectionHistory. New count:', trimmedHistory.length);
       
-      // Update saved count
       setSavedCount(prev => prev + 1);
-      
       return true;
     } catch (error) {
       console.error('❌ [LIVE] Failed to save detection to localStorage:', error);
@@ -138,13 +126,11 @@ const EnhancedLiveDetection = () => {
     }
   };
 
-  // Enhanced notification alert system integration
   const triggerNotificationAlert = (data) => {
     try {
       const now = Date.now();
-      const cooldownPeriod = 5000; // 5 seconds cooldown between alerts
+      const cooldownPeriod = 5000;
 
-      // Check cooldown to prevent spam
       if (now - lastAlertTimeRef.current < cooldownPeriod) {
         console.log('⏳ [LIVE] Alert cooldown active, skipping notification');
         return false;
@@ -152,7 +138,6 @@ const EnhancedLiveDetection = () => {
 
       console.log('🚨 [LIVE] Starting notification alert process:', data);
       
-      // Create comprehensive alert data
       const alertData = {
         confidence: data.confidence,
         accident_detected: data.accident_detected,
@@ -167,9 +152,6 @@ const EnhancedLiveDetection = () => {
         filename: `live_frame_${data.frame_id || frameCountRef.current}.jpg`
       };
 
-      console.log('📊 [LIVE] Created alert data:', alertData);
-
-      // STEP 1: Save to notification/alert history in the same format as upload component
       try {
         const alertHistoryItem = {
           id: `alert-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
@@ -188,32 +170,17 @@ const EnhancedLiveDetection = () => {
           analysis_type: alertData.analysis_type
         };
 
-        console.log('💾 [LIVE] Created alert history item:', alertHistoryItem);
-
-        // Get existing alert history (same key as notification page and upload component)
         const existingAlerts = JSON.parse(localStorage.getItem('alertHistory') || '[]');
-        console.log('📋 [LIVE] Existing alert count:', existingAlerts.length);
-
-        // Add to beginning of array
         existingAlerts.unshift(alertHistoryItem);
-        
-        // Keep only last 50 alerts
         const trimmedAlerts = existingAlerts.slice(0, 50);
-        
-        // Save to localStorage with same key as notification page
         localStorage.setItem('alertHistory', JSON.stringify(trimmedAlerts));
-        console.log('✅ [LIVE] Alert saved to alertHistory. New count:', trimmedAlerts.length);
 
-        // Force a storage event to notify other tabs/components
         window.dispatchEvent(new StorageEvent('storage', {
           key: 'alertHistory',
           newValue: JSON.stringify(trimmedAlerts),
           url: window.location.href
         }));
         
-        console.log('📡 [LIVE] Dispatched storage event for cross-tab sync');
-
-        // Update local state
         setAlertsTriggered(prev => prev + 1);
         lastAlertTimeRef.current = now;
 
@@ -221,7 +188,6 @@ const EnhancedLiveDetection = () => {
         console.error('❌ [LIVE] Failed to save alert to history:', storageError);
       }
 
-      // STEP 2: Trigger the GlobalNotificationSystem
       if (window.GlobalNotificationSystem?.triggerAlert) {
         console.log('🔊 [LIVE] Triggering GlobalNotificationSystem alert');
         window.GlobalNotificationSystem.triggerAlert(alertData);
@@ -229,7 +195,6 @@ const EnhancedLiveDetection = () => {
       } else {
         console.warn('⚠️ [LIVE] GlobalNotificationSystem not available, using fallback');
         
-        // Fallback: Show browser notification if available
         if ('Notification' in window && Notification.permission === 'granted') {
           new Notification(
             alertData.accident_detected ? 'ACCIDENT DETECTED!' : 'DETECTION ALERT',
@@ -243,7 +208,6 @@ const EnhancedLiveDetection = () => {
         }
       }
 
-      console.log('🚀 [LIVE] All notification components triggered');
       return true;
 
     } catch (error) {
@@ -255,119 +219,173 @@ const EnhancedLiveDetection = () => {
   const setupWebSocket = () => {
     return new Promise((resolve, reject) => {
       try {
-        const ws = new WebSocket('ws://localhost:8000/api/live/ws');
+        const wsUrl = `${WS_BASE_URL}/api/live/ws`;
+        console.log('🔗 Connecting to WebSocket:', wsUrl);
+        
+        const ws = new WebSocket(wsUrl);
         wsRef.current = ws;
 
         const timeout = setTimeout(() => {
           if (ws.readyState === WebSocket.CONNECTING) {
             ws.close();
-            reject(new Error('WebSocket timeout'));
+            reject(new Error('WebSocket connection timeout'));
           }
-        }, 10000);
+        }, 15000);
 
         ws.onopen = () => {
           clearTimeout(timeout);
           setWsConnected(true);
-          console.log('🔗 WebSocket connected');
+          console.log('🔗 WebSocket connected successfully');
+          
+          // Send initial ping to verify connection
+          ws.send(JSON.stringify({
+            type: 'ping',
+            timestamp: new Date().toISOString()
+          }));
+          
           resolve();
         };
 
         ws.onmessage = (event) => {
           try {
             const data = JSON.parse(event.data);
+            console.log('📨 WebSocket message received:', data);
             
-            if (data.type === 'connection_established' || data.type === 'ping') {
+            if (data.type === 'connection_established') {
+              console.log('✅ Connection established:', data.message);
+              return;
+            }
+            
+            if (data.type === 'pong' || data.type === 'ping') {
+              console.log('🏓 Ping/pong received');
               return;
             }
             
             if (data.error) {
-              console.error('WebSocket error:', data.error);
+              console.error('❌ WebSocket error from server:', data.error);
+              setCameraError(`Server error: ${data.error}`);
               return;
             }
             
-            // Handle detection results
-            if (typeof data.accident_detected !== 'undefined') {
-              console.log('📊 [LIVE] Detection result received:', data);
+            // CRITICAL FIX: Handle detection results properly
+            if (data.type === 'detection_result' || typeof data.accident_detected !== 'undefined') {
+              console.log('🎯 [DETECTION] Processing detection result:', {
+                accident_detected: data.accident_detected,
+                confidence: data.confidence,
+                predicted_class: data.predicted_class,
+                frame_id: data.frame_id,
+                type: data.type
+              });
               
+              // Update current detection state
               setCurrentDetection(data);
               
+              // Create result for display
               const newResult = {
                 id: `result-${++resultIdRef.current}`,
                 timestamp: new Date().toLocaleTimeString(),
                 type: data.accident_detected ? 'Accident' : 'Normal',
                 confidence: Math.round(data.confidence * 100),
-                frameId: data.frame_id,
+                frameId: data.frame_id || frameCountRef.current,
                 predictedClass: data.predicted_class || 'Unknown'
               };
               
               setDetectionResults(prev => [newResult, ...prev.slice(0, 19)]);
               
-              // Save to results history
+              // Save to results history - save ALL results
               const saved = saveToResultsHistory(data);
               if (saved) {
                 console.log('✅ [LIVE] Detection saved to results history');
               }
               
-              // Use the new notification service (ONLY for accidents)
+              // CRITICAL FIX: Use the new notification service correctly
               const notification = notificationService.notifyLiveDetection(data);
               
-              // Play sound based on result
+              // Enhanced alert logic with better sound handling
               if (data.accident_detected) {
+                // Play accident alert sound
                 notificationService.playAlertSound('accident');
-                setAlertsTriggered(prev => prev + 1);
-                console.log('🚨 [LIVE] Accident detected - notification created:', notification);
+                
+                // Trigger comprehensive alert system
+                triggerNotificationAlert(data);
+                
+                console.log('🚨 [LIVE] ACCIDENT DETECTED - All alerts triggered:', {
+                  confidence: data.confidence,
+                  predicted_class: data.predicted_class,
+                  notification: notification
+                });
               } else {
+                // Play completion sound for normal traffic
                 notificationService.playAlertSound('completion');
-                console.log('✅ [LIVE] Safe result - no notification created');
+                console.log('✅ [LIVE] Normal traffic detected - completion sound played');
               }
               
+              // Update stats
               setStats(prev => ({
                 ...prev,
-                totalFrames: data.total_frames || prev.totalFrames,
+                totalFrames: data.total_frames || prev.totalFrames + 1,
                 detectionRate: data.detection_rate || prev.detectionRate
               }));
             }
             
           } catch (error) {
-            console.error('Error parsing WebSocket message:', error);
+            console.error('❌ Error parsing WebSocket message:', error, 'Raw data:', event.data);
           }
         };
 
         ws.onclose = (event) => {
           clearTimeout(timeout);
           setWsConnected(false);
-          console.log('🔌 WebSocket disconnected');
+          console.log('🔌 WebSocket disconnected:', event.code, event.reason);
+          
+          // Auto-reconnect if detection is still active
+          if (detectionActiveRef.current && mountedRef.current) {
+            console.log('🔄 Attempting WebSocket reconnection...');
+            setTimeout(() => {
+              if (detectionActiveRef.current && mountedRef.current) {
+                setupWebSocket().catch(console.error);
+              }
+            }, 3000);
+          }
         };
 
         ws.onerror = (error) => {
           clearTimeout(timeout);
           setWsConnected(false);
-          console.error('WebSocket error:', error);
+          console.error('❌ WebSocket error:', error);
+          setCameraError('WebSocket connection failed. Check if the backend server is running.');
           reject(error);
         };
 
       } catch (error) {
+        console.error('❌ Failed to create WebSocket:', error);
         reject(error);
       }
     });
   };
 
+  // CRITICAL FIX: Enhanced frame capture with better error handling
   const captureFrame = () => {
     if (!videoRef.current) {
+      console.warn('⚠️ Video ref not available');
       return null;
     }
 
     const video = videoRef.current;
 
+    // Check video state more thoroughly
     if (video.videoWidth === 0 || video.videoHeight === 0) {
+      console.warn('⚠️ Video dimensions not available:', { width: video.videoWidth, height: video.videoHeight });
       return null;
     }
 
     if (video.readyState < 2) {
+      console.warn('⚠️ Video not ready:', { readyState: video.readyState });
       return null;
     }
 
     if (video.paused || video.ended) {
+      console.warn('⚠️ Video is paused or ended');
       return null;
     }
 
@@ -375,33 +393,48 @@ const EnhancedLiveDetection = () => {
       const canvas = document.createElement('canvas');
       const ctx = canvas.getContext('2d');
       
-      canvas.width = 128;
-      canvas.height = 128;
+      // Use video's actual dimensions for better quality
+      const width = Math.min(video.videoWidth, 640);
+      const height = Math.min(video.videoHeight, 480);
       
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      canvas.width = width;
+      canvas.height = height;
       
-      const dataURL = canvas.toDataURL('image/jpeg', 0.8);
+      // Draw the video frame to canvas
+      ctx.drawImage(video, 0, 0, width, height);
+      
+      // Convert to base64 with good quality
+      const dataURL = canvas.toDataURL('image/jpeg', 0.9);
       const base64 = dataURL.split(',')[1];
       
       if (!base64 || base64.length === 0) {
+        console.warn('⚠️ Empty base64 data');
         return null;
       }
+      
+      console.log('📸 Frame captured successfully:', {
+        dimensions: `${width}x${height}`,
+        base64Length: base64.length,
+        dataUrlLength: dataURL.length
+      });
       
       return base64;
       
     } catch (error) {
-      console.error('Frame capture error:', error);
+      console.error('❌ Frame capture error:', error);
       return null;
     }
   };
 
   const captureAndSendFrame = () => {
     if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
+      console.warn('⚠️ WebSocket not ready for frame send');
       return false;
     }
 
     const frame = captureFrame();
     if (!frame) {
+      console.warn('⚠️ No frame available to send');
       return false;
     }
 
@@ -411,8 +444,15 @@ const EnhancedLiveDetection = () => {
       const payload = {
         frame: frame,
         timestamp: new Date().toISOString(),
-        frame_id: frameCountRef.current
+        frame_id: `live_${frameCountRef.current}_${Date.now()}`,
+        type: 'frame_analysis'
       };
+      
+      console.log('📤 Sending frame for analysis:', {
+        frame_id: payload.frame_id,
+        frameSize: frame.length,
+        wsState: wsRef.current.readyState
+      });
       
       wsRef.current.send(JSON.stringify(payload));
       
@@ -424,7 +464,7 @@ const EnhancedLiveDetection = () => {
       return true;
       
     } catch (error) {
-      console.error('Frame send error:', error);
+      console.error('❌ Frame send error:', error);
       return false;
     }
   };
@@ -434,6 +474,9 @@ const EnhancedLiveDetection = () => {
       clearInterval(intervalRef.current);
     }
     
+    console.log('🎬 Starting frame processing...');
+    
+    // Send frames more frequently for better detection
     intervalRef.current = setInterval(() => {
       if (!detectionActiveRef.current || !mountedRef.current) {
         return;
@@ -443,13 +486,16 @@ const EnhancedLiveDetection = () => {
         return;
       }
       
-      captureAndSendFrame();
-    }, 1000); // Send frame every second
+      const success = captureAndSendFrame();
+      if (!success) {
+        console.warn('⚠️ Failed to capture/send frame');
+      }
+    }, 2000); // Send frame every 2 seconds for more reliable detection
   };
 
   const startCamera = async () => {
     if (!apiConnected) {
-      setCameraError('API not connected');
+      setCameraError('API not connected. Please check if the backend server is running.');
       return;
     }
 
@@ -458,13 +504,18 @@ const EnhancedLiveDetection = () => {
       setCameraError('');
       setVideoReady(false);
       
+      console.log('📹 Starting camera...');
+      
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { 
-          width: { ideal: 640, min: 320 },
-          height: { ideal: 480, min: 240 }
+          width: { ideal: 1280, min: 640 },
+          height: { ideal: 720, min: 480 },
+          frameRate: { ideal: 30, min: 15 }
         },
         audio: false
       });
+      
+      console.log('✅ Camera stream obtained');
       
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
@@ -475,16 +526,25 @@ const EnhancedLiveDetection = () => {
           
           const onLoad = async () => {
             try {
-              await video.play();
+              console.log('🎥 Video metadata loaded:', {
+                videoWidth: video.videoWidth,
+                videoHeight: video.videoHeight,
+                readyState: video.readyState
+              });
               
+              await video.play();
+              console.log('▶️ Video playback started');
+              
+              // Wait a bit longer for video to stabilize
               setTimeout(() => {
                 setVideoReady(true);
                 videoReadyRef.current = true;
                 console.log('📹 Video ready for capture');
-              }, 500);
+              }, 1500);
               
               resolve();
             } catch (playError) {
+              console.error('❌ Video play error:', playError);
               reject(playError);
             }
           };
@@ -494,27 +554,29 @@ const EnhancedLiveDetection = () => {
           setTimeout(() => {
             video.removeEventListener('loadeddata', onLoad);
             reject(new Error('Video load timeout'));
-          }, 10000);
+          }, 15000);
         });
       }
       
       setCameraPermission('granted');
       
+      console.log('🔗 Setting up WebSocket...');
       await setupWebSocket();
       
       setIsDetectionActive(true);
       detectionActiveRef.current = true;
       
+      // Start frame processing after everything is ready
       setTimeout(() => {
         if (mountedRef.current && videoReadyRef.current) {
           startFrameProcessing();
-          console.log('🚀 Live detection started');
+          console.log('🚀 Live detection started successfully');
         }
       }, 2000);
       
     } catch (error) {
-      console.error('Camera start error:', error);
-      setCameraError(error.message);
+      console.error('❌ Camera start error:', error);
+      setCameraError(`Failed to start camera: ${error.message}`);
       setIsDetectionActive(false);
     } finally {
       setIsLoading(false);
@@ -558,7 +620,6 @@ const EnhancedLiveDetection = () => {
     console.log('✅ Detection stopped');
   };
 
-  // Test notification system
   const testNotificationSystem = () => {
     const testData = {
       confidence: 0.92,
@@ -578,14 +639,13 @@ const EnhancedLiveDetection = () => {
         Live Accident Detection
       </h1>
 
-      {/* Debug Panel (for development) */}
+      {/* Debug Panel */}
       <div style={{ 
         backgroundColor: '#fff3cd', 
         border: '1px solid #ffeaa7',
         borderRadius: '6px',
         padding: '1rem',
-        marginBottom: '1rem',
-        display: 'none' // Set to 'block' for debugging
+        marginBottom: '1rem'
       }}>
         <h4 style={{ color: '#856404', marginBottom: '0.5rem' }}>🔧 Live Detection Debug</h4>
         <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
@@ -993,36 +1053,35 @@ const EnhancedLiveDetection = () => {
         </div>
       )}
 
-      {/* Notification Integration Status */}
+      {/* Connection Diagnostics */}
       <div style={{
         backgroundColor: '#e8f4fd',
         border: '1px solid #b3d9ff',
         borderRadius: '8px',
         padding: '20px',
-        marginBottom: '20px',
-        textAlign: 'center'
+        marginBottom: '20px'
       }}>
-        <h4 style={{ color: '#0056b3', marginBottom: '15px' }}>🔔 Notification Integration Status</h4>
+        <h4 style={{ color: '#0056b3', marginBottom: '15px' }}>🔧 Connection Diagnostics</h4>
         
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '15px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '15px' }}>
           <div style={{
             backgroundColor: 'white',
             padding: '15px',
             borderRadius: '8px',
             border: '1px solid #b3d9ff'
           }}>
-            <div style={{ fontWeight: 'bold', color: '#0056b3', marginBottom: '8px', fontSize: '1rem' }}>
-              📺 Live Detection
+            <div style={{ fontWeight: 'bold', color: '#0056b3', marginBottom: '8px' }}>
+              🌐 API Connection
             </div>
             <div style={{ fontSize: '0.9rem', color: '#666', marginBottom: '8px' }}>
-              Real-time camera feed analysis with instant alerts
+              Backend URL: {API_BASE_URL}
             </div>
             <div style={{ 
               fontSize: '0.8rem', 
-              color: isDetectionActive ? '#28a745' : '#6c757d',
+              color: apiConnected ? '#28a745' : '#dc3545',
               fontWeight: 'bold'
             }}>
-              Status: {isDetectionActive ? 'ACTIVE' : 'INACTIVE'}
+              Status: {apiConnected ? 'CONNECTED' : 'DISCONNECTED'}
             </div>
           </div>
 
@@ -1032,39 +1091,18 @@ const EnhancedLiveDetection = () => {
             borderRadius: '8px',
             border: '1px solid #b3d9ff'
           }}>
-            <div style={{ fontWeight: 'bold', color: '#0056b3', marginBottom: '8px', fontSize: '1rem' }}>
-              🚨 Alert System
+            <div style={{ fontWeight: 'bold', color: '#0056b3', marginBottom: '8px' }}>
+              🔌 WebSocket Connection
             </div>
             <div style={{ fontSize: '0.9rem', color: '#666', marginBottom: '8px' }}>
-              Cross-platform notification alerts
+              WebSocket URL: {WS_BASE_URL}/api/live/ws
             </div>
             <div style={{ 
               fontSize: '0.8rem', 
-              color: window.GlobalNotificationSystem ? '#28a745' : '#dc3545',
+              color: wsConnected ? '#28a745' : '#dc3545',
               fontWeight: 'bold'
             }}>
-              Status: {window.GlobalNotificationSystem ? 'CONNECTED' : 'DISCONNECTED'}
-            </div>
-          </div>
-
-          <div style={{
-            backgroundColor: 'white',
-            padding: '15px',
-            borderRadius: '8px',
-            border: '1px solid #b3d9ff'
-          }}>
-            <div style={{ fontWeight: 'bold', color: '#0056b3', marginBottom: '8px', fontSize: '1rem' }}>
-              💾 Data Storage
-            </div>
-            <div style={{ fontSize: '0.9rem', color: '#666', marginBottom: '8px' }}>
-              Results & alerts saved permanently
-            </div>
-            <div style={{ 
-              fontSize: '0.8rem', 
-              color: '#28a745',
-              fontWeight: 'bold'
-            }}>
-              Status: OPERATIONAL
+              Status: {wsConnected ? 'CONNECTED' : 'DISCONNECTED'}
             </div>
           </div>
         </div>
@@ -1076,14 +1114,14 @@ const EnhancedLiveDetection = () => {
           borderRadius: '6px' 
         }}>
           <div style={{ fontSize: '0.9rem', color: '#0056b3' }}>
-            <strong>Live Detection Features:</strong>
+            <strong>Troubleshooting Tips:</strong>
           </div>
           <div style={{ fontSize: '0.8rem', color: '#666', marginTop: '5px' }}>
-            • Real-time accident detection with instant alerts<br/>
-            • All detections automatically saved to Results page<br/>
-            • High-confidence detections trigger notification alerts<br/>
-            • Cross-tab synchronization for multi-window usage<br/>
-            • Persistent storage with full history tracking
+            • Make sure the Python backend server is running<br/>
+            • Check that port 8000 is accessible<br/>
+            • Verify WebSocket connections are not blocked by firewall<br/>
+            • Try refreshing the page if connections fail<br/>
+            • Check browser console for detailed error messages
           </div>
         </div>
       </div>
@@ -1102,9 +1140,9 @@ const EnhancedLiveDetection = () => {
           <strong>🤖 Live Detection System Information</strong>
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '10px' }}>
-          <div><strong>Model:</strong> MobileNetV2-based accident detection</div>
-          <div><strong>Input Size:</strong> 128x128 pixels</div>
-          <div><strong>Frame Rate:</strong> 1 FPS (1 frame per second)</div>
+          <div><strong>Model:</strong> AI-powered accident detection</div>
+          <div><strong>Frame Rate:</strong> 1 frame every 2 seconds</div>
+          <div><strong>Resolution:</strong> Up to 1280x720 capture</div>
           <div><strong>Threshold:</strong> 50% confidence</div>
           <div><strong>Processing:</strong> Real-time WebSocket streaming</div>
           <div><strong>Storage:</strong> localStorage with 100 result limit</div>
