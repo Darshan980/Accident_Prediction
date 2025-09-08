@@ -1,5 +1,5 @@
-# Enhanced main.py with COMPREHENSIVE CORS fixes and timeout handling for deployment
-from fastapi import FastAPI, UploadFile, File, HTTPException, WebSocket, WebSocketDisconnect, Depends, Query, status, BackgroundTasks, Request
+# Enhanced main.py with comprehensive CORS fix
+from fastapi import FastAPI, UploadFile, File, HTTPException, WebSocket, WebSocketDisconnect, Depends, Query, status, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -21,8 +21,7 @@ from typing import Optional, List, Dict, Any
 from pathlib import Path
 from jose import JWTError, jwt
 from passlib.context import CryptContext
-import threading
-from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeoutError
+from starlette.middleware.base import BaseHTTPMiddleware
 
 # Database imports
 from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime, Boolean, Text, and_, text
@@ -31,86 +30,11 @@ from sqlalchemy.sql import func
 from pydantic import BaseModel
 
 # Import your existing detection service
-try:
-    from services.detection import accident_model, analyze_image, LiveStreamProcessor
-except ImportError:
-    # Fallback if detection service is not available
-    class DummyModel:
-        def __init__(self):
-            self.model = None
-            self.threshold = 0.5
-            self.model_path = "dummy"
-    
-    accident_model = DummyModel()
-    
-    async def analyze_image(file_contents, content_type, filename):
-        return {
-            "accident_detected": False,
-            "confidence": 0.1,
-            "details": "Dummy analysis - replace with real model",
-            "processing_time": 0.05,
-            "predicted_class": "Normal"
-        }
-    
-    class LiveStreamProcessor:
-        def __init__(self):
-            self.results = []
-        
-        def should_process_frame(self):
-            return True
-        
-        def add_result(self, result):
-            self.results.append(result)
+from services.detection import accident_model, analyze_image, LiveStreamProcessor
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
-# ==================== CORS CONFIGURATION - COMPREHENSIVE FIX ====================
-
-# Environment-based configuration
-ENVIRONMENT = os.getenv("ENVIRONMENT", "development")
-FRONTEND_URL = os.getenv("FRONTEND_URL", "")
-RENDER_EXTERNAL_URL = os.getenv("RENDER_EXTERNAL_URL", "")
-
-# Base allowed origins
-ALLOWED_ORIGINS = [
-    "http://localhost:3000",
-    "http://localhost:3001",
-    "http://localhost:5173",
-    "http://localhost:8080",
-    "http://127.0.0.1:3000",
-    "http://127.0.0.1:3001", 
-    "http://127.0.0.1:5173",
-    "http://127.0.0.1:8080",
-]
-
-# Add production URLs
-if FRONTEND_URL:
-    ALLOWED_ORIGINS.append(FRONTEND_URL)
-    if FRONTEND_URL.startswith("http://"):
-        ALLOWED_ORIGINS.append(FRONTEND_URL.replace("http://", "https://"))
-
-# Add common deployment patterns
-VERCEL_PATTERNS = [
-    "https://*.vercel.app",
-    "https://accident-prediction-frontend.vercel.app",
-    "https://accident-prediction-1fnp-bc57hroy1-darshan-ss-projects-39372c06.vercel.app",
-]
-
-NETLIFY_PATTERNS = [
-    "https://*.netlify.app",
-    "https://*.netlify.com",
-]
-
-ALL_ORIGINS = ALLOWED_ORIGINS + VERCEL_PATTERNS + NETLIFY_PATTERNS
-
-# CORS debug mode
-CORS_DEBUG_MODE = os.getenv("CORS_DEBUG_MODE", "true").lower() == "true"
-
-logger.info(f"CORS Configuration - Environment: {ENVIRONMENT}, Debug: {CORS_DEBUG_MODE}")
-logger.info(f"Frontend URL: {FRONTEND_URL}")
-logger.info(f"Allowed Origins: {ALLOWED_ORIGINS}")
 
 # Database setup
 SQLALCHEMY_DATABASE_URL = "sqlite:///./accident_detection.db"
@@ -119,20 +43,90 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
 # JWT Configuration
-SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key-change-this-in-production-render-deployment-2024")
+SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key-change-this-in-production")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
 # Password hashing
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-security = HTTPBearer(auto_error=False)
+security = HTTPBearer()
 
-# Thread pool for CPU-intensive tasks
-executor = ThreadPoolExecutor(max_workers=2)
+# ==================== CORS MIDDLEWARE FIX ====================
 
-# Processing timeout settings
-UPLOAD_TIMEOUT = 25
-MAX_FILE_SIZE = 10 * 1024 * 1024
+class CORSMiddleware(BaseHTTPMiddleware):
+    """Custom CORS middleware that handles all CORS scenarios properly"""
+    
+    def __init__(self, app):
+        super().__init__(app)
+        # Get allowed origins from environment or use defaults
+        self.allowed_origins = self.get_allowed_origins()
+        logger.info(f"CORS allowed origins: {self.allowed_origins}")
+    
+    def get_allowed_origins(self):
+        """Get allowed origins from environment or use defaults"""
+        env_origins = os.getenv("ALLOWED_ORIGINS", "")
+        if env_origins:
+            origins = [origin.strip() for origin in env_origins.split(",") if origin.strip()]
+        else:
+            origins = [
+                "http://localhost:3000",
+                "http://localhost:3001",
+                "http://127.0.0.1:3000", 
+                "http://127.0.0.1:3001",
+                "http://localhost:8080",
+                "http://127.0.0.1:8080",
+                # Add your production domains here
+                # "https://yourdomain.com",
+            ]
+        
+        # For development, allow all origins
+        if os.getenv("ENVIRONMENT", "development") == "development":
+            origins.append("*")
+            
+        return origins
+    
+    def is_cors_enabled_for_origin(self, origin):
+        """Check if CORS is enabled for the given origin"""
+        if "*" in self.allowed_origins:
+            return True
+        return origin in self.allowed_origins
+    
+    async def dispatch(self, request: Request, call_next):
+        """Handle CORS for all requests"""
+        origin = request.headers.get("origin")
+        
+        # Handle preflight OPTIONS requests
+        if request.method == "OPTIONS":
+            response = JSONResponse(content={}, status_code=200)
+        else:
+            try:
+                response = await call_next(request)
+            except Exception as e:
+                logger.error(f"Request processing error: {str(e)}")
+                response = JSONResponse(
+                    content={"detail": f"Internal server error: {str(e)}"}, 
+                    status_code=500
+                )
+        
+        # Add CORS headers
+        if origin and self.is_cors_enabled_for_origin(origin):
+            response.headers["Access-Control-Allow-Origin"] = origin
+        elif "*" in self.allowed_origins:
+            response.headers["Access-Control-Allow-Origin"] = "*"
+        
+        response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, PATCH, DELETE, OPTIONS, HEAD"
+        response.headers["Access-Control-Allow-Headers"] = (
+            "accept, accept-encoding, authorization, content-type, dnt, "
+            "origin, user-agent, x-csrftoken, x-requested-with, cache-control, "
+            "pragma, expires, x-api-key"
+        )
+        response.headers["Access-Control-Allow-Credentials"] = "true"
+        response.headers["Access-Control-Max-Age"] = "600"
+        response.headers["Access-Control-Expose-Headers"] = (
+            "content-disposition, content-length, content-type"
+        )
+        
+        return response
 
 # ==================== DATABASE MODELS ====================
 
@@ -319,6 +313,7 @@ def authenticate_user(db: Session, username: str, password: str) -> Optional[Use
     db.commit()
     return user
 
+# Admin functions
 def get_admin_by_username(db: Session, username: str) -> Optional[Admin]:
     return db.query(Admin).filter(Admin.username == username).first()
 
@@ -400,6 +395,85 @@ def create_default_super_admin(db: Session):
     except Exception as e:
         logger.error(f"Error creating default super admin: {str(e)}")
 
+# ==================== PROFILE UPDATE HELPER FUNCTIONS ====================
+
+def user_exists_by_username_sync(db: Session, username: str, exclude_user_id: int = None) -> bool:
+    query = db.query(User).filter(User.username == username)
+    if exclude_user_id:
+        query = query.filter(User.id != exclude_user_id)
+    return query.first() is not None
+
+def user_exists_by_email_sync(db: Session, email: str, exclude_user_id: int = None) -> bool:
+    query = db.query(User).filter(User.email == email)
+    if exclude_user_id:
+        query = query.filter(User.id != exclude_user_id)
+    return query.first() is not None
+
+def update_user_profile_sync(db: Session, user_id: int, updated_fields: dict):
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    for field, value in updated_fields.items():
+        if hasattr(user, field):
+            setattr(user, field, value)
+    
+    db.commit()
+    db.refresh(user)
+    return user
+
+def update_user_password_sync(db: Session, user_id: int, new_hashed_password: str):
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    user.hashed_password = new_hashed_password
+    user.last_password_change = datetime.now(timezone.utc)
+    db.commit()
+    db.refresh(user)
+    return user
+
+def upgrade_database_schema():
+    try:
+        # Add missing columns to existing tables
+        try:
+            with engine.begin() as conn:
+                conn.execute(text('ALTER TABLE users ADD COLUMN department VARCHAR'))
+            logger.info("Added department column to users table")
+        except Exception as e:
+            logger.debug(f"Department column might already exist in users: {e}")
+        
+        try:
+            with engine.begin() as conn:
+                conn.execute(text('ALTER TABLE users ADD COLUMN role VARCHAR DEFAULT "user"'))
+            logger.info("Added role column to users table")
+        except Exception as e:
+            logger.debug(f"Role column might already exist in users: {e}")
+            
+        try:
+            with engine.begin() as conn:
+                conn.execute(text('ALTER TABLE users ADD COLUMN last_password_change DATETIME'))
+            logger.info("Added last_password_change column to users table")
+        except Exception as e:
+            logger.debug(f"Last_password_change column might already exist in users: {e}")
+            
+        try:
+            with engine.begin() as conn:
+                conn.execute(text('ALTER TABLE admins ADD COLUMN department VARCHAR'))
+            logger.info("Added department column to admins table")
+        except Exception as e:
+            logger.debug(f"Department column might already exist in admins: {e}")
+            
+        try:
+            with engine.begin() as conn:
+                conn.execute(text('ALTER TABLE admins ADD COLUMN last_password_change DATETIME'))
+            logger.info("Added last_password_change column to admins table")
+        except Exception as e:
+            logger.debug(f"Last_password_change column might already exist in admins: {e}")
+            
+    except Exception as e:
+        logger.error(f"Error upgrading database schema: {e}")
+
 # ==================== DEPENDENCY FUNCTIONS ====================
 
 def get_db():
@@ -413,13 +487,6 @@ def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(security),
     db: Session = Depends(get_db)
 ) -> User:
-    if not credentials:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Authentication credentials required",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-        
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
@@ -445,13 +512,6 @@ def get_current_admin(
     credentials: HTTPAuthorizationCredentials = Depends(security),
     db: Session = Depends(get_db)
 ) -> Admin:
-    if not credentials:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Authentication credentials required",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-        
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate admin credentials",
@@ -570,130 +630,71 @@ def log_accident_detection(
         db.rollback()
         return None
 
-# ==================== ASYNC PROCESSING FUNCTIONS ====================
-
-def process_image_sync(file_contents: bytes, content_type: str, filename: str) -> dict:
-    """Synchronous image processing function to run in thread pool"""
+async def analyze_frame_with_logging(
+    frame_bytes: bytes, 
+    db: Session,
+    source: str = "live_camera",
+    frame_id: str = None
+) -> dict:
+    start_time = time.time()
+    frame = None
+    
     try:
-        start_time = time.time()
+        nparr = np.frombuffer(frame_bytes, np.uint8)
+        frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
         
-        if len(file_contents) > MAX_FILE_SIZE:
-            return {
-                "success": False,
-                "error": f"File too large. Maximum size is {MAX_FILE_SIZE // (1024*1024)}MB."
-            }
-        
-        if accident_model and hasattr(accident_model, 'model') and accident_model.model is not None:
+        if frame is None:
             try:
-                result = {
-                    "accident_detected": False,
-                    "confidence": 0.15,
-                    "details": "Quick analysis completed",
-                    "processing_time": time.time() - start_time,
-                    "predicted_class": "Normal",
-                    "threshold": getattr(accident_model, 'threshold', 0.5),
-                    "frames_analyzed": 1,
-                    "avg_confidence": 0.15
-                }
-            except Exception as e:
-                logger.error(f"Model inference error: {str(e)}")
-                result = {
-                    "accident_detected": False,
-                    "confidence": 0.1,
-                    "details": f"Analysis error: {str(e)}",
-                    "processing_time": time.time() - start_time,
-                    "predicted_class": "Error",
-                    "error": str(e)
-                }
-        else:
-            result = {
-                "accident_detected": False,
-                "confidence": 0.1,
-                "details": "Model not loaded - dummy response",
-                "processing_time": time.time() - start_time,
-                "predicted_class": "Normal",
-                "threshold": 0.5,
-                "frames_analyzed": 1,
-                "avg_confidence": 0.1
-            }
+                image = Image.open(io.BytesIO(frame_bytes))
+                frame = np.array(image.convert('RGB'))
+                frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+            except Exception as pil_error:
+                logger.error(f"PIL fallback failed: {str(pil_error)}")
+                raise ValueError("Could not decode frame data")
         
-        result["success"] = True
-        return result
+        result = accident_model.predict(frame)
+        result["processing_time"] = time.time() - start_time
+        result["frame_id"] = frame_id or f"frame_{int(time.time() * 1000)}"
         
-    except Exception as e:
-        logger.error(f"Image processing error: {str(e)}")
-        return {
-            "success": False,
-            "error": f"Processing failed: {str(e)}",
-            "processing_time": time.time() - start_time if 'start_time' in locals() else 0
-        }
-
-async def process_image_with_timeout(file_contents: bytes, content_type: str, filename: str) -> dict:
-    """Process image with timeout protection"""
-    try:
-        loop = asyncio.get_event_loop()
-        
-        future = loop.run_in_executor(
-            executor, 
-            process_image_sync, 
-            file_contents, 
-            content_type, 
-            filename
+        log_entry = log_accident_detection(
+            db=db,
+            detection_data=result,
+            frame=frame,
+            source=source,
+            analysis_type="live"
         )
         
-        result = await asyncio.wait_for(future, timeout=UPLOAD_TIMEOUT)
+        if log_entry:
+            result["log_id"] = log_entry.id
+            result["snapshot_url"] = log_entry.snapshot_url
+        
         return result
         
-    except asyncio.TimeoutError:
-        logger.error(f"Image processing timeout for file: {filename}")
-        return {
-            "success": False,
-            "error": f"Processing timeout after {UPLOAD_TIMEOUT} seconds",
-            "accident_detected": False,
-            "confidence": 0.0,
-            "processing_time": UPLOAD_TIMEOUT
-        }
     except Exception as e:
-        logger.error(f"Async processing error: {str(e)}")
+        logger.error(f"Error in frame analysis with logging: {str(e)}")
         return {
-            "success": False,
-            "error": f"Processing error: {str(e)}",
             "accident_detected": False,
             "confidence": 0.0,
-            "processing_time": 0
+            "details": f"Frame analysis error: {str(e)}",
+            "processing_time": time.time() - start_time,
+            "error": True
         }
 
-# ==================== CORS MIDDLEWARE HELPER ====================
-
-def is_origin_allowed(origin: str, allowed_origins: List[str]) -> bool:
-    """Check if origin is allowed, supporting wildcard patterns"""
-    if origin in allowed_origins:
-        return True
-    
-    for pattern in allowed_origins:
-        if "*" in pattern:
-            if pattern.startswith("https://*."):
-                domain_pattern = pattern.replace("https://*.", "")
-                if origin.startswith("https://") and origin.endswith(domain_pattern):
-                    return True
-            elif pattern.startswith("http://*."):
-                domain_pattern = pattern.replace("http://*.", "")
-                if origin.startswith("http://") and origin.endswith(domain_pattern):
-                    return True
-    
-    return False
-
-# ==================== APP INITIALIZATION WITH FIXED CORS ====================
+# ==================== APP INITIALIZATION ====================
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
     logger.info("Starting Enhanced Accident Detection API with Authentication...")
     
+    # Create all database tables
     Base.metadata.create_all(bind=engine)
     logger.info("Database tables created/verified")
     
-    if hasattr(accident_model, 'model') and accident_model.model is None:
+    # Upgrade database schema for existing installations
+    upgrade_database_schema()
+    
+    if accident_model.model is None:
         logger.warning("Model not loaded during startup")
     else:
         logger.info("Model loaded successfully")
@@ -701,6 +702,7 @@ async def lifespan(app: FastAPI):
     SNAPSHOTS_DIR.mkdir(exist_ok=True)
     logger.info(f"Snapshots directory ready: {SNAPSHOTS_DIR}")
     
+    # Create default super admin if none exists
     db = SessionLocal()
     try:
         create_default_super_admin(db)
@@ -720,204 +722,113 @@ async def lifespan(app: FastAPI):
             logger.error(f"Error cleaning up processor {client_id}: {str(e)}")
     
     live_processors.clear()
-    executor.shutdown(wait=True)
     logger.info("Shutdown complete")
 
-# Create FastAPI instance
+# Create FastAPI instance with lifespan
 app = FastAPI(
     title="Enhanced Accident Detection API with Authentication",
     description="AI-powered accident detection system with user/admin authentication",
-    version="2.3.0",
+    version="2.1.0",
     lifespan=lifespan
 )
 
-# ==================== COMPREHENSIVE CORS CONFIGURATION ====================
+# Add the custom CORS middleware FIRST
+app.add_middleware(CORSMiddleware)
 
-@app.middleware("http")
-async def cors_middleware(request: Request, call_next):
-    # Handle preflight requests
-    if request.method == "OPTIONS":
-        origin = request.headers.get("origin")
-        
-        response = JSONResponse(content={"message": "OK"})
-        
-        if CORS_DEBUG_MODE:
-            response.headers["Access-Control-Allow-Origin"] = origin or "*"
-        else:
-            if origin and is_origin_allowed(origin, ALL_ORIGINS):
-                response.headers["Access-Control-Allow-Origin"] = origin
-            else:
-                response.headers["Access-Control-Allow-Origin"] = ALL_ORIGINS[0] if ALL_ORIGINS else "null"
-        
-        response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS, PATCH"
-        response.headers["Access-Control-Allow-Headers"] = "*"
-        response.headers["Access-Control-Allow-Credentials"] = "true"
-        response.headers["Access-Control-Max-Age"] = "3600"
-        response.headers["Access-Control-Expose-Headers"] = "*"
-        
-        return response
-    
-    # Process the request
-    response = await call_next(request)
-    
-    # Add CORS headers to all responses
-    origin = request.headers.get("origin")
-    
-    if CORS_DEBUG_MODE:
-        response.headers["Access-Control-Allow-Origin"] = origin or "*"
-    else:
-        if origin and is_origin_allowed(origin, ALL_ORIGINS):
-            response.headers["Access-Control-Allow-Origin"] = origin
-        else:
-            response.headers["Access-Control-Allow-Origin"] = ALL_ORIGINS[0] if ALL_ORIGINS else "null"
-    
-    response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS, PATCH"
-    response.headers["Access-Control-Allow-Headers"] = "*"
-    response.headers["Access-Control-Allow-Credentials"] = "true"
-    response.headers["Access-Control-Expose-Headers"] = "*"
-    response.headers["Vary"] = "Origin"
-    
-    return response
+# Also add the standard CORS middleware as backup
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:3000",
+        "http://localhost:3001", 
+        "http://127.0.0.1:3000",
+        "http://127.0.0.1:3001",
+        "http://localhost:8080",
+        "http://127.0.0.1:8080",
+        "*"  # Allow all origins for development
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+    expose_headers=["*"]
+)
 
-# Standard CORS middleware as backup
-if CORS_DEBUG_MODE:
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=["*"],
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
-        expose_headers=["*"],
+# Mount static files for serving snapshots
+app.mount("/snapshots", StaticFiles(directory="snapshots"), name="snapshots")
+
+# ==================== CORS PREFLIGHT HANDLER ====================
+
+@app.options("/{full_path:path}")
+async def preflight_handler(request: Request, full_path: str):
+    """Explicit CORS preflight handler"""
+    origin = request.headers.get("origin", "*")
+    
+    return JSONResponse(
+        content={},
+        headers={
+            "Access-Control-Allow-Origin": origin,
+            "Access-Control-Allow-Methods": "GET, POST, PUT, PATCH, DELETE, OPTIONS, HEAD",
+            "Access-Control-Allow-Headers": "*",
+            "Access-Control-Allow-Credentials": "true",
+            "Access-Control-Max-Age": "600",
+        },
+        status_code=200
     )
-    logger.info("CORS Debug Mode: Allowing all origins")
-else:
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=ALL_ORIGINS,
-        allow_credentials=True,
-        allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
-        allow_headers=["*"],
-        expose_headers=["*"],
-    )
-    logger.info(f"CORS Production Mode: Allowing specific origins")
 
-# Mount static files
-try:
-    SNAPSHOTS_DIR.mkdir(exist_ok=True)
-    app.mount("/snapshots", StaticFiles(directory=str(SNAPSHOTS_DIR)), name="snapshots")
-except Exception as e:
-    logger.warning(f"Could not mount snapshots directory: {e}")
-
-# ==================== BASIC ROUTES ====================
+# ==================== ROUTES ====================
 
 @app.get("/")
 async def root():
-    return {
-        "message": "Enhanced Accident Detection API with Authentication is running!", 
-        "version": "2.3.0",
-        "status": "healthy",
-        "features": ["Real-time detection", "Database logging", "Snapshot storage", "User/Admin Auth", "Dashboard API", "Timeout Protection", "CORS Fixed"],
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-        "cors_status": "debug_mode" if CORS_DEBUG_MODE else "production_mode",
-        "allowed_origins": ALL_ORIGINS if not CORS_DEBUG_MODE else ["*"],
-        "backend_url": "https://accident-prediction-1-mpm0.onrender.com",
-        "model_status": "loaded" if hasattr(accident_model, 'model') and accident_model.model is not None else "not_loaded",
-        "timeout_settings": {
-            "upload_timeout": UPLOAD_TIMEOUT,
-            "max_file_size_mb": MAX_FILE_SIZE // (1024*1024)
+    return JSONResponse(
+        content={
+            "message": "Enhanced Accident Detection API with Authentication is running!", 
+            "version": "2.1.0",
+            "features": ["Real-time detection", "Database logging", "Snapshot storage", "User/Admin Auth", "Dashboard API"],
+            "cors_status": "enabled"
         },
-        "environment": ENVIRONMENT,
-        "frontend_url": FRONTEND_URL
-    }
+        headers={
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+            "Access-Control-Allow-Headers": "*"
+        }
+    )
 
 @app.get("/api/health")
-async def health_check():
-    """Health check endpoint"""
-    try:
-        health_data = {
+async def health_check(db: Session = Depends(get_db)):
+    total_logs = db.query(AccidentLog).count()
+    accidents_detected = db.query(AccidentLog).filter(AccidentLog.accident_detected == True).count()
+    total_users = db.query(User).count()
+    total_admins = db.query(Admin).count()
+    
+    return JSONResponse(
+        content={
             "status": "healthy",
-            "model_loaded": hasattr(accident_model, 'model') and accident_model.model is not None,
-            "model_path": getattr(accident_model, 'model_path', 'unknown'),
-            "threshold": getattr(accident_model, 'threshold', 0.5),
+            "model_loaded": accident_model.model is not None,
+            "model_path": accident_model.model_path,
+            "threshold": accident_model.threshold,
             "active_connections": len(live_processors),
+            "database_status": "connected",
+            "total_logs": total_logs,
+            "accidents_detected": accidents_detected,
+            "total_users": total_users,
+            "total_admins": total_admins,
             "snapshots_directory": str(SNAPSHOTS_DIR),
-            "cors_enabled": True,
-            "cors_debug_mode": CORS_DEBUG_MODE,
-            "allowed_origins": ALL_ORIGINS if not CORS_DEBUG_MODE else ["*"],
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-            "backend_url": "https://accident-prediction-1-mpm0.onrender.com",
-            "timeout_settings": {
-                "upload_timeout": UPLOAD_TIMEOUT,
-                "max_file_size_mb": MAX_FILE_SIZE // (1024*1024)
-            },
-            "environment": ENVIRONMENT,
-            "frontend_url": FRONTEND_URL
+            "timestamp": time.time(),
+            "cors_status": "enabled"
+        },
+        headers={
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+            "Access-Control-Allow-Headers": "*"
         }
-        
-        try:
-            db = SessionLocal()
-            total_logs = db.query(AccidentLog).count()
-            accidents_detected = db.query(AccidentLog).filter(AccidentLog.accident_detected == True).count()
-            total_users = db.query(User).count()
-            total_admins = db.query(Admin).count()
-            
-            health_data.update({
-                "database_status": "connected",
-                "total_logs": total_logs,
-                "accidents_detected": accidents_detected,
-                "total_users": total_users,
-                "total_admins": total_admins
-            })
-            db.close()
-        except Exception as db_error:
-            logger.warning(f"Database health check failed: {db_error}")
-            health_data.update({
-                "database_status": "warning",
-                "database_error": str(db_error)
-            })
-        
-        return health_data
-        
-    except Exception as e:
-        logger.error(f"Health check failed: {str(e)}")
-        return {
-            "status": "unhealthy",
-            "error": str(e),
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-            "backend_url": "https://accident-prediction-1-mpm0.onrender.com"
-        }
-
-@app.get("/api/test")
-async def test_endpoint():
-    return {
-        "message": "Test endpoint working",
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-        "server": "Render",
-        "cors_enabled": True,
-        "cors_debug": CORS_DEBUG_MODE,
-        "timeout_protection": True,
-        "environment": ENVIRONMENT
-    }
-
-@app.get("/api/cors-test")
-async def cors_test():
-    return {
-        "message": "CORS test successful",
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-        "cors_debug_mode": CORS_DEBUG_MODE,
-        "allowed_origins": ALL_ORIGINS if not CORS_DEBUG_MODE else ["*"],
-        "environment": ENVIRONMENT,
-        "headers_note": "Check browser dev tools for CORS headers"
-    }
+    )
 
 # ==================== AUTHENTICATION ROUTES ====================
 
 @app.post("/auth/register", response_model=UserResponse)
 async def register_user(user: UserCreate, db: Session = Depends(get_db)):
     try:
-        logger.info(f"Registration attempt for username: {user.username}")
         db_user = create_user(db, user)
-        logger.info(f"User {user.username} registered successfully")
         return UserResponse(
             id=db_user.id,
             username=db_user.username,
@@ -926,19 +837,15 @@ async def register_user(user: UserCreate, db: Session = Depends(get_db)):
             created_at=db_user.created_at,
             last_login=db_user.last_login
         )
-    except HTTPException as he:
-        logger.error(f"Registration failed for {user.username}: {he.detail}")
-        raise he
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"Registration error for {user.username}: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Registration failed: {str(e)}")
 
 @app.post("/auth/login", response_model=Token)
 async def login_user(user_credentials: UserLogin, db: Session = Depends(get_db)):
-    logger.info(f"Login attempt for username: {user_credentials.username}")
     user = authenticate_user(db, user_credentials.username, user_credentials.password)
     if not user:
-        logger.warning(f"Failed login attempt for username: {user_credentials.username}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect username or password",
@@ -951,7 +858,6 @@ async def login_user(user_credentials: UserLogin, db: Session = Depends(get_db))
         expires_delta=access_token_expires
     )
     
-    logger.info(f"User {user.username} logged in successfully")
     return Token(
         access_token=access_token,
         token_type="bearer",
@@ -969,18 +875,253 @@ async def get_current_user_info(current_user: User = Depends(get_current_active_
         last_login=current_user.last_login
     )
 
+@app.put("/auth/me")
+async def update_profile(
+    profile_data: ProfileUpdateRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Update user profile information"""
+    try:
+        updated_fields = {}
+        
+        if profile_data.username and profile_data.username != current_user.username:
+            if user_exists_by_username_sync(db, profile_data.username, current_user.id):
+                raise HTTPException(status_code=400, detail="Username already exists")
+            updated_fields['username'] = profile_data.username
+            
+        if profile_data.email and profile_data.email != current_user.email:
+            if user_exists_by_email_sync(db, profile_data.email, current_user.id):
+                raise HTTPException(status_code=400, detail="Email already exists")
+            updated_fields['email'] = profile_data.email
+            
+        if profile_data.department is not None:
+            updated_fields['department'] = profile_data.department
+            
+        if updated_fields:
+            updated_user = update_user_profile_sync(db, current_user.id, updated_fields)
+        else:
+            updated_user = current_user
+        
+        new_token = None
+        if 'username' in updated_fields:
+            access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+            new_token = create_access_token(
+                data={"sub": updated_user.username, "user_id": updated_user.id},
+                expires_delta=access_token_expires
+            )
+        
+        response_data = {
+            "id": updated_user.id,
+            "username": updated_user.username,
+            "email": updated_user.email,
+            "department": getattr(updated_user, 'department', ''),
+            "role": getattr(updated_user, 'role', 'user'),
+            "last_updated": datetime.now(timezone.utc).isoformat()
+        }
+        
+        if new_token:
+            response_data["new_token"] = new_token
+            response_data["token_type"] = "bearer"
+            response_data["username_changed"] = True
+        
+        return response_data
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to update profile: {str(e)}")
+
+@app.put("/auth/change-password")  
+async def change_password(
+    password_data: PasswordChangeRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Change user password"""
+    try:
+        if not verify_password(password_data.current_password, current_user.hashed_password):
+            raise HTTPException(status_code=400, detail="Current password is incorrect")
+        
+        if verify_password(password_data.new_password, current_user.hashed_password):
+            raise HTTPException(status_code=400, detail="New password must be different from current password")
+            
+        new_hashed_password = get_password_hash(password_data.new_password)
+        update_user_password_sync(db, current_user.id, new_hashed_password)
+        
+        return {
+            "message": "Password changed successfully",
+            "last_password_change": datetime.now(timezone.utc).isoformat()
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to change password: {str(e)}")
+
+@app.post("/auth/admin/login", response_model=AdminToken)
+async def login_admin(admin_credentials: AdminLogin, db: Session = Depends(get_db)):
+    admin = authenticate_admin(db, admin_credentials.username, admin_credentials.password)
+    if not admin:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect admin credentials",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    
+    access_token = create_admin_access_token(admin)
+    
+    return AdminToken(
+        access_token=access_token,
+        token_type="bearer",
+        expires_in=60 * 60,
+        admin_level="super_admin" if admin.is_super_admin else "admin"
+    )
+
+@app.post("/auth/admin/create", response_model=AdminResponse)
+async def create_new_admin(
+    admin: AdminCreate, 
+    db: Session = Depends(get_db),
+    current_admin: Admin = Depends(get_current_super_admin)
+):
+    try:
+        db_admin = create_admin(db, admin, created_by_id=current_admin.id)
+        return AdminResponse(
+            id=db_admin.id,
+            username=db_admin.username,
+            email=db_admin.email,
+            is_active=db_admin.is_active,
+            is_super_admin=db_admin.is_super_admin,
+            permissions=db_admin.permissions.split(",") if db_admin.permissions else [],
+            created_at=db_admin.created_at,
+            last_login=db_admin.last_login
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Admin creation failed: {str(e)}")
+
+@app.get("/auth/admin/me", response_model=AdminResponse)
+async def get_current_admin_info(current_admin: Admin = Depends(get_current_admin)):
+    return AdminResponse(
+        id=current_admin.id,
+        username=current_admin.username,
+        email=current_admin.email,
+        is_active=current_admin.is_active,
+        is_super_admin=current_admin.is_super_admin,
+        permissions=current_admin.permissions.split(",") if current_admin.permissions else [],
+        created_at=current_admin.created_at,
+        last_login=current_admin.last_login
+    )
+
+@app.put("/auth/admin/me")
+async def update_admin_profile(
+    profile_data: ProfileUpdateRequest,
+    db: Session = Depends(get_db),
+    current_admin: Admin = Depends(get_current_admin)
+):
+    """Update admin profile information"""
+    try:
+        updated_fields = {}
+        
+        if profile_data.username and profile_data.username != current_admin.username:
+            existing_admin = db.query(Admin).filter(
+                Admin.username == profile_data.username,
+                Admin.id != current_admin.id
+            ).first()
+            
+            if existing_admin:
+                raise HTTPException(status_code=400, detail="Username already exists")
+            updated_fields['username'] = profile_data.username
+            
+        if profile_data.email and profile_data.email != current_admin.email:
+            existing_admin = db.query(Admin).filter(
+                Admin.email == profile_data.email,
+                Admin.id != current_admin.id
+            ).first()
+            
+            if existing_admin:
+                raise HTTPException(status_code=400, detail="Email already exists")
+            updated_fields['email'] = profile_data.email
+            
+        if profile_data.department is not None:
+            updated_fields['department'] = profile_data.department
+            
+        if updated_fields:
+            for field, value in updated_fields.items():
+                setattr(current_admin, field, value)
+            
+            db.commit()
+            db.refresh(current_admin)
+        
+        new_token = None
+        if 'username' in updated_fields:
+            new_token = create_admin_access_token(current_admin)
+        
+        response_data = {
+            "id": current_admin.id,
+            "username": current_admin.username,
+            "email": current_admin.email,
+            "department": getattr(current_admin, 'department', ''),
+            "is_super_admin": current_admin.is_super_admin,
+            "permissions": current_admin.permissions.split(",") if current_admin.permissions else [],
+            "last_updated": datetime.now(timezone.utc).isoformat()
+        }
+        
+        if new_token:
+            response_data["new_token"] = new_token
+            response_data["token_type"] = "bearer"
+            response_data["username_changed"] = True
+        
+        return response_data
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to update admin profile: {str(e)}")
+
+@app.put("/auth/admin/change-password")  
+async def change_admin_password(
+    password_data: PasswordChangeRequest,
+    db: Session = Depends(get_db),
+    current_admin: Admin = Depends(get_current_admin)
+):
+    """Change admin password"""
+    try:
+        if not verify_password(password_data.current_password, current_admin.hashed_password):
+            raise HTTPException(status_code=400, detail="Current password is incorrect")
+        
+        if verify_password(password_data.new_password, current_admin.hashed_password):
+            raise HTTPException(status_code=400, detail="New password must be different from current password")
+            
+        new_hashed_password = get_password_hash(password_data.new_password)
+        current_admin.hashed_password = new_hashed_password
+        current_admin.last_password_change = datetime.now(timezone.utc)
+        db.commit()
+        db.refresh(current_admin)
+        
+        return {
+            "message": "Password changed successfully",
+            "last_password_change": datetime.now(timezone.utc).isoformat()
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to change admin password: {str(e)}")
+
 # ==================== USER PROTECTED ROUTES ====================
 
 @app.post("/api/upload")
 async def upload_file(
-    background_tasks: BackgroundTasks,
     file: UploadFile = File(...), 
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
-    """Upload and analyze file with timeout protection"""
-    start_time = time.time()
-    
     try:
         logger.info(f"User {current_user.username} uploaded file: {file.filename}")
         
@@ -991,123 +1132,335 @@ async def upload_file(
             )
         
         file_contents = await file.read()
-        file_size = len(file_contents)
-        
-        if file_size > MAX_FILE_SIZE:
+        if len(file_contents) > 50 * 1024 * 1024:
             raise HTTPException(
                 status_code=413,
-                detail=f"File too large. Maximum size is {MAX_FILE_SIZE // (1024*1024)}MB."
+                detail="File too large. Maximum size is 50MB."
             )
         
-        if file_size == 0:
-            raise HTTPException(
-                status_code=400,
-                detail="Empty file uploaded."
-            )
+        result = await analyze_image(file_contents, file.content_type, file.filename)
         
-        quick_response = {
+        frame = None
+        if file.content_type.startswith('image/'):
+            try:
+                nparr = np.frombuffer(file_contents, np.uint8)
+                frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+            except:
+                pass
+        
+        log_entry = log_accident_detection(
+            db=db,
+            detection_data=result,
+            frame=frame,
+            source=f"upload_{current_user.username}_{file.filename}",
+            analysis_type="upload"
+        )
+        
+        response_data = {
             "success": True,
             "filename": file.filename,
-            "file_size": file_size,
+            "file_size": len(file_contents),
             "content_type": file.content_type,
-            "uploaded_by": current_user.username,
-            "upload_time": time.time() - start_time,
-            "status": "processing",
-            "message": "File uploaded successfully. Processing in background..."
+            "accident_detected": result["accident_detected"],
+            "confidence": float(result["confidence"]),
+            "details": result.get("details", ""),
+            "processing_time": result.get("processing_time", 0),
+            "predicted_class": result.get("predicted_class", "Unknown"),
+            "threshold": result.get("threshold", accident_model.threshold),
+            "frames_analyzed": result.get("frames_analyzed", 1),
+            "avg_confidence": result.get("avg_confidence", result["confidence"]),
+            "uploaded_by": current_user.username
         }
         
-        try:
-            logger.info(f"Starting analysis for {file.filename}")
-            result = await process_image_with_timeout(file_contents, file.content_type, file.filename)
-            
-            if not result.get("success", False):
-                error_response = quick_response.copy()
-                error_response.update({
-                    "status": "error",
-                    "error": result.get("error", "Unknown processing error"),
-                    "accident_detected": False,
-                    "confidence": 0.0,
-                    "processing_time": result.get("processing_time", time.time() - start_time)
-                })
-                logger.error(f"Processing failed for {file.filename}: {result.get('error')}")
-                return JSONResponse(content=error_response, status_code=200)
-            
-            response_data = quick_response.copy()
-            response_data.update({
-                "status": "completed",
-                "accident_detected": result.get("accident_detected", False),
-                "confidence": float(result.get("confidence", 0.0)),
-                "details": result.get("details", "Analysis completed"),
-                "processing_time": result.get("processing_time", 0),
-                "predicted_class": result.get("predicted_class", "Unknown"),
-                "threshold": result.get("threshold", 0.5),
-                "frames_analyzed": result.get("frames_analyzed", 1),
-                "avg_confidence": result.get("avg_confidence", result.get("confidence", 0.0)),
-                "total_time": time.time() - start_time
-            })
-            
-            frame = None
-            if file.content_type.startswith('image/') and file_size < 5 * 1024 * 1024:
-                try:
-                    nparr = np.frombuffer(file_contents, np.uint8)
-                    frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-                except Exception as frame_error:
-                    logger.warning(f"Could not create frame for logging: {frame_error}")
-            
-            try:
-                log_entry = log_accident_detection(
-                    db=db,
-                    detection_data=result,
-                    frame=frame,
-                    source=f"upload_{current_user.username}_{file.filename}",
-                    analysis_type="upload"
-                )
-                if log_entry:
-                    response_data["log_id"] = log_entry.id
-                    response_data["snapshot_url"] = log_entry.snapshot_url
-            except Exception as log_error:
-                logger.warning(f"Logging failed (non-critical): {log_error}")
-                response_data["log_warning"] = "Detection logged with warnings"
-            
-            logger.info(f"Upload processing completed for {file.filename} in {time.time() - start_time:.2f}s")
-            return JSONResponse(content=response_data)
-            
-        except asyncio.TimeoutError:
-            timeout_response = quick_response.copy()
-            timeout_response.update({
-                "status": "timeout",
-                "error": f"Processing timeout after {UPLOAD_TIMEOUT} seconds",
-                "accident_detected": False,
-                "confidence": 0.0,
-                "processing_time": UPLOAD_TIMEOUT,
-                "message": "File analysis timed out. This may indicate the file is too complex or the server is busy."
-            })
-            logger.warning(f"Upload timeout for {file.filename} after {UPLOAD_TIMEOUT}s")
-            return JSONResponse(content=timeout_response, status_code=200)
-            
+        if log_entry:
+            response_data["log_id"] = log_entry.id
+            response_data["snapshot_url"] = log_entry.snapshot_url
+        
+        return JSONResponse(content=response_data)
+        
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Upload error for {file.filename}: {str(e)}")
-        error_response = {
-            "success": False,
-            "filename": file.filename,
-            "error": str(e),
-            "processing_time": time.time() - start_time,
-            "uploaded_by": current_user.username,
-            "status": "error"
-        }
-        return JSONResponse(content=error_response, status_code=200)
+        logger.error(f"Error processing file {file.filename}: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error processing file: {str(e)}")
 
-@app.get("/api/upload/status")
-async def get_upload_status():
-    """Get current upload processing status"""
+@app.websocket("/api/live/ws")
+async def websocket_live_detection(websocket: WebSocket, db: Session = Depends(get_db)):
+    client_id = str(uuid.uuid4())
+    processor = None
+    
+    try:
+        await websocket.accept()
+        processor = LiveStreamProcessor()
+        live_processors[client_id] = processor
+        logger.info(f"WebSocket client {client_id} connected")
+        
+        confirmation = {
+            "type": "connection_established",
+            "client_id": client_id,
+            "timestamp": time.time(),
+            "model_loaded": accident_model.model is not None,
+            "threshold": accident_model.threshold,
+            "database_status": "connected"
+        }
+        await websocket.send_text(json.dumps(confirmation))
+        
+        frame_count = 0
+        consecutive_errors = 0
+        max_consecutive_errors = 5
+        
+        while True:
+            try:
+                data = await asyncio.wait_for(websocket.receive_text(), timeout=30.0)
+                
+                if not data.strip():
+                    continue
+                
+                try:
+                    frame_data = json.loads(data)
+                except json.JSONDecodeError:
+                    consecutive_errors += 1
+                    if consecutive_errors >= max_consecutive_errors:
+                        break
+                    continue
+                
+                consecutive_errors = 0
+                frame_count += 1
+                
+                if not processor.should_process_frame():
+                    continue
+                
+                if 'frame' not in frame_data or not frame_data['frame']:
+                    continue
+                
+                try:
+                    frame_bytes = base64.b64decode(frame_data['frame'])
+                    if len(frame_bytes) == 0:
+                        continue
+                        
+                except Exception as e:
+                    logger.error(f"Error decoding base64 frame from client {client_id}: {str(e)}")
+                    continue
+                
+                result = await analyze_frame_with_logging(
+                    frame_bytes, 
+                    db,
+                    source=f"live_camera_{client_id}",
+                    frame_id=frame_data.get("frame_id", frame_count)
+                )
+                
+                if result.get("error"):
+                    logger.error(f"Frame analysis failed for client {client_id}: {result.get('details')}")
+                    continue
+                
+                processor.add_result(result)
+                trend = processor.get_trend_analysis()
+                
+                response = {
+                    "timestamp": frame_data.get("timestamp", time.time()),
+                    "frame_id": frame_data.get("frame_id", frame_count),
+                    "accident_detected": result["accident_detected"],
+                    "confidence": float(result["confidence"]),
+                    "details": result.get("details", ""),
+                    "processing_time": result.get("processing_time", 0),
+                    "predicted_class": result.get("predicted_class", "Unknown"),
+                    "threshold": accident_model.threshold,
+                    "trend": trend.get("trend", "stable"),
+                    "avg_confidence": trend.get("confidence_avg", result["confidence"]),
+                    "detection_rate": trend.get("detection_rate", 0.0),
+                    "total_frames": frame_count,
+                    "model_status": "loaded" if accident_model.model is not None else "not_loaded",
+                    "log_id": result.get("log_id"),
+                    "snapshot_url": result.get("snapshot_url")
+                }
+                
+                await websocket.send_text(json.dumps(response))
+                
+            except asyncio.TimeoutError:
+                ping_message = {
+                    "type": "ping",
+                    "timestamp": time.time(),
+                    "frames_processed": frame_count
+                }
+                await websocket.send_text(json.dumps(ping_message))
+                    
+            except WebSocketDisconnect:
+                break
+                    
+            except Exception as e:
+                logger.error(f"Error in main processing loop for client {client_id}: {str(e)}")
+                consecutive_errors += 1
+                
+                if consecutive_errors >= max_consecutive_errors:
+                    break
+            
+    except WebSocketDisconnect:
+        logger.info(f"WebSocket client {client_id} disconnected normally")
+        
+    except Exception as e:
+        logger.error(f"WebSocket connection error for client {client_id}: {str(e)}")
+        
+    finally:
+        if client_id in live_processors:
+            del live_processors[client_id]
+            logger.info(f"Cleaned up processor for client {client_id}")
+
+@app.post("/api/live/frame")
+async def analyze_single_frame(
+    frame_data: dict, 
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    try:
+        if 'frame' not in frame_data or not frame_data['frame']:
+            raise HTTPException(status_code=400, detail="No frame data provided")
+        
+        try:
+            frame_bytes = base64.b64decode(frame_data['frame'])
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"Invalid base64 frame data: {str(e)}")
+        
+        result = await analyze_frame_with_logging(
+            frame_bytes, 
+            db,
+            source=f"http_frame_{current_user.username}",
+            frame_id=frame_data.get("frame_id")
+        )
+        
+        if result.get("error"):
+            raise HTTPException(status_code=500, detail=result.get("details", "Analysis failed"))
+        
+        return {
+            "success": True,
+            "timestamp": frame_data.get("timestamp", time.time()),
+            "accident_detected": result["accident_detected"],
+            "confidence": float(result["confidence"]),
+            "details": result.get("details", ""),
+            "processing_time": result.get("processing_time", 0),
+            "predicted_class": result.get("predicted_class", "Unknown"),
+            "threshold": accident_model.threshold,
+            "log_id": result.get("log_id"),
+            "snapshot_url": result.get("snapshot_url"),
+            "analyzed_by": current_user.username
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error analyzing frame: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error analyzing frame: {str(e)}")
+
+# ==================== ADMIN PROTECTED ROUTES ====================
+
+@app.get("/api/admin/logs")
+async def get_accident_logs_admin(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, le=1000),
+    accident_only: bool = Query(False),
+    status: Optional[str] = Query(None),
+    source: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
+    current_admin: Admin = Depends(check_admin_permission("view_logs"))
+):
+    query = db.query(AccidentLog)
+    
+    if accident_only:
+        query = query.filter(AccidentLog.accident_detected == True)
+    
+    if status:
+        query = query.filter(AccidentLog.status == status)
+    
+    if source:
+        query = query.filter(AccidentLog.video_source.contains(source))
+    
+    logs = query.order_by(AccidentLog.timestamp.desc()).offset(skip).limit(limit).all()
+    
+    result = []
+    for log in logs:
+        result.append({
+            "id": log.id,
+            "timestamp": log.timestamp.isoformat(),
+            "video_source": log.video_source,
+            "confidence": log.confidence,
+            "accident_detected": log.accident_detected,
+            "predicted_class": log.predicted_class,
+            "processing_time": log.processing_time,
+            "snapshot_url": log.snapshot_url,
+            "frame_id": log.frame_id,
+            "analysis_type": log.analysis_type,
+            "status": log.status,
+            "severity_estimate": log.severity_estimate,
+            "location": log.location,
+            "weather_conditions": log.weather_conditions,
+            "notes": log.notes,
+            "user_feedback": log.user_feedback,
+            "created_at": log.created_at.isoformat() if log.created_at else None,
+            "updated_at": log.updated_at.isoformat() if log.updated_at else None
+        })
+    
+    return result
+
+@app.get("/api/admin/dashboard/stats")
+async def get_admin_dashboard_stats(
+    db: Session = Depends(get_db),
+    current_admin: Admin = Depends(check_admin_permission("view_dashboard"))
+):
+    total_logs = db.query(AccidentLog).count()
+    accidents_detected = db.query(AccidentLog).filter(AccidentLog.accident_detected == True).count()
+    
+    unresolved = db.query(AccidentLog).filter(AccidentLog.status == "unresolved").count()
+    verified = db.query(AccidentLog).filter(AccidentLog.status == "verified").count()
+    false_alarms = db.query(AccidentLog).filter(AccidentLog.status == "false_alarm").count()
+    resolved = db.query(AccidentLog).filter(AccidentLog.status == "resolved").count()
+    
+    yesterday = datetime.now(timezone.utc) - timedelta(days=1)
+    recent_logs = db.query(AccidentLog).filter(AccidentLog.timestamp >= yesterday).count()
+    recent_accidents = db.query(AccidentLog).filter(
+        and_(AccidentLog.timestamp >= yesterday, AccidentLog.accident_detected == True)
+    ).count()
+    
+    total_users = db.query(User).count()
+    active_users = db.query(User).filter(User.is_active == True).count()
+    
+    total_admins = db.query(Admin).count()
+    active_admins = db.query(Admin).filter(Admin.is_active == True).count()
+    
+    high_confidence = db.query(AccidentLog).filter(AccidentLog.confidence >= 0.8).count()
+    medium_confidence = db.query(AccidentLog).filter(
+        and_(AccidentLog.confidence >= 0.5, AccidentLog.confidence < 0.8)
+    ).count()
+    low_confidence = db.query(AccidentLog).filter(AccidentLog.confidence < 0.5).count()
+    
     return {
-        "max_file_size_mb": MAX_FILE_SIZE // (1024*1024),
-        "timeout_seconds": UPLOAD_TIMEOUT,
-        "supported_types": ["image/*", "video/*"],
-        "worker_status": "healthy",
-        "timestamp": datetime.now(timezone.utc).isoformat()
+        "total_logs": total_logs,
+        "accidents_detected": accidents_detected,
+        "accuracy_rate": round((accidents_detected / total_logs * 100) if total_logs > 0 else 0, 1),
+        "status_breakdown": {
+            "unresolved": unresolved,
+            "verified": verified,
+            "false_alarm": false_alarms,
+            "resolved": resolved
+        },
+        "recent_activity": {
+            "total_logs_24h": recent_logs,
+            "accidents_24h": recent_accidents
+        },
+        "user_stats": {
+            "total_users": total_users,
+            "active_users": active_users
+        },
+        "admin_stats": {
+            "total_admins": total_admins,
+            "active_admins": active_admins
+        },
+        "confidence_distribution": {
+            "high": high_confidence,
+            "medium": medium_confidence,
+            "low": low_confidence
+        },
+        "active_connections": len(live_processors),
+        "model_status": "loaded" if accident_model.model is not None else "not_loaded",
+        "accessed_by": current_admin.username
     }
 
 # ==================== PUBLIC DASHBOARD ROUTES ====================
@@ -1121,6 +1474,7 @@ async def get_logs_public(
     source: Optional[str] = Query(None),
     db: Session = Depends(get_db)
 ):
+    """Get accident logs (public route for dashboard compatibility)"""
     try:
         query = db.query(AccidentLog)
         
@@ -1165,6 +1519,7 @@ async def get_logs_public(
 
 @app.get("/api/dashboard/stats")
 async def get_dashboard_stats_public(db: Session = Depends(get_db)):
+    """Get dashboard statistics (public route for frontend compatibility)"""
     try:
         total_logs = db.query(AccidentLog).count()
         accidents_detected = db.query(AccidentLog).filter(AccidentLog.accident_detected == True).count()
@@ -1220,8 +1575,7 @@ async def get_dashboard_stats_public(db: Session = Depends(get_db)):
                 "low": low_confidence
             },
             "active_connections": len(live_processors),
-            "model_status": "loaded" if hasattr(accident_model, 'model') and accident_model.model is not None else "not_loaded",
-            "timestamp": datetime.now(timezone.utc).isoformat()
+            "model_status": "loaded" if accident_model.model is not None else "not_loaded"
         }
     except Exception as e:
         logger.error(f"Error fetching dashboard stats: {str(e)}")
@@ -1229,15 +1583,31 @@ async def get_dashboard_stats_public(db: Session = Depends(get_db)):
             "total_logs": 0,
             "accidents_detected": 0,
             "accuracy_rate": 0,
-            "status_breakdown": {"unresolved": 0, "verified": 0, "false_alarm": 0, "resolved": 0},
-            "recent_activity": {"total_logs_24h": 0, "accidents_24h": 0},
-            "user_stats": {"total_users": 0, "active_users": 0},
-            "admin_stats": {"total_admins": 0, "active_admins": 0},
-            "confidence_distribution": {"high": 0, "medium": 0, "low": 0},
+            "status_breakdown": {
+                "unresolved": 0,
+                "verified": 0,
+                "false_alarm": 0,
+                "resolved": 0
+            },
+            "recent_activity": {
+                "total_logs_24h": 0,
+                "accidents_24h": 0
+            },
+            "user_stats": {
+                "total_users": 0,
+                "active_users": 0
+            },
+            "admin_stats": {
+                "total_admins": 0,
+                "active_admins": 0
+            },
+            "confidence_distribution": {
+                "high": 0,
+                "medium": 0,
+                "low": 0
+            },
             "active_connections": len(live_processors),
-            "model_status": "loaded" if hasattr(accident_model, 'model') and accident_model.model is not None else "not_loaded",
-            "error": str(e),
-            "timestamp": datetime.now(timezone.utc).isoformat()
+            "model_status": "loaded" if accident_model.model is not None else "not_loaded"
         }
 
 @app.post("/api/logs/{log_id}/status")
@@ -1246,6 +1616,7 @@ async def update_log_status_public(
     status_data: dict,
     db: Session = Depends(get_db)
 ):
+    """Update log status (public route for dashboard compatibility)"""
     try:
         log = db.query(AccidentLog).filter(AccidentLog.id == log_id).first()
         
@@ -1352,138 +1723,109 @@ async def get_user_stats(
         "last_login": current_user.last_login.isoformat() if current_user.last_login else None
     }
 
-# ==================== ADMIN ROUTES ====================
-
-@app.post("/auth/admin/login", response_model=AdminToken)
-async def login_admin(admin_credentials: AdminLogin, db: Session = Depends(get_db)):
-    admin = authenticate_admin(db, admin_credentials.username, admin_credentials.password)
-    if not admin:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect admin credentials",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-    
-    access_token = create_admin_access_token(admin)
-    
-    return AdminToken(
-        access_token=access_token,
-        token_type="bearer",
-        expires_in=60 * 60,
-        admin_level="super_admin" if admin.is_super_admin else "admin"
-    )
-
-@app.post("/auth/admin/create", response_model=AdminResponse)
-async def create_new_admin(
-    admin: AdminCreate, 
-    db: Session = Depends(get_db),
-    current_admin: Admin = Depends(get_current_super_admin)
+@app.get("/api/snapshot/{filename}")
+async def get_snapshot(
+    filename: str,
+    current_user: User = Depends(get_current_active_user)
 ):
-    try:
-        db_admin = create_admin(db, admin, created_by_id=current_admin.id)
-        return AdminResponse(
-            id=db_admin.id,
-            username=db_admin.username,
-            email=db_admin.email,
-            is_active=db_admin.is_active,
-            is_super_admin=db_admin.is_super_admin,
-            permissions=db_admin.permissions.split(",") if db_admin.permissions else [],
-            created_at=db_admin.created_at,
-            last_login=db_admin.last_login
-        )
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Admin creation failed: {str(e)}")
+    file_path = SNAPSHOTS_DIR / filename
+    
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="Snapshot not found")
+    
+    return FileResponse(file_path)
 
-@app.get("/auth/admin/me", response_model=AdminResponse)
-async def get_current_admin_info(current_admin: Admin = Depends(get_current_admin)):
-    return AdminResponse(
-        id=current_admin.id,
-        username=current_admin.username,
-        email=current_admin.email,
-        is_active=current_admin.is_active,
-        is_super_admin=current_admin.is_super_admin,
-        permissions=current_admin.permissions.split(",") if current_admin.permissions else [],
-        created_at=current_admin.created_at,
-        last_login=current_admin.last_login
-    )
+@app.get("/api/admin/snapshot/{filename}")
+async def get_snapshot_admin(
+    filename: str,
+    current_admin: Admin = Depends(check_admin_permission("view_logs"))
+):
+    file_path = SNAPSHOTS_DIR / filename
+    
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="Snapshot not found")
+    
+    return FileResponse(file_path)
 
 # ==================== ERROR HANDLERS ====================
 
-@app.exception_handler(404)
-async def not_found_handler(request, exc):
-    return JSONResponse(
-        status_code=404,
-        content={
-            "detail": "Resource not found",
-            "path": str(request.url),
-            "timestamp": datetime.now(timezone.utc).isoformat()
-        },
-        headers={
-            "Access-Control-Allow-Origin": "*" if CORS_DEBUG_MODE else request.headers.get("origin", "*"),
-            "Access-Control-Allow-Credentials": "true",
-            "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS, PATCH",
-            "Access-Control-Allow-Headers": "*"
-        }
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request: Request, exc: HTTPException):
+    """Handle HTTP exceptions with CORS headers"""
+    origin = request.headers.get("origin")
+    
+    response = JSONResponse(
+        status_code=exc.status_code,
+        content={"detail": exc.detail}
     )
+    
+    # Add CORS headers to error responses
+    if origin:
+        response.headers["Access-Control-Allow-Origin"] = origin
+    else:
+        response.headers["Access-Control-Allow-Origin"] = "*"
+    
+    response.headers["Access-Control-Allow-Credentials"] = "true"
+    response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
+    response.headers["Access-Control-Allow-Headers"] = "*"
+    
+    return response
 
-@app.exception_handler(500)
-async def internal_server_error_handler(request, exc):
-    logger.error(f"Internal server error on {request.url}: {exc}")
-    return JSONResponse(
+@app.exception_handler(Exception)
+async def general_exception_handler(request: Request, exc: Exception):
+    """Handle general exceptions with CORS headers"""
+    logger.error(f"Unhandled exception: {str(exc)}")
+    
+    origin = request.headers.get("origin")
+    
+    response = JSONResponse(
         status_code=500,
-        content={
-            "detail": "Internal server error",
-            "path": str(request.url),
-            "timestamp": datetime.now(timezone.utc).isoformat()
-        },
-        headers={
-            "Access-Control-Allow-Origin": "*" if CORS_DEBUG_MODE else request.headers.get("origin", "*"),
-            "Access-Control-Allow-Credentials": "true",
-            "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS, PATCH",
-            "Access-Control-Allow-Headers": "*"
-        }
+        content={"detail": "Internal server error"}
     )
+    
+    # Add CORS headers to error responses
+    if origin:
+        response.headers["Access-Control-Allow-Origin"] = origin
+    else:
+        response.headers["Access-Control-Allow-Origin"] = "*"
+    
+    response.headers["Access-Control-Allow-Credentials"] = "true"
+    response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
+    response.headers["Access-Control-Allow-Headers"] = "*"
+    
+    return response
 
-# ==================== MAIN ENTRY POINT ====================
+# ==================== STARTUP CONFIGURATION ====================
 
 if __name__ == "__main__":
     import uvicorn
     
-    logger.info("=" * 80)
-    logger.info("ENHANCED ACCIDENT DETECTION API STARTING - CORS FIXED VERSION")
-    logger.info("=" * 80)
-    logger.info(f"Environment: {ENVIRONMENT}")
-    logger.info(f"Model Path: {getattr(accident_model, 'model_path', 'unknown')}")
-    logger.info(f"Model Loaded: {hasattr(accident_model, 'model') and accident_model.model is not None}")
-    logger.info(f"Detection Threshold: {getattr(accident_model, 'threshold', 0.5)}")
-    logger.info(f"Database URL: {SQLALCHEMY_DATABASE_URL}")
-    logger.info(f"Snapshots Directory: {SNAPSHOTS_DIR}")
-    logger.info(f"JWT Secret Key Set: {bool(SECRET_KEY and SECRET_KEY != 'your-secret-key-change-this-in-production-render-deployment-2024')}")
-    logger.info(f"CORS Debug Mode: {CORS_DEBUG_MODE}")
-    logger.info(f"Frontend URL: {FRONTEND_URL}")
-    logger.info(f"Allowed Origins: {ALL_ORIGINS}")
-    logger.info(f"Upload Timeout: {UPLOAD_TIMEOUT}s")
-    logger.info(f"Max File Size: {MAX_FILE_SIZE // (1024*1024)}MB")
-    logger.info("=" * 80)
-    logger.info("🚀 CORS FIXES APPLIED:")
-    logger.info("   ✅ Custom middleware for OPTIONS handling")
-    logger.info("   ✅ Dynamic origin validation")
-    logger.info("   ✅ Wildcard pattern support")
-    logger.info("   ✅ Comprehensive header settings")
-    logger.info("   ✅ Error handler CORS headers")
-    logger.info("   ✅ Environment-based configuration")
-    logger.info("=" * 80)
-    
-    SNAPSHOTS_DIR.mkdir(exist_ok=True)
-    
-    uvicorn.run(
+    # Configure uvicorn with CORS-friendly settings
+    config = uvicorn.Config(
         app, 
         host="0.0.0.0", 
-        port=int(os.getenv("PORT", 8000)),
+        port=8000,
         log_level="info",
-        access_log=True,
-        timeout_keep_alive=30,
-        timeout_graceful_shutdown=30
+        reload=True if os.getenv("ENVIRONMENT", "development") == "development" else False,
+        # Enable CORS at the server level as well
+        access_log=True
     )
+    
+    server = uvicorn.Server(config)
+    
+    print("=" * 50)
+    print("🚀 ACCIDENT DETECTION API STARTING")
+    print("=" * 50)
+    print(f"📍 Server URL: http://localhost:8000")
+    print(f"📋 API Docs: http://localhost:8000/docs")
+    print(f"🔍 Health Check: http://localhost:8000/api/health")
+    print(f"🌐 CORS Status: ENABLED for all origins (development)")
+    print("=" * 50)
+    print("🔐 Default Admin Credentials:")
+    print("   Username: superadmin")
+    print("   Password: admin123")
+    print("   ⚠️  CHANGE THESE IN PRODUCTION!")
+    print("=" * 50)
+    
+    # Run the server
+    server.run()
