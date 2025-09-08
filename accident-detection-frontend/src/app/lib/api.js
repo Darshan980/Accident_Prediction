@@ -1,4 +1,4 @@
-// src/lib/api.js - FIXED API client with correct Render URL configuration
+// src/lib/api.js - FIXED API client with CORS issue resolved
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://accident-prediction-1-mpm0.onrender.com'
 
 class ApiClient {
@@ -58,8 +58,8 @@ class ApiClient {
       headers: {
         'Accept': 'application/json',
         'Content-Type': 'application/json',
-        // Add Authorization header if token exists
-        ...(token && { 'Authorization': `Bearer ${token}` }),
+        // ONLY add Authorization header if token exists AND endpoint requires auth
+        ...(token && this.requiresAuth(endpoint) && { 'Authorization': `Bearer ${token}` }),
         ...options.headers
       },
       ...options
@@ -74,6 +74,8 @@ class ApiClient {
       console.log(`Making request to: ${url}`, {
         method: config.method || 'GET',
         hasToken: !!token,
+        requiresAuth: this.requiresAuth(endpoint),
+        willSendAuth: !!(token && this.requiresAuth(endpoint)),
         tokenPreview: token ? `${token.substring(0, 10)}...` : 'none',
         headers: Object.keys(config.headers)
       });
@@ -136,6 +138,28 @@ class ApiClient {
       
       throw error
     }
+  }
+
+  // NEW: Determine which endpoints require authentication
+  requiresAuth(endpoint) {
+    const publicEndpoints = [
+      '/',
+      '/api/health',
+      '/api/dashboard/stats',
+      '/api/logs',
+      '/auth/register',
+      '/auth/login',
+      '/auth/admin/login'
+    ];
+    
+    // Check if endpoint starts with any public endpoint
+    const isPublic = publicEndpoints.some(publicEndpoint => 
+      endpoint === publicEndpoint || 
+      (publicEndpoint.includes('?') ? endpoint.startsWith(publicEndpoint.split('?')[0]) : false) ||
+      (endpoint.startsWith('/api/logs?') && publicEndpoint === '/api/logs')
+    );
+    
+    return !isPublic;
   }
 
   // Helper method to clear all possible token storage locations
@@ -280,18 +304,21 @@ class ApiClient {
     throw new Error(errorMessage);
   }
 
-  // Health check with enhanced error handling (NO CREDENTIALS)
+  // FIXED: Health check without credentials to avoid CORS preflight issues
   async healthCheck() {
     try {
-      // Health check without credentials to avoid CORS issues
+      console.log('Performing health check (no auth required)...');
+      
+      // Health check without any authentication headers to avoid CORS preflight
       const response = await fetch(`${this.baseURL}/api/health`, {
         method: 'GET',
         mode: 'cors',
         headers: {
-          'Accept': 'application/json',
-          'Content-Type': 'application/json'
+          'Accept': 'application/json'
+          // NO Content-Type to avoid CORS preflight
+          // NO Authorization header to avoid CORS preflight
         }
-        // NO credentials: 'include' for health check
+        // NO credentials to avoid CORS preflight
       });
       
       console.log('Health check response:', {
@@ -323,7 +350,7 @@ class ApiClient {
     }
   }
 
-  // Test connection method (NO CREDENTIALS)
+  // FIXED: Test connection method without credentials
   async testConnection() {
     try {
       console.log('Testing connection to backend...');
@@ -333,7 +360,7 @@ class ApiClient {
         headers: {
           'Accept': 'application/json'
         }
-        // NO credentials: 'include' for basic connection test
+        // NO credentials to avoid CORS preflight
       });
       
       console.log('Connection test response:', {
@@ -379,7 +406,7 @@ class ApiClient {
     })
   }
 
-  // Get system stats
+  // FIXED: Get system stats (public endpoint, no auth)
   async getStats() {
     return this.request('/api/dashboard/stats')
   }
@@ -402,12 +429,12 @@ class ApiClient {
     return this.request('/api/user/stats')
   }
 
-  // Get public dashboard stats
+  // FIXED: Get public dashboard stats (no auth required)
   async getDashboardStats() {
     return this.request('/api/dashboard/stats')
   }
 
-  // Get public logs
+  // FIXED: Get public logs (no auth required for basic logs)
   async getLogs(skip = 0, limit = 100, accidentOnly = false, status = null, source = null) {
     let params = new URLSearchParams({
       skip: skip.toString(),
