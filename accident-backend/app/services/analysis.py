@@ -207,14 +207,29 @@ async def warmup_model():
         
         if result.get('error'):
             logger.warning(f"Model warmup completed with warning: {result.get('error')}")
+            return {
+                "status": "warning",
+                "message": f"Model warmup completed with warning: {result.get('error')}",
+                "processing_time": result.get('processing_time', 0),
+                "model_loaded": False
+            }
         else:
             logger.info(f"Model warmup completed successfully in {result.get('processing_time', 0):.2f}s")
+            return {
+                "status": "success",
+                "message": "Model warmup completed successfully",
+                "processing_time": result.get('processing_time', 0),
+                "model_loaded": True
+            }
             
-        return True
-        
     except Exception as e:
         logger.error(f"Error during model warmup: {str(e)}")
-        return False
+        return {
+            "status": "error",
+            "message": f"Error during model warmup: {str(e)}",
+            "processing_time": 0,
+            "model_loaded": False
+        }
 
 def cleanup_thread_pool():
     """
