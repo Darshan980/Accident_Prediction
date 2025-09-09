@@ -1,99 +1,96 @@
-# requirements.txt - Render-Optimized Dependencies for Accident Detection API v2.3.0
-# Cleaned up and tested for Render deployment compatibility
+# requirements.txt - Python 3.13 Compatible for Render
+# Updated versions that have Python 3.13 wheel support
 
 # Core FastAPI and ASGI server
-fastapi==0.104.1
-uvicorn[standard]==0.24.0
-gunicorn==21.2.0
+fastapi==0.115.4
+uvicorn[standard]==0.32.1
+gunicorn==23.0.0
 
 # Database
-sqlalchemy==2.0.23
+sqlalchemy==2.0.36
 
 # Authentication and Security
 python-jose[cryptography]==3.3.0
 passlib[bcrypt]==1.7.4
-python-multipart==0.0.6
+python-multipart==0.0.12
 
-# Image and Video Processing - RENDER OPTIMIZED
-opencv-python-headless==4.8.1.78
-Pillow==10.1.0
-numpy==1.24.4
+# Image and Video Processing - Python 3.13 compatible versions
+opencv-python-headless==4.10.0.84
+Pillow==11.0.0
+numpy==2.1.3
 
-# Machine Learning - CPU optimized for Render
-tensorflow-cpu==2.15.0
-scikit-learn==1.3.2
+# Machine Learning - Python 3.13 compatible
+tensorflow-cpu==2.18.0
+scikit-learn==1.5.2
 
 # HTTP and Networking
-httpx==0.25.2
-requests==2.31.0
-websockets==12.0
+httpx==0.28.1
+requests==2.32.3
+websockets==13.1
 
 # Data Processing
-pandas==2.1.4
-pydantic==2.5.2
+pandas==2.2.3
+pydantic==2.10.3
 
 # Environment and Configuration
-python-dotenv==1.0.0
+python-dotenv==1.0.1
 
 # File Handling
-aiofiles==23.2.1
+aiofiles==24.1.0
 
-# CORS Support (already included in FastAPI)
-starlette==0.27.0
+# CORS Support
+starlette==0.41.2
 
 # Date/Time Utilities
-python-dateutil==2.8.2
+python-dateutil==2.9.0
 
 # WebSocket Support
-websocket-client==1.6.4
+websocket-client==1.8.0
 
-# Static file serving for production
-whitenoise==6.6.0
+# Static file serving
+whitenoise==6.8.2
 
-# Additional ML Libraries (lightweight)
-scipy==1.11.4
-h5py==3.10.0
-joblib==1.3.2
+# Additional ML Libraries
+scipy==1.14.1
+h5py==3.12.1
+joblib==1.4.2
 
-# Error Tracking (optional but recommended)
-sentry-sdk[fastapi]==1.39.2
+# Error Tracking
+sentry-sdk[fastapi]==2.18.0
 
 # Rate Limiting
 slowapi==0.1.9
 
 # Enhanced logging
-structlog==23.2.0
+structlog==24.5.0
 
 # Memory Management
-psutil==5.9.6
+psutil==6.1.0
 
-# Configuration Management
-python-dotenv==1.0.0
+# Threading control
+threadpoolctl==3.5.0
 
-# Threading control for ML operations
-threadpoolctl==3.2.0
-
-# Graceful shutdown support
-tenacity==8.2.3
+# Retry logic
+tenacity==9.0.0
 
 # Time zone support
-pytz==2023.3
+pytz==2024.2
 
-# Additional security
-cryptography==41.0.8
-bcrypt==4.1.2
+# Security
+cryptography==43.0.3
+bcrypt==4.2.1
 
-# JSON Web Token Support
-PyJWT==2.8.0
+# JWT Support
+PyJWT==2.10.1
 
 # CLI support
-click==8.1.7
+click==8.1.8
 
 # Session security
-itsdangerous==2.1.2
+itsdangerous==2.2.0
 
-# Template support (minimal)
-jinja2==3.1.2
+# Template support
+jinja2==3.1.4
 
 # Monitoring
-prometheus-client==0.19.0
+prometheus-client==0.21.1
