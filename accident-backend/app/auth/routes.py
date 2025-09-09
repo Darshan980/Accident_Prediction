@@ -70,6 +70,107 @@ async def get_current_user_info(current_user: User = Depends(get_current_active_
         last_login=current_user.last_login
     )
 
+# ADD THESE MISSING ENDPOINTS:
+
+@router.put("/me", response_model=UserResponse)
+async def update_user_profile(
+    user_update: dict,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """Update current user profile"""
+    try:
+        # Update allowed fields
+        if "username" in user_update:
+            # Check if username already exists
+            existing_user = db.query(User).filter(
+                User.username == user_update["username"],
+                User.id != current_user.id
+            ).first()
+            if existing_user:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Username already exists"
+                )
+            current_user.username = user_update["username"]
+        
+        if "email" in user_update:
+            # Check if email already exists
+            existing_user = db.query(User).filter(
+                User.email == user_update["email"],
+                User.id != current_user.id
+            ).first()
+            if existing_user:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Email already exists"
+                )
+            current_user.email = user_update["email"]
+        
+        if "department" in user_update:
+            current_user.department = user_update["department"]
+        
+        db.commit()
+        db.refresh(current_user)
+        
+        return UserResponse(
+            id=current_user.id,
+            username=current_user.username,
+            email=current_user.email,
+            is_active=current_user.is_active,
+            created_at=current_user.created_at,
+            last_login=current_user.last_login
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Profile update failed: {str(e)}")
+
+@router.put("/change-password")
+async def change_password(
+    password_data: dict,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """Change user password"""
+    try:
+        from auth.handlers import verify_password, get_password_hash
+        
+        current_password = password_data.get("currentPassword")
+        new_password = password_data.get("newPassword")
+        
+        if not current_password or not new_password:
+            raise HTTPException(
+                status_code=400,
+                detail="Current password and new password are required"
+            )
+        
+        # Verify current password
+        if not verify_password(current_password, current_user.hashed_password):
+            raise HTTPException(
+                status_code=400,
+                detail="Current password is incorrect"
+            )
+        
+        # Validate new password strength (optional)
+        if len(new_password) < 6:
+            raise HTTPException(
+                status_code=400,
+                detail="New password must be at least 6 characters long"
+            )
+        
+        # Update password
+        current_user.hashed_password = get_password_hash(new_password)
+        db.commit()
+        
+        return {"message": "Password updated successfully"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Password change failed: {str(e)}")
+
 # Admin Authentication Routes
 @router.post("/admin/register", response_model=AdminResponse)
 async def register_admin(
