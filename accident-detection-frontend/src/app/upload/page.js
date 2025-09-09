@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react'
 import { useAuth } from '../contexts/AuthContext'
-import { apiClient, utils } from '../lib/api'
+import { apiClient } from '../lib/api'
 import notificationService from '../lib/notificationService'
 import { CheckCircle, XCircle, AlertCircle, Upload, Server, Key, User, FileText, Clock, Target } from 'lucide-react'
 
@@ -18,6 +18,17 @@ const UserUploadPage = () => {
   const [error, setError] = useState(null)
   const [apiStatus, setApiStatus] = useState('checking')
   const [uploadHistory, setUploadHistory] = useState([])
+
+  // Local utility function to format file sizes
+  const formatFileSize = (bytes) => {
+    if (bytes === 0) return '0 Bytes'
+    
+    const k = 1024
+    const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB']
+    const i = Math.floor(Math.log(bytes) / Math.log(k))
+    
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
+  }
 
   useEffect(() => {
     checkApiHealth()
@@ -1002,7 +1013,7 @@ const UserUploadPage = () => {
                 )}
                 
                 <div className="file-details">
-                  <p><strong>Size:</strong> {utils.formatFileSize(selectedFile.size)}</p>
+                  <p><strong>Size:</strong> {formatFileSize(selectedFile.size)}</p>
                   <p><strong>Type:</strong> {selectedFile.type}</p>
                 </div>
                 
@@ -1086,7 +1097,7 @@ const UserUploadPage = () => {
                   </div>
                   <p className="result-card-content">
                     <strong>Name:</strong> {analysisResult.filename}<br/>
-                    <strong>Size:</strong> {utils.formatFileSize(analysisResult.file_size)}<br/>
+                    <strong>Size:</strong> {formatFileSize(analysisResult.file_size)}<br/>
                     <strong>Type:</strong> {analysisResult.content_type}
                   </p>
                 </div>
