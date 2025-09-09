@@ -8,6 +8,7 @@ class UserCreate(BaseModel):
     username: str
     email: str
     password: str
+    department: Optional[str] = "General"
 
 class UserLogin(BaseModel):
     username: str
@@ -17,6 +18,7 @@ class UserResponse(BaseModel):
     id: int
     username: str
     email: str
+    department: Optional[str] = "General"
     is_active: bool
     created_at: datetime
     last_login: Optional[datetime] = None
