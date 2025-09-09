@@ -1,4 +1,4 @@
-# services/analysis.py - Fixed version with better error handling
+# services/analysis.py - Complete Fixed version with better error handling
 import cv2
 import numpy as np
 import time
@@ -195,15 +195,47 @@ def get_model_info() -> Dict[str, any]:
             "error": str(e)
         }
 
-async def analyze_frame_with_logging(frame: np.ndarray, frame_bytes: Optional[bytes] = None, metadata: Optional[Dict] = None) -> Dict:
+async def analyze_frame_with_logging(
+    frame: np.ndarray = None, 
+    frame_bytes: Optional[bytes] = None, 
+    metadata: Optional[Dict] = None,
+    source: str = "webcam",
+    frame_number: Optional[int] = None,
+    session_id: Optional[str] = None,
+    **kwargs  # Accept any additional keyword arguments for compatibility
+) -> Dict:
     """
     Analyze frame with comprehensive logging and error handling.
     This is the main function used by websocket connections.
+    
+    Args:
+        frame: numpy array of the frame
+        frame_bytes: optional bytes representation of the frame
+        metadata: optional metadata dictionary
+        source: source of the frame (default: "webcam")
+        frame_number: frame sequence number (optional)
+        session_id: session identifier (optional)
+        **kwargs: additional keyword arguments for compatibility
     """
     start_time = time.time()
-    frame_id = metadata.get('frame_id', 'unknown') if metadata else 'unknown'
     
-    logger.info(f"Starting analysis for frame {frame_id}")
+    # Extract additional parameters from kwargs if not provided directly
+    if frame_number is None:
+        frame_number = kwargs.get('frame_number')
+    if session_id is None:
+        session_id = kwargs.get('session_id')
+    if source == "webcam" and 'source' in kwargs:
+        source = kwargs['source']
+    
+    # Extract frame_id from metadata or use frame_number/source combination
+    if metadata and 'frame_id' in metadata:
+        frame_id = metadata['frame_id']
+    elif frame_number is not None:
+        frame_id = f"{source}_{frame_number}"
+    else:
+        frame_id = f"{source}_{int(time.time() * 1000)}"
+    
+    logger.info(f"Starting analysis for frame {frame_id} from source: {source}")
     
     try:
         # Handle both frame_bytes and frame parameters
@@ -223,6 +255,9 @@ async def analyze_frame_with_logging(frame: np.ndarray, frame_bytes: Optional[by
                 logger.error(f"Failed to convert frame_bytes to numpy array for frame {frame_id}: {str(e)}")
                 return {
                     "frame_id": frame_id,
+                    "source": source,
+                    "frame_number": frame_number,
+                    "session_id": session_id,
                     "accident_detected": False,
                     "confidence": 0.0,
                     "predicted_class": "bytes_conversion_error",
@@ -236,6 +271,9 @@ async def analyze_frame_with_logging(frame: np.ndarray, frame_bytes: Optional[by
             logger.warning(f"Invalid frame received for frame {frame_id}")
             return {
                 "frame_id": frame_id,
+                "source": source,
+                "frame_number": frame_number,
+                "session_id": session_id,
                 "accident_detected": False,
                 "confidence": 0.0,
                 "predicted_class": "invalid_frame",
@@ -245,7 +283,7 @@ async def analyze_frame_with_logging(frame: np.ndarray, frame_bytes: Optional[by
             }
         
         # Log frame info
-        logger.debug(f"Frame {frame_id} - Shape: {frame.shape}, Type: {frame.dtype}")
+        logger.debug(f"Frame {frame_id} - Shape: {frame.shape}, Type: {frame.dtype}, Source: {source}")
         
         # Run prediction
         result = await run_ml_prediction_async(frame)
@@ -253,6 +291,9 @@ async def analyze_frame_with_logging(frame: np.ndarray, frame_bytes: Optional[by
         # Add metadata
         result.update({
             "frame_id": frame_id,
+            "source": source,
+            "frame_number": frame_number,
+            "session_id": session_id,
             "timestamp": time.time(),
             "total_processing_time": time.time() - start_time
         })
@@ -262,20 +303,23 @@ async def analyze_frame_with_logging(frame: np.ndarray, frame_bytes: Optional[by
         accident_detected = result.get('accident_detected', False)
         
         if accident_detected:
-            logger.warning(f"ACCIDENT DETECTED - Frame {frame_id}, Confidence: {confidence:.2f}")
+            logger.warning(f"ACCIDENT DETECTED - Frame {frame_id} from {source}, Confidence: {confidence:.2f}")
         else:
-            logger.debug(f"Frame {frame_id} - No accident detected, Confidence: {confidence:.2f}")
+            logger.debug(f"Frame {frame_id} from {source} - No accident detected, Confidence: {confidence:.2f}")
         
-        logger.info(f"Completed analysis for frame {frame_id} in {result['total_processing_time']:.2f}s")
+        logger.info(f"Completed analysis for frame {frame_id} from {source} in {result['total_processing_time']:.2f}s")
         
         return result
         
     except Exception as e:
         processing_time = time.time() - start_time
-        logger.error(f"Error analyzing frame {frame_id}: {str(e)}")
+        logger.error(f"Error analyzing frame {frame_id} from {source}: {str(e)}")
         
         return {
             "frame_id": frame_id,
+            "source": source,
+            "frame_number": frame_number,
+            "session_id": session_id,
             "accident_detected": False,
             "confidence": 0.0,
             "predicted_class": "analysis_error",
@@ -385,3 +429,34 @@ def model_health_check() -> Dict:
             "status": "unhealthy",
             "error": str(e)
         }
+
+# Additional utility functions for backward compatibility
+def analyze_frame(frame_data, frame_number: int = None, session_id: str = None, source: str = "webcam"):
+    """
+    Synchronous wrapper for analyze_frame_with_logging for backward compatibility
+    """
+    import asyncio
+    
+    try:
+        loop = asyncio.get_event_loop()
+    except RuntimeError:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+    
+    return loop.run_until_complete(
+        analyze_frame_with_logging(
+            frame=frame_data,
+            frame_number=frame_number,
+            session_id=session_id,
+            source=source
+        )
+    )
+
+# Legacy function names for backward compatibility
+async def process_frame(frame, **kwargs):
+    """Legacy function name - redirects to analyze_frame_with_logging"""
+    return await analyze_frame_with_logging(frame=frame, **kwargs)
+
+def process_frame_sync(frame, **kwargs):
+    """Legacy synchronous function name"""
+    return analyze_frame(frame, **kwargs)
