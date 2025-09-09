@@ -1,5 +1,6 @@
-# config/settings.py - FIXED CORS configuration
+# config/settings.py - COMPREHENSIVE CORS FIX
 import os
+import re
 from pathlib import Path
 from typing import List
 
@@ -24,9 +25,8 @@ FRAME_PROCESSING_INTERVAL = 2.0
 # File paths
 SNAPSHOTS_DIR = BASE_DIR / "snapshots"
 
-# FIXED CORS configuration - NO WILDCARDS with credentials
 def get_cors_origins() -> List[str]:
-    """Get CORS origins from environment or use defaults - FIXED VERSION"""
+    """Get CORS origins - COMPREHENSIVE VERSION that handles Vercel preview URLs"""
     
     # Get from environment variable first
     env_origins = os.getenv("CORS_ORIGINS", "")
@@ -36,7 +36,7 @@ def get_cors_origins() -> List[str]:
         # Filter out wildcards when using credentials
         origins = [origin for origin in origins if origin != "*"]
     else:
-        # Comprehensive list of allowed origins - NO WILDCARDS
+        # Base list of known origins
         origins = [
             # Local development
             "http://localhost:3000",
@@ -46,26 +46,69 @@ def get_cors_origins() -> List[str]:
             "http://127.0.0.1:3000",
             "http://127.0.0.1:8000",
             
-            # Your specific deployments
+            # Your main deployments
             "https://accident-prediction-xi.vercel.app",
             "https://accident-prediction-1-mpm0.onrender.com",
-            "https://accident-prediction-7wnp-git-main-darshan-ss-projects-39372c06.vercel.app",
         ]
     
-    # Add your actual frontend URL if deployed
+    # Add frontend URL from environment
     frontend_url = os.getenv("FRONTEND_URL")
     if frontend_url and frontend_url not in origins and frontend_url != "*":
         origins.append(frontend_url)
     
-    # Remove duplicates while preserving order
-    seen = set()
-    unique_origins = []
-    for origin in origins:
-        if origin not in seen and origin != "*":  # Explicitly exclude wildcards
-            seen.add(origin)
-            unique_origins.append(origin)
+    # CRITICAL: Add support for Vercel preview URLs
+    # Vercel generates URLs like: https://accident-prediction-ff5ymi7ps-darshan-ss-projects-39372c06.vercel.app
+    vercel_patterns = [
+        # Your project patterns - adjust these to match your actual Vercel project names
+        "https://accident-prediction-.*-darshan-ss-projects-.*\.vercel\.app",
+        "https://accident-prediction-.*\.vercel\.app",
+        # Add more patterns as needed
+    ]
     
-    return unique_origins
+    # Check if any request origin matches Vercel patterns (this will be done in middleware)
+    # For now, add some common Vercel preview patterns
+    origins.extend([
+        # Add specific preview URLs you know about
+        "https://accident-prediction-ff5ymi7ps-darshan-ss-projects-39372c06.vercel.app",
+        # Add more as you discover them
+    ])
+    
+    # Remove duplicates
+    return list(set(origins))
+
+def is_allowed_origin(origin: str) -> bool:
+    """Check if an origin is allowed - handles dynamic Vercel URLs"""
+    if not origin:
+        return False
+    
+    # Get static origins
+    allowed_origins = get_cors_origins()
+    
+    # Check exact matches first
+    if origin in allowed_origins:
+        return True
+    
+    # Check Vercel patterns
+    vercel_patterns = [
+        r"^https://accident-prediction-[a-zA-Z0-9]+-darshan-ss-projects-[a-zA-Z0-9]+\.vercel\.app$",
+        r"^https://accident-prediction-[a-zA-Z0-9-]+\.vercel\.app$",
+    ]
+    
+    for pattern in vercel_patterns:
+        if re.match(pattern, origin):
+            return True
+    
+    # Check localhost patterns for development
+    localhost_patterns = [
+        r"^http://localhost:\d+$",
+        r"^http://127\.0\.0\.1:\d+$",
+    ]
+    
+    for pattern in localhost_patterns:
+        if re.match(pattern, origin):
+            return True
+    
+    return False
 
 # Alternative: If you need wildcard behavior, disable credentials
 def get_cors_origins_no_credentials() -> List[str]:
