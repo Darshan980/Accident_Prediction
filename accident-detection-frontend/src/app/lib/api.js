@@ -1,5 +1,5 @@
-// src/lib/api.js - FIXED with consistent URL handling
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+// src/lib/api.js - FIXED with proper health check handling
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://accident-prediction-1-mpm0.onrender.com'
 
 // Export the base URL for use in components
 export const getApiBaseUrl = () => API_BASE_URL
@@ -243,7 +243,7 @@ class ApiClient {
     }
   }
 
-  // FIXED health check with dynamic URL
+  // FIXED health check - proper response handling
   async healthCheck() {
     try {
       console.log('🏥 Checking API health...');
@@ -259,7 +259,17 @@ class ApiClient {
       if (response.ok) {
         const data = await response.json();
         console.log('✅ Health check passed:', data);
-        return data;
+        
+        // Return normalized health data
+        return {
+          status: 'online',
+          model_loaded: data.model_loaded !== false, // Default to true if not specified
+          message: data.status === 'healthy' ? 'Backend is running and ready' : data.message || 'Ready',
+          backend_url: this.baseURL,
+          version: data.version,
+          uptime: data.uptime,
+          timestamp: data.timestamp
+        };
       } else {
         throw new Error(`Health check failed: ${response.status}`);
       }
@@ -270,8 +280,7 @@ class ApiClient {
         model_loaded: false,
         message: 'Backend server is not accessible',
         error: error.message,
-        backend_url: this.baseURL,
-        fallback: true
+        backend_url: this.baseURL
       };
     }
   }
