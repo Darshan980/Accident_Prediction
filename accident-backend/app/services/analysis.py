@@ -8,7 +8,6 @@ from PIL import Image
 import io
 from typing import Dict, Optional
 from concurrent.futures import ThreadPoolExecutor
-
 from config.settings import MAX_PREDICTION_TIME, THREAD_POOL_SIZE
 
 logger = logging.getLogger(__name__)
@@ -110,4 +109,20 @@ async def run_ml_prediction_async(frame: np.ndarray) -> dict:
             "confidence": 0.0,
             "predicted_class": "error",
             "processing_time": 0.0,
-            "error
+            "error": str(e)
+        }
+
+def get_model_info() -> Dict[str, any]:
+    """Get information about the loaded model"""
+    try:
+        return {
+            "model_loaded": hasattr(accident_model, 'model') and accident_model.model is not None,
+            "model_path": getattr(accident_model, 'model_path', 'unknown'),
+            "input_size": getattr(accident_model, 'input_size', (128, 128)),
+            "threshold": getattr(accident_model, 'threshold', 0.5)
+        }
+    except Exception as e:
+        return {
+            "model_loaded": False,
+            "error": str(e)
+        }
