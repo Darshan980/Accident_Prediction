@@ -1,4 +1,4 @@
-# main.py - FIXED with proper imports and database migration
+# main.py - CUSTOM CORS MIDDLEWARE FOR DYNAMIC ORIGINS
 import os
 import sys
 import signal
@@ -12,11 +12,13 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from sqlalchemy import create_engine, text
 from sqlalchemy.exc import OperationalError
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.responses import Response
 
-# FIXED: Import get_cors_origins function
-from config.settings import get_cors_origins, SNAPSHOTS_DIR, PORT, HOST
+# Import from config/settings
+from config.settings import SNAPSHOTS_DIR, PORT, HOST, get_cors_origins, is_allowed_origin
 
-# Import models and database - REMOVED DATABASE_URL from import
+# Import models and database
 from models.database import create_tables, SessionLocal
 from auth.handlers import create_default_super_admin
 
@@ -35,6 +37,54 @@ from utils.logging import setup_logging
 # Initialize logging
 logger_dict = setup_logging()
 logger = logging.getLogger(__name__)
+
+class CustomCORSMiddleware(BaseHTTPMiddleware):
+    """Custom CORS middleware that handles dynamic Vercel URLs"""
+    
+    def __init__(self, app, **kwargs):
+        super().__init__(app)
+        self.allow_credentials = True
+        self.allow_methods = ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"]
+        self.allow_headers = [
+            "Accept", "Accept-Language", "Content-Language", "Content-Type",
+            "Authorization", "X-Requested-With", "X-CSRFToken", "X-Custom-Header",
+            "Origin", "User-Agent", "DNT", "Cache-Control", "X-Mx-ReqToken",
+            "Keep-Alive", "If-Modified-Since"
+        ]
+        self.expose_headers = [
+            "Content-Length", "Content-Type", "Content-Disposition",
+            "X-Total-Count", "X-Page-Count"
+        ]
+        self.max_age = 86400
+    
+    async def dispatch(self, request: Request, call_next):
+        origin = request.headers.get("origin")
+        
+        # Handle preflight requests
+        if request.method == "OPTIONS":
+            if origin and is_allowed_origin(origin):
+                response = Response()
+                response.headers["Access-Control-Allow-Origin"] = origin
+                response.headers["Access-Control-Allow-Credentials"] = "true"
+                response.headers["Access-Control-Allow-Methods"] = ", ".join(self.allow_methods)
+                response.headers["Access-Control-Allow-Headers"] = ", ".join(self.allow_headers)
+                response.headers["Access-Control-Max-Age"] = str(self.max_age)
+                logger.info(f"✅ CORS preflight allowed for origin: {origin}")
+                return response
+            else:
+                logger.warning(f"❌ CORS preflight rejected for origin: {origin}")
+                return Response(status_code=400)
+        
+        # Handle actual requests
+        response = await call_next(request)
+        
+        if origin and is_allowed_origin(origin):
+            response.headers["Access-Control-Allow-Origin"] = origin
+            response.headers["Access-Control-Allow-Credentials"] = "true"
+            response.headers["Access-Control-Expose-Headers"] = ", ".join(self.expose_headers)
+            logger.debug(f"✅ CORS headers added for origin: {origin}")
+        
+        return response
 
 def run_migration():
     """Add department column to users table if it doesn't exist"""
@@ -57,7 +107,7 @@ def run_migration():
         if not database_url:
             database_url = "sqlite:///./accident_detection.db"
             
-        logger.info(f"Using database URL: {database_url.split('://')[0]}://...")  # Log without credentials
+        logger.info(f"Using database URL: {database_url.split('://')[0]}://...")
         
         engine = create_engine(database_url)
         
@@ -71,57 +121,46 @@ def run_migration():
                 logger.info("Adding department column to users table...")
                 
                 if "sqlite" in database_url.lower():
-                    # SQLite syntax
                     connection.execute(text("ALTER TABLE users ADD COLUMN department VARCHAR DEFAULT 'General'"))
                 else:
-                    # PostgreSQL/MySQL syntax
                     connection.execute(text("ALTER TABLE users ADD COLUMN department VARCHAR(255) DEFAULT 'General'"))
                 
-                # Update existing users to have a default department
                 connection.execute(text("UPDATE users SET department = 'General' WHERE department IS NULL"))
                 connection.commit()
-                
                 logger.info("Department column added successfully")
                 
     except Exception as e:
         logger.error(f"Migration failed: {str(e)}")
-        # Don't raise the exception to prevent app startup failure
-        # The app can still work without the department field
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Application lifespan manager with enhanced error handling"""
+    """Application lifespan manager"""
     # Startup
     logger.info("=" * 80)
-    logger.info("STARTING RENDER-OPTIMIZED ACCIDENT DETECTION API v2.3.0")
+    logger.info("STARTING ACCIDENT DETECTION API v2.3.0 - CUSTOM CORS")
     logger.info("=" * 80)
     
     try:
-        # Create database tables
         create_tables()
         logger.info("Database tables created/verified")
         
-        # Run migration for department column
         run_migration()
         
-        # Create default admin
         db = SessionLocal()
         try:
             create_default_super_admin(db)
             logger.info("Default admin user verified")
         except Exception as e:
-            logger.warning(f"Admin creation issue (non-critical): {e}")
+            logger.warning(f"Admin creation issue: {e}")
         finally:
             db.close()
         
-        # Pre-warm ML model
         try:
             warmup_result = await warmup_model()
             logger.info(f"Model initialization: {warmup_result.get('status', 'unknown')}")
         except Exception as e:
             logger.error(f"Model warmup failed: {e}")
         
-        # Ensure snapshots directory
         SNAPSHOTS_DIR.mkdir(exist_ok=True)
         logger.info(f"Snapshots directory ready: {SNAPSHOTS_DIR}")
         
@@ -144,8 +183,8 @@ async def lifespan(app: FastAPI):
 
 # Create FastAPI app
 app = FastAPI(
-    title="Render-Optimized Accident Detection API",
-    description="AI-powered accident detection system optimized for Render deployment",
+    title="Accident Detection API with Custom CORS",
+    description="AI-powered accident detection system with dynamic CORS support",
     version="2.3.0",
     lifespan=lifespan,
     docs_url="/docs",
@@ -153,42 +192,13 @@ app = FastAPI(
     openapi_url="/openapi.json"
 )
 
-# Get CORS origins AFTER importing the function
-cors_origins = get_cors_origins()
-logger.info(f"CORS origins configured: {cors_origins}")
+# Add custom CORS middleware FIRST
+app.add_middleware(CustomCORSMiddleware)
 
-# FIXED CORS Configuration - NO wildcards with credentials
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=cors_origins,  # Specific origins only, no wildcards
-    allow_credentials=True,      # Keep this for authenticated requests
-    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"],
-    allow_headers=[
-        "Accept",
-        "Accept-Language",
-        "Content-Language",
-        "Content-Type",
-        "Authorization",
-        "X-Requested-With",
-        "X-CSRFToken",
-        "X-Custom-Header",
-        "Origin",
-        "User-Agent",
-        "DNT",
-        "Cache-Control",
-        "X-Mx-ReqToken",
-        "Keep-Alive",
-        "If-Modified-Since"
-    ],
-    expose_headers=[
-        "Content-Length",
-        "Content-Type",
-        "Content-Disposition",
-        "X-Total-Count",
-        "X-Page-Count"
-    ],
-    max_age=86400  # 24 hours
-)
+# Log CORS configuration
+cors_origins = get_cors_origins()
+logger.info(f"🌐 CORS origins configured: {cors_origins}")
+logger.info("🔧 Using custom CORS middleware for dynamic origin handling")
 
 # Add trusted host middleware for production
 if os.getenv("ENVIRONMENT") == "production":
@@ -217,7 +227,7 @@ app.include_router(upload_router, prefix="/api", tags=["upload"])
 # WebSocket endpoint
 app.websocket("/api/live/ws")(websocket_endpoint)
 
-# Root endpoint for health checks
+# Root endpoint
 @app.get("/")
 async def root():
     """Root endpoint"""
@@ -225,16 +235,15 @@ async def root():
         "message": "Accident Detection API is running",
         "version": "2.3.0",
         "status": "operational",
+        "cors": "custom_middleware_enabled",
         "docs": "/docs",
         "health": "/api/health"
     }
 
-# REMOVED: Manual OPTIONS handler - FastAPI CORS middleware handles this automatically
-
-# FIXED error handlers - let CORS middleware handle headers
+# Error handlers
 @app.exception_handler(HTTPException)
 async def http_exception_handler(request: Request, exc: HTTPException):
-    """Handle HTTP exceptions with CORS headers"""
+    """Handle HTTP exceptions"""
     return JSONResponse(
         status_code=exc.status_code,
         content={"detail": exc.detail, "error": "HTTP Exception"}
@@ -242,7 +251,7 @@ async def http_exception_handler(request: Request, exc: HTTPException):
 
 @app.exception_handler(Exception)
 async def general_exception_handler(request: Request, exc: Exception):
-    """Handle general exceptions with CORS headers"""
+    """Handle general exceptions"""
     logger.error(f"Unhandled exception on {request.url}: {str(exc)}")
     return JSONResponse(
         status_code=500,
@@ -253,7 +262,7 @@ async def general_exception_handler(request: Request, exc: Exception):
         }
     )
 
-# Signal handlers for graceful shutdown
+# Signal handlers
 def signal_handler(signum, frame):
     """Handle shutdown signals gracefully"""
     logger.info(f"Received signal {signum}, starting graceful shutdown...")
@@ -264,7 +273,6 @@ def signal_handler(signum, frame):
     logger.info("Graceful shutdown completed")
     sys.exit(0)
 
-# Register signal handlers
 signal.signal(signal.SIGTERM, signal_handler)
 signal.signal(signal.SIGINT, signal_handler)
 
@@ -273,20 +281,12 @@ if __name__ == "__main__":
     import uvicorn
     
     print("=" * 80)
-    print("🚀 RENDER-OPTIMIZED ACCIDENT DETECTION API v2.3.0 STARTING")
+    print("🚀 ACCIDENT DETECTION API v2.3.0 - CUSTOM CORS")
     print("=" * 80)
     print(f"📍 Server URL: http://{HOST}:{PORT}")
     print(f"📍 Production URL: https://accident-prediction-1-mpm0.onrender.com")
-    print(f"🔌 WebSocket URL: wss://accident-prediction-1-mpm0.onrender.com/api/live/ws")
-    print(f"📋 API Docs: /docs")
-    print(f"🔍 Health Check: /api/health")
-    print(f"📊 Performance Stats: /api/performance")
     print(f"🌐 CORS Origins: {cors_origins}")
-    print("=" * 80)
-    print("🔐 Default Admin Credentials:")
-    print("   Username: superadmin")
-    print("   Password: admin123")
-    print("   ⚠️  CHANGE THESE IN PRODUCTION!")
+    print("🔧 Custom CORS Middleware: ENABLED")
     print("=" * 80)
     
     uvicorn.run(
