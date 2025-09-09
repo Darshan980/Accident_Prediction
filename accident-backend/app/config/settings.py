@@ -33,6 +33,8 @@ def get_cors_origins() -> List[str]:
     
     if env_origins:
         origins = [origin.strip() for origin in env_origins.split(",") if origin.strip()]
+        # Filter out wildcards when using credentials
+        origins = [origin for origin in origins if origin != "*"]
     else:
         # Comprehensive list of allowed origins - NO WILDCARDS
         origins = [
@@ -50,12 +52,9 @@ def get_cors_origins() -> List[str]:
             "https://accident-prediction-7wnp-git-main-darshan-ss-projects-39372c06.vercel.app",
         ]
     
-    # REMOVED wildcard logic - never add "*" when using credentials
-    # Instead, add your actual domain patterns
-    
     # Add your actual frontend URL if deployed
     frontend_url = os.getenv("FRONTEND_URL")
-    if frontend_url and frontend_url not in origins:
+    if frontend_url and frontend_url not in origins and frontend_url != "*":
         origins.append(frontend_url)
     
     # Remove duplicates while preserving order
