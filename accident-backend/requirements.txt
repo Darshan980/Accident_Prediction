@@ -1,4 +1,5 @@
 # requirements.txt - Render-Optimized Dependencies for Accident Detection API v2.3.0
+# Cleaned up and tested for Render deployment compatibility
 
 # Core FastAPI and ASGI server
 fastapi==0.104.1
@@ -7,22 +8,19 @@ gunicorn==21.2.0
 
 # Database
 sqlalchemy==2.0.23
-alembic==1.13.1
 
 # Authentication and Security
 python-jose[cryptography]==3.3.0
 passlib[bcrypt]==1.7.4
 python-multipart==0.0.6
 
-# Image and Video Processing
-opencv-python-headless==4.8.1.78  # Headless version for server deployment
+# Image and Video Processing - RENDER OPTIMIZED
+opencv-python-headless==4.8.1.78
 Pillow==10.1.0
 numpy==1.24.4
 
-# Machine Learning (TensorFlow/Keras)
-tensorflow==2.15.0
-# Alternative: tensorflow-cpu==2.15.0  # Use CPU version for lighter deployment
-keras==2.15.0
+# Machine Learning - CPU optimized for Render
+tensorflow-cpu==2.15.0
 scikit-learn==1.3.2
 
 # HTTP and Networking
@@ -34,227 +32,68 @@ websockets==12.0
 pandas==2.1.4
 pydantic==2.5.2
 
-# Logging and Monitoring
-loguru==0.7.2
-psutil==5.9.6  # System monitoring
-
-# File Handling
-python-magic==0.4.27
-aiofiles==23.2.1
-
 # Environment and Configuration
 python-dotenv==1.0.0
 
-# Async Support
-asyncio==3.4.3
-concurrent-futures==3.1.1
+# File Handling
+aiofiles==23.2.1
 
-# Development and Testing (optional)
-pytest==7.4.3
-pytest-asyncio==0.21.1
-
-# CORS Support
+# CORS Support (already included in FastAPI)
 starlette==0.27.0
 
 # Date/Time Utilities
 python-dateutil==2.8.2
 
-# JSON Web Token Support
-PyJWT==2.8.0
-
-# Background Task Processing
-celery==5.3.4  # Optional: for background tasks
-
-# Caching (optional)
-redis==5.0.1  # Optional: for caching
-
-# Memory Optimization
-memory-profiler==0.61.0
-
-# Error Handling and Validation
-marshmallow==3.20.1
-
-# API Documentation
-python-markdown==3.5.1
-
-# File Upload Handling
-python-magic-bin==0.4.14  # Windows compatibility
-
-# Render-Specific Optimizations
-# These help with deployment stability
-gevent==23.9.1
-eventlet==0.33.3
-
-# Production WSGI Server Alternatives
-waitress==2.1.2  # Alternative WSGI server
-bjoern==3.2.2    # Fast WSGI server (Linux only)
-
-# Monitoring and Health Checks
-healthcheck==1.3.3
-
-# Database Migrations
-alembic==1.13.1
-
-# Configuration Management
-configparser==6.0.0
-
-# System Information
-platform==1.0.8
-
-# Additional Security
-cryptography==41.0.8
-bcrypt==4.1.2
-
-# Performance Monitoring
-py-spy==0.3.14  # Optional: performance profiling
-
 # WebSocket Support
 websocket-client==1.6.4
 
-# Threading and Multiprocessing
-threadpoolctl==3.2.0
+# Static file serving for production
+whitenoise==6.6.0
 
-# Base64 and Encoding
-base64io==1.0.3
-
-# UUID Generation
-uuid==1.30
-
-# Path Manipulation
-pathlib2==2.3.7
-
-# Time Zone Support
-pytz==2023.3
-
-# Signal Processing
-signal==1.0.0
-
-# OS Interface
-os-sys==2.1.4
-
-# I/O Operations
-io-async==1.0.0
-
-# Render Deployment Helpers
-whitenoise==6.6.0  # Static file serving
-dj-database-url==2.1.0  # Database URL parsing
-
-# Additional ML Libraries (optional)
+# Additional ML Libraries (lightweight)
 scipy==1.11.4
-matplotlib==3.8.2
-seaborn==0.13.0
-
-# Computer Vision Extensions
-imageio==2.32.0
-scikit-image==0.22.0
-
-# Video Processing (optional)
-ffmpeg-python==0.2.0
-
-# Audio Processing (optional)
-librosa==0.10.1
-
-# Deep Learning Utilities
 h5py==3.10.0
-
-# Model Serialization
 joblib==1.3.2
-pickle5==0.0.11
 
-# Numerical Computing
-numba==0.58.1
-
-# Statistical Analysis
-statsmodels==0.14.0
-
-# Data Validation
-cerberus==1.3.5
-
-# HTTP Client with Retry Logic
-tenacity==8.2.3
-backoff==2.2.1
-
-# Structured Logging
-structlog==23.2.0
-
-# Application Metrics
-prometheus-client==0.19.0
-
-# Graceful Shutdown
-signal-exit==1.0.0
-
-# Memory Management
-pympler==0.9
-
-# Process Management
-supervisor==4.2.5
-
-# Environment Detection
-distro==1.8.0
-
-# File System Monitoring
-watchdog==3.0.0
-
-# Configuration Validation
-schema==0.7.5
-
-# Thread Safety
-threading-utils==0.3
-
-# Error Tracking (optional)
+# Error Tracking (optional but recommended)
 sentry-sdk[fastapi]==1.39.2
 
 # Rate Limiting
 slowapi==0.1.9
-limits==3.7.0
 
-# Caching Backends
-diskcache==5.6.3
+# Enhanced logging
+structlog==23.2.0
 
-# Session Management
+# Memory Management
+psutil==5.9.6
+
+# Configuration Management
+python-dotenv==1.0.0
+
+# Threading control for ML operations
+threadpoolctl==3.2.0
+
+# Graceful shutdown support
+tenacity==8.2.3
+
+# Time zone support
+pytz==2023.3
+
+# Additional security
+cryptography==41.0.8
+bcrypt==4.1.2
+
+# JSON Web Token Support
+PyJWT==2.8.0
+
+# CLI support
+click==8.1.7
+
+# Session security
 itsdangerous==2.1.2
 
-# Template Engine (optional)
+# Template support (minimal)
 jinja2==3.1.2
 
-# CLI Tools
-click==8.1.7
-typer==0.9.0
-
-# Development Tools (commented out for production)
-# black==23.11.0
-# isort==5.12.0
-# flake8==6.1.0
-# mypy==1.7.1
-
-# Testing Tools (commented out for production)
-# pytest-cov==4.1.0
-# pytest-mock==3.12.0
-# httpx==0.25.2  # Already included above
-
-# Documentation (optional)
-# sphinx==7.2.6
-# sphinx-rtd-theme==1.3.0
-
-# Deployment Utilities
-python-dotenv==1.0.0  # Already included above
-
-# ASGI Middleware
-asgi-cors==0.5.0
-
-# Additional FastAPI Extensions
-fastapi-limiter==0.1.6
-fastapi-cache2[redis]==0.2.1
-
-# Production Logging
-python-json-logger==2.0.7
-
-# Health Check Extensions
-fastapi-health==0.4.0
-
-# OpenAPI Documentation
-fastapi-openapi==1.0.0
-
-# Monitoring Integration
-opentelemetry-api==1.21.0
-opentelemetry-sdk==1.21.0
+# Monitoring
+prometheus-client==0.19.0
