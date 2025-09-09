@@ -192,7 +192,7 @@ async def analyze_frame_with_logging(frame: np.ndarray, metadata: Optional[Dict]
             "timestamp": time.time()
         }
 
-def warmup_model():
+async def warmup_model():
     """
     Warm up the model by running a dummy prediction.
     This helps reduce cold start latency for the first real prediction.
@@ -202,8 +202,8 @@ def warmup_model():
         # Create a dummy frame for warmup
         dummy_frame = np.zeros((128, 128, 3), dtype=np.uint8)
         
-        # Run a dummy prediction
-        result = run_ml_prediction_sync(dummy_frame)
+        # Run an async dummy prediction to properly warm up the async pipeline
+        result = await run_ml_prediction_async(dummy_frame)
         
         if result.get('error'):
             logger.warning(f"Model warmup completed with warning: {result.get('error')}")
