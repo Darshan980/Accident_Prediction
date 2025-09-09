@@ -1,4 +1,4 @@
-# requirements.txt - Python 3.13 Compatible for Render
+# requirements.txt - Python 3.12 Compatible
 # Core FastAPI and ASGI server
 fastapi==0.104.1
 uvicorn[standard]==0.24.0
@@ -12,12 +12,12 @@ python-jose[cryptography]==3.3.0
 passlib[bcrypt]==1.7.4
 python-multipart==0.0.6
 
-# Image and Video Processing - Python 3.13 compatible
+# Image and Video Processing
 opencv-python-headless==4.9.0.80
 Pillow==10.4.0
 numpy==1.26.4
 
-# Machine Learning - Python 3.13 compatible
+# Machine Learning
 tensorflow-cpu==2.15.0
 scikit-learn==1.4.2
 
