@@ -138,6 +138,31 @@ async def analyze_frame_with_logging(frame: np.ndarray, metadata: Optional[Dict]
     logger.info(f"Starting analysis for frame {frame_id}")
     
     try:
+        # Handle both frame_bytes and frame parameters
+        if frame_bytes is not None:
+            # Convert bytes to numpy array
+            try:
+                # Decode bytes to numpy array using opencv
+                nparr = np.frombuffer(frame_bytes, np.uint8)
+                frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+                
+                if frame is None:
+                    raise ValueError("Failed to decode image bytes")
+                    
+                logger.debug(f"Frame {frame_id} - Converted from bytes to array, Shape: {frame.shape}")
+                
+            except Exception as e:
+                logger.error(f"Failed to convert frame_bytes to numpy array for frame {frame_id}: {str(e)}")
+                return {
+                    "frame_id": frame_id,
+                    "accident_detected": False,
+                    "confidence": 0.0,
+                    "predicted_class": "bytes_conversion_error",
+                    "processing_time": time.time() - start_time,
+                    "error": f"Failed to convert frame bytes: {str(e)}",
+                    "timestamp": time.time()
+                }
+        
         # Validate frame
         if frame is None or frame.size == 0:
             logger.warning(f"Invalid frame received for frame {frame_id}")
