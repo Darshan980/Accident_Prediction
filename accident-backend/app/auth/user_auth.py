@@ -1,4 +1,4 @@
-# auth/user_auth.py
+# auth/user_auth.py - Updated User model
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
@@ -31,6 +31,7 @@ class User(Base):
     username = Column(String, unique=True, index=True, nullable=False)
     email = Column(String, unique=True, index=True, nullable=False)
     hashed_password = Column(String, nullable=False)
+    department = Column(String, nullable=True, default="General")  # Added department field
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), default=datetime.now)
     last_login = Column(DateTime(timezone=True), nullable=True)
@@ -40,6 +41,7 @@ class UserCreate(BaseModel):
     username: str
     email: str
     password: str
+    department: Optional[str] = "General"  # Added department to create model
 
 class UserLogin(BaseModel):
     username: str
@@ -49,6 +51,7 @@ class UserResponse(BaseModel):
     id: int
     username: str
     email: str
+    department: Optional[str] = None  # Added department to response model
     is_active: bool
     created_at: datetime
     last_login: Optional[datetime] = None
@@ -123,7 +126,8 @@ def create_user(db: Session, user: UserCreate) -> User:
     db_user = User(
         username=user.username,
         email=user.email,
-        hashed_password=hashed_password
+        hashed_password=hashed_password,
+        department=user.department or "General"  # Set department
     )
     
     db.add(db_user)
