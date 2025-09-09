@@ -126,3 +126,68 @@ def get_model_info() -> Dict[str, any]:
             "model_loaded": False,
             "error": str(e)
         }
+
+async def analyze_frame_with_logging(frame: np.ndarray, metadata: Optional[Dict] = None) -> Dict:
+    """
+    Analyze frame with comprehensive logging and error handling.
+    This is the main function used by websocket connections.
+    """
+    start_time = time.time()
+    frame_id = metadata.get('frame_id', 'unknown') if metadata else 'unknown'
+    
+    logger.info(f"Starting analysis for frame {frame_id}")
+    
+    try:
+        # Validate frame
+        if frame is None or frame.size == 0:
+            logger.warning(f"Invalid frame received for frame {frame_id}")
+            return {
+                "frame_id": frame_id,
+                "accident_detected": False,
+                "confidence": 0.0,
+                "predicted_class": "invalid_frame",
+                "processing_time": time.time() - start_time,
+                "error": "Invalid or empty frame",
+                "timestamp": time.time()
+            }
+        
+        # Log frame info
+        logger.debug(f"Frame {frame_id} - Shape: {frame.shape}, Type: {frame.dtype}")
+        
+        # Run prediction
+        result = await run_ml_prediction_async(frame)
+        
+        # Add metadata
+        result.update({
+            "frame_id": frame_id,
+            "timestamp": time.time(),
+            "total_processing_time": time.time() - start_time
+        })
+        
+        # Log results
+        confidence = result.get('confidence', 0.0)
+        accident_detected = result.get('accident_detected', False)
+        
+        if accident_detected:
+            logger.warning(f"ACCIDENT DETECTED - Frame {frame_id}, Confidence: {confidence:.2f}")
+        else:
+            logger.debug(f"Frame {frame_id} - No accident detected, Confidence: {confidence:.2f}")
+        
+        logger.info(f"Completed analysis for frame {frame_id} in {result['total_processing_time']:.2f}s")
+        
+        return result
+        
+    except Exception as e:
+        processing_time = time.time() - start_time
+        logger.error(f"Error analyzing frame {frame_id}: {str(e)}")
+        
+        return {
+            "frame_id": frame_id,
+            "accident_detected": False,
+            "confidence": 0.0,
+            "predicted_class": "analysis_error",
+            "processing_time": processing_time,
+            "total_processing_time": processing_time,
+            "error": str(e),
+            "timestamp": time.time()
+        }
