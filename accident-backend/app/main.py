@@ -16,8 +16,8 @@ from sqlalchemy.exc import OperationalError
 # FIXED: Import get_cors_origins function
 from config.settings import get_cors_origins, SNAPSHOTS_DIR, PORT, HOST
 
-# Import models and database
-from models.database import create_tables, SessionLocal, DATABASE_URL
+# Import models and database - REMOVED DATABASE_URL from import
+from models.database import create_tables, SessionLocal
 from auth.handlers import create_default_super_admin
 
 # Import routers
