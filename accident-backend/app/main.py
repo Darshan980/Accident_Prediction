@@ -1,4 +1,4 @@
-# main.py - FIXED with proper imports
+# main.py - FIXED with proper imports and database migration
 import os
 import sys
 import signal
@@ -10,12 +10,14 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
+from sqlalchemy import create_engine, text
+from sqlalchemy.exc import OperationalError
 
 # FIXED: Import get_cors_origins function
 from config.settings import get_cors_origins, SNAPSHOTS_DIR, PORT, HOST
 
 # Import models and database
-from models.database import create_tables, SessionLocal
+from models.database import create_tables, SessionLocal, DATABASE_URL
 from auth.handlers import create_default_super_admin
 
 # Import routers
@@ -34,6 +36,38 @@ from utils.logging import setup_logging
 logger_dict = setup_logging()
 logger = logging.getLogger(__name__)
 
+def run_migration():
+    """Add department column to users table if it doesn't exist"""
+    try:
+        engine = create_engine(DATABASE_URL)
+        
+        with engine.connect() as connection:
+            # Check if department column exists
+            try:
+                result = connection.execute(text("SELECT department FROM users LIMIT 1"))
+                logger.info("Department column already exists")
+                return
+            except OperationalError:
+                logger.info("Adding department column to users table...")
+                
+                if "sqlite" in DATABASE_URL.lower():
+                    # SQLite syntax
+                    connection.execute(text("ALTER TABLE users ADD COLUMN department VARCHAR DEFAULT 'General'"))
+                else:
+                    # PostgreSQL/MySQL syntax
+                    connection.execute(text("ALTER TABLE users ADD COLUMN department VARCHAR(255) DEFAULT 'General'"))
+                
+                # Update existing users to have a default department
+                connection.execute(text("UPDATE users SET department = 'General' WHERE department IS NULL"))
+                connection.commit()
+                
+                logger.info("Department column added successfully")
+                
+    except Exception as e:
+        logger.error(f"Migration failed: {str(e)}")
+        # Don't raise the exception to prevent app startup failure
+        # The app can still work without the department field
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan manager with enhanced error handling"""
@@ -46,6 +80,9 @@ async def lifespan(app: FastAPI):
         # Create database tables
         create_tables()
         logger.info("Database tables created/verified")
+        
+        # Run migration for department column
+        run_migration()
         
         # Create default admin
         db = SessionLocal()
