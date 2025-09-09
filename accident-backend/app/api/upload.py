@@ -80,4 +80,87 @@ async def upload_file(
         logger.error(f"Upload processing error: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
 
-@router.post("/analyze
+@router.post("/analyze-url")
+async def analyze_url(
+    url: str,
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db)
+):
+    """Analyze an image from URL"""
+    try:
+        import requests
+        from urllib.parse import urlparse
+        
+        # Validate URL
+        parsed_url = urlparse(url)
+        if not parsed_url.scheme or not parsed_url.netloc:
+            raise HTTPException(status_code=400, detail="Invalid URL format")
+        
+        # Download image
+        try:
+            response = requests.get(url, timeout=30, stream=True)
+            response.raise_for_status()
+            
+            # Check content type
+            content_type = response.headers.get('content-type', '')
+            if not any(allowed_type in content_type for allowed_type in ALLOWED_FILE_TYPES):
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Invalid content type: {content_type}"
+                )
+            
+            # Check content length
+            content_length = int(response.headers.get('content-length', 0))
+            if content_length > MAX_FILE_SIZE:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"File too large: {content_length} bytes"
+                )
+            
+            # Read content
+            file_content = response.content
+            
+        except requests.RequestException as e:
+            raise HTTPException(status_code=400, detail=f"Failed to download image: {str(e)}")
+        
+        # Analyze the content
+        result = await analyze_frame_with_logging(
+            frame_bytes=file_content,
+            source=f"url_analysis_{current_user.username}",
+            frame_id=f"url_{int(time.time() * 1000)}"
+        )
+        
+        # Log to database if accident detected
+        try:
+            if result.get('accident_detected', False):
+                log_entry = log_accident_detection(
+                    db=db,
+                    detection_data=result,
+                    frame=None,
+                    source=f"url_analysis_{current_user.username}",
+                    analysis_type="url_analysis"
+                )
+                if log_entry:
+                    result["log_id"] = log_entry.id
+                    result["snapshot_url"] = log_entry.snapshot_url
+        except Exception as e:
+            logger.warning(f"Database logging failed: {e}")
+        
+        # Add metadata
+        result.update({
+            "source_url": url,
+            "content_type": content_type,
+            "content_size": len(file_content),
+            "user_id": current_user.id,
+            "username": current_user.username,
+            "analysis_timestamp": time.time(),
+            "analysis_type": "url_analysis"
+        })
+        
+        return result
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"URL analysis error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"URL analysis failed: {str(e)}")
