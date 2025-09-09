@@ -1,4 +1,4 @@
-# config/settings.py - COMPREHENSIVE CORS FIX
+# config/settings.py - FIXED regex escape sequences
 import os
 import re
 from pathlib import Path
@@ -56,17 +56,15 @@ def get_cors_origins() -> List[str]:
     if frontend_url and frontend_url not in origins and frontend_url != "*":
         origins.append(frontend_url)
     
-    # CRITICAL: Add support for Vercel preview URLs
-    # Vercel generates URLs like: https://accident-prediction-ff5ymi7ps-darshan-ss-projects-39372c06.vercel.app
+    # FIXED: Properly escaped regex patterns - using raw strings
     vercel_patterns = [
-        # Your project patterns - adjust these to match your actual Vercel project names
-        "https://accident-prediction-.*-darshan-ss-projects-.*\.vercel\.app",
-        "https://accident-prediction-.*\.vercel\.app",
+        # Your project patterns - FIXED with raw strings
+        r"https://accident-prediction-.*-darshan-ss-projects-.*\.vercel\.app",
+        r"https://accident-prediction-.*\.vercel\.app",
         # Add more patterns as needed
     ]
     
-    # Check if any request origin matches Vercel patterns (this will be done in middleware)
-    # For now, add some common Vercel preview patterns
+    # Add specific preview URLs you know about
     origins.extend([
         # Add specific preview URLs you know about
         "https://accident-prediction-ff5ymi7ps-darshan-ss-projects-39372c06.vercel.app",
@@ -88,7 +86,7 @@ def is_allowed_origin(origin: str) -> bool:
     if origin in allowed_origins:
         return True
     
-    # Check Vercel patterns
+    # FIXED: Check Vercel patterns with raw strings
     vercel_patterns = [
         r"^https://accident-prediction-[a-zA-Z0-9]+-darshan-ss-projects-[a-zA-Z0-9]+\.vercel\.app$",
         r"^https://accident-prediction-[a-zA-Z0-9-]+\.vercel\.app$",
