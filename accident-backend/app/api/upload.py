@@ -1,4 +1,4 @@
-# api/upload.py - Fixed with CORS support
+# api/upload.py - Fixed API upload endpoint
 import time
 import logging
 from fastapi import APIRouter, UploadFile, File, HTTPException, Depends, Request
@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from config.settings import ALLOWED_FILE_TYPES, MAX_FILE_SIZE
 from models.database import get_db, User
 from auth.dependencies import get_current_active_user
-from services.analysis import analyze_frame_with_logging
+from services.analysis import analyze_frame_with_logging, get_model_info
 from services.database import log_accident_detection
 
 router = APIRouter()
@@ -83,7 +83,7 @@ async def upload_file(
         # Read file content
         file_content = await file.read()
         
-        # Analyze the file
+        # Analyze the file using the correct service
         result = await analyze_frame_with_logging(
             frame_bytes=file_content,
             source=f"user_upload_{current_user.username}",
@@ -115,7 +115,7 @@ async def upload_file(
             "username": current_user.username,
             "upload_timestamp": time.time(),
             "analysis_type": "file_upload",
-            "success": True
+            "success": not result.get('error')
         })
         
         return create_cors_response(result)
@@ -199,7 +199,7 @@ async def analyze_url(
                 status_code=400
             )
         
-        # Analyze the content
+        # Analyze the content using the correct service
         result = await analyze_frame_with_logging(
             frame_bytes=file_content,
             source=f"url_analysis_{current_user.username}",
@@ -231,7 +231,7 @@ async def analyze_url(
             "username": current_user.username,
             "analysis_timestamp": time.time(),
             "analysis_type": "url_analysis",
-            "success": True
+            "success": not result.get('error')
         })
         
         return create_cors_response(result)
@@ -254,17 +254,17 @@ async def analyze_url(
             status_code=500
         )
 
-# Additional endpoints with CORS support
 @router.post("/configure")
 async def configure_model(config: dict, current_user: User = Depends(get_current_active_user)):
     """Configure model parameters (e.g., threshold)"""
     try:
         if "threshold" in config:
             threshold = config["threshold"]
-            # Add your threshold update logic here
+            # Add your threshold update logic here if needed
             return create_cors_response({
-                "message": f"Threshold updated to {threshold}",
-                "success": True
+                "message": f"Threshold update requested: {threshold}",
+                "success": True,
+                "note": "Threshold update needs to be implemented in the model service"
             })
         
         return create_cors_response({
@@ -283,18 +283,10 @@ async def configure_model(config: dict, current_user: User = Depends(get_current
         )
 
 @router.get("/model-info")
-async def get_model_info():
+async def get_model_info_endpoint():
     """Get information about the loaded model"""
     try:
-        # Add your model info logic here
-        model_info = {
-            "model_loaded": True,  # Replace with actual check
-            "model_path": "models/accident_detection_model",
-            "input_size": (224, 224),
-            "threshold": 0.5,
-            "class_names": ["no_accident", "accident"]
-        }
-        
+        model_info = get_model_info()
         return create_cors_response(model_info)
         
     except Exception as e:
