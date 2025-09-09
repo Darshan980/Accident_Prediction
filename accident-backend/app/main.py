@@ -39,7 +39,27 @@ logger = logging.getLogger(__name__)
 def run_migration():
     """Add department column to users table if it doesn't exist"""
     try:
-        engine = create_engine(DATABASE_URL)
+        # Get the database URL - try multiple ways
+        database_url = None
+        
+        # Method 1: Try to get from environment
+        database_url = os.getenv("DATABASE_URL")
+        
+        # Method 2: Try to get from config/settings
+        if not database_url:
+            try:
+                from config.settings import DATABASE_URL as SETTINGS_DB_URL
+                database_url = SETTINGS_DB_URL
+            except ImportError:
+                pass
+        
+        # Method 3: Default fallback
+        if not database_url:
+            database_url = "sqlite:///./accident_detection.db"
+            
+        logger.info(f"Using database URL: {database_url.split('://')[0]}://...")  # Log without credentials
+        
+        engine = create_engine(database_url)
         
         with engine.connect() as connection:
             # Check if department column exists
@@ -50,7 +70,7 @@ def run_migration():
             except OperationalError:
                 logger.info("Adding department column to users table...")
                 
-                if "sqlite" in DATABASE_URL.lower():
+                if "sqlite" in database_url.lower():
                     # SQLite syntax
                     connection.execute(text("ALTER TABLE users ADD COLUMN department VARCHAR DEFAULT 'General'"))
                 else:
