@@ -191,3 +191,50 @@ async def analyze_frame_with_logging(frame: np.ndarray, metadata: Optional[Dict]
             "error": str(e),
             "timestamp": time.time()
         }
+
+def warmup_model():
+    """
+    Warm up the model by running a dummy prediction.
+    This helps reduce cold start latency for the first real prediction.
+    """
+    logger.info("Warming up model...")
+    try:
+        # Create a dummy frame for warmup
+        dummy_frame = np.zeros((128, 128, 3), dtype=np.uint8)
+        
+        # Run a dummy prediction
+        result = run_ml_prediction_sync(dummy_frame)
+        
+        if result.get('error'):
+            logger.warning(f"Model warmup completed with warning: {result.get('error')}")
+        else:
+            logger.info(f"Model warmup completed successfully in {result.get('processing_time', 0):.2f}s")
+            
+        return True
+        
+    except Exception as e:
+        logger.error(f"Error during model warmup: {str(e)}")
+        return False
+
+def cleanup_thread_pool():
+    """
+    Cleanup the thread pool executor gracefully.
+    Should be called during application shutdown.
+    """
+    logger.info("Shutting down ML thread pool...")
+    try:
+        ml_thread_pool.shutdown(wait=True)
+        logger.info("ML thread pool shutdown completed")
+    except Exception as e:
+        logger.error(f"Error during thread pool cleanup: {str(e)}")
+
+# Optional: Add a context manager for the thread pool
+class MLThreadPoolManager:
+    """Context manager for ML thread pool lifecycle"""
+    
+    def __enter__(self):
+        logger.info("ML thread pool initialized")
+        return ml_thread_pool
+    
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        cleanup_thread_pool()
