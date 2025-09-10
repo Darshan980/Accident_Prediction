@@ -1,16 +1,13 @@
-'use client';
 import React, { useState, useEffect, useContext, useCallback, useRef } from 'react';
 import { Bell, AlertTriangle, MapPin, Clock, Eye, CheckCircle, RefreshCw, User, Shield, Activity, TrendingUp } from 'lucide-react';
 
-// IMPORTANT: Import your real auth context from the correct file
-// Remove the mock auth and use the real one from your auth file
+// Mock AuthContext for demo - replace with your real auth implementation
 const AuthContext = React.createContext();
 
-// This should match your real useAuth implementation
 const useAuth = () => {
   const context = useContext(AuthContext);
   if (!context) {
-    // If no auth context, check localStorage for stored auth
+    // Check localStorage for stored auth
     const storedToken = localStorage.getItem('token');
     const storedUser = localStorage.getItem('user');
     
@@ -29,7 +26,6 @@ const useAuth = () => {
       }
     }
     
-    // Fallback for testing - but indicate not authenticated
     return {
       user: null,
       token: null,
@@ -71,10 +67,6 @@ const LoginPrompt = ({ onLoginSuccess }) => {
         const data = await response.json();
         console.log('Login successful, storing auth data');
         
-        // Store the token
-        localStorage.setItem('token', data.access_token);
-        
-        // Create user object
         const userData = {
           id: data.user_id || Date.now(),
           username: credentials.username,
@@ -85,8 +77,8 @@ const LoginPrompt = ({ onLoginSuccess }) => {
           loginTime: new Date().toISOString()
         };
         
+        localStorage.setItem('token', data.access_token);
         localStorage.setItem('user', JSON.stringify(userData));
-        console.log('Auth data stored, calling onLoginSuccess');
         
         onLoginSuccess(userData);
       } else {
@@ -183,7 +175,6 @@ const LoginPrompt = ({ onLoginSuccess }) => {
 };
 
 const UserDashboard = () => {
-  // Get real auth state
   const authData = useAuth();
   const { user, token, isAuthenticated } = authData;
 
@@ -200,30 +191,24 @@ const UserDashboard = () => {
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [authUser, setAuthUser] = useState(user);
   
-  // Use React state instead of localStorage for read alerts
   const [readAlerts, setReadAlerts] = useState(new Set());
   
-  // WebSocket reference
+  // WebSocket reference with better connection management
   const wsRef = useRef(null);
   const retryTimeoutRef = useRef(null);
   const retryCount = useRef(0);
   const maxRetries = 5;
+  const isConnectingRef = useRef(false);
 
-  // API configuration
   const API_BASE_URL = process.env.REACT_APP_API_URL || 'https://accident-prediction-1-mpm0.onrender.com';
-  
-  // WebSocket URL
   const WS_URL = API_BASE_URL.replace('http', 'ws') + '/api/dashboard/ws/alerts';
 
-  // Handle login success
   const handleLoginSuccess = (userData) => {
     console.log('Login successful, updating auth user:', userData);
     setAuthUser(userData);
     setError(null);
-    // Component will re-render and load data
   };
 
-  // Handle logout
   const handleLogout = () => {
     console.log('Logging out...');
     localStorage.removeItem('token');
@@ -232,41 +217,41 @@ const UserDashboard = () => {
     cleanupWebSocket();
   };
 
-  // Check authentication on mount
-  useEffect(() => {
-    if (!isAuthenticated && !authUser) {
-      console.log('Not authenticated, waiting for login...');
-      setLoading(false);
-      return;
-    }
-    
-    if (authUser || user) {
-      console.log('User authenticated, loading dashboard data...');
-      loadRealTimeData();
-      initializeWebSocket();
-    }
-  }, [isAuthenticated, authUser, user]);
+  // Better connection status management
+  const updateConnectionStatus = useCallback((status) => {
+    setConnectionStatus(prevStatus => {
+      if (prevStatus !== status) {
+        console.log(`Connection status changed: ${prevStatus} -> ${status}`);
+      }
+      return status;
+    });
+  }, []);
 
-  // Calculate unread count whenever alerts or readAlerts change
+  // Calculate unread count
   useEffect(() => {
     const unread = alerts.filter(alert => {
       return !alert.read && !readAlerts.has(alert.id);
     }).length;
-    
     setUnreadCount(unread);
   }, [alerts, readAlerts]);
 
-  // Auto-refresh effect
+  // Auto-refresh effect with better error handling
   useEffect(() => {
     if (!authUser && !user) return;
     
-    const interval = setInterval(() => {
-      if (autoRefresh && !refreshing) {
-        loadRealTimeData(false); // Silent refresh
-      }
-    }, 30000);
+    let intervalId;
+    
+    if (autoRefresh && !refreshing) {
+      intervalId = setInterval(() => {
+        loadRealTimeData(false);
+      }, 30000);
+    }
 
-    return () => clearInterval(interval);
+    return () => {
+      if (intervalId) {
+        clearInterval(intervalId);
+      }
+    };
   }, [autoRefresh, refreshing, authUser, user]);
 
   const getCurrentUser = () => authUser || user;
@@ -275,8 +260,10 @@ const UserDashboard = () => {
     return currentUser?.token || token || localStorage.getItem('token');
   };
 
+  // Improved data loading with better error handling
   const loadRealTimeData = async (showLoading = true) => {
-    if (!getCurrentUser()) {
+    const currentUser = getCurrentUser();
+    if (!currentUser) {
       console.log('No user found, skipping data load');
       return;
     }
@@ -285,7 +272,13 @@ const UserDashboard = () => {
     setError(null);
     
     try {
-      // Fetch alerts and stats in parallel
+      // Check if we have a valid token
+      const currentToken = getCurrentToken();
+      if (!currentToken || currentToken === 'null') {
+        throw new Error('No valid authentication token');
+      }
+
+      // Fetch with proper error handling
       const [alertsResponse, statsResponse] = await Promise.all([
         fetchWithAuth('/api/dashboard/user/alerts?limit=50'),
         fetchWithAuth('/api/dashboard/user/dashboard/stats')
@@ -300,14 +293,21 @@ const UserDashboard = () => {
       }
 
       setLastUpdateTime(new Date());
-      setConnectionStatus('connected');
+      updateConnectionStatus('connected');
       
     } catch (err) {
       console.error('Error loading dashboard data:', err);
-      setError(err.message || 'Failed to load dashboard data');
-      setConnectionStatus('disconnected');
       
-      // Fall back to demo data if API fails
+      // Don't cascade auth errors to connection status
+      if (err.message.includes('Authentication failed') || err.message.includes('401')) {
+        setError('Authentication expired. Please log in again.');
+        // Don't change connection status for auth errors
+      } else {
+        setError(err.message || 'Failed to load dashboard data');
+        updateConnectionStatus('error');
+      }
+      
+      // Fall back to demo data
       loadDemoData();
     } finally {
       setLoading(false);
@@ -318,7 +318,7 @@ const UserDashboard = () => {
     const url = `${API_BASE_URL}${endpoint}`;
     const currentToken = getCurrentToken();
     
-    console.log('Making authenticated request to:', endpoint, 'with token:', currentToken ? 'present' : 'missing');
+    console.log('Making authenticated request to:', endpoint);
     
     try {
       const response = await fetch(url, {
@@ -333,7 +333,6 @@ const UserDashboard = () => {
 
       if (!response.ok) {
         if (response.status === 401 || response.status === 403) {
-          console.log('Authentication failed, token may be invalid');
           throw new Error('Authentication failed. Please log in again.');
         }
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
@@ -351,25 +350,31 @@ const UserDashboard = () => {
     }
   };
 
-  const initializeWebSocket = () => {
+  // Improved WebSocket connection with better state management
+  const initializeWebSocket = useCallback(() => {
     const currentUser = getCurrentUser();
     if (!currentUser) {
       console.log('No user for WebSocket connection');
       return;
     }
 
-    if (wsRef.current?.readyState === WebSocket.OPEN) {
-      return; // Already connected
+    // Prevent multiple connection attempts
+    if (isConnectingRef.current || (wsRef.current?.readyState === WebSocket.OPEN)) {
+      console.log('WebSocket already connecting or connected');
+      return;
     }
 
+    isConnectingRef.current = true;
+    console.log('Initializing WebSocket connection...');
+
     try {
-      console.log('Initializing WebSocket connection...');
       wsRef.current = new WebSocket(WS_URL);
       
       wsRef.current.onopen = () => {
-        console.log('WebSocket connected');
-        setConnectionStatus('connected');
+        console.log('WebSocket connected successfully');
+        updateConnectionStatus('connected');
         retryCount.current = 0;
+        isConnectingRef.current = false;
         
         // Send subscription message
         wsRef.current.send(JSON.stringify({
@@ -390,39 +395,83 @@ const UserDashboard = () => {
 
       wsRef.current.onclose = (event) => {
         console.log('WebSocket disconnected:', event.code, event.reason);
-        setConnectionStatus('disconnected');
+        isConnectingRef.current = false;
         
-        // Attempt to reconnect with exponential backoff
-        if (retryCount.current < maxRetries) {
+        // Only update status to disconnected if we're not already in error state
+        if (connectionStatus !== 'error') {
+          updateConnectionStatus('disconnected');
+        }
+        
+        // Implement exponential backoff retry with limits
+        if (retryCount.current < maxRetries && event.code !== 1000) {
           const delay = Math.min(1000 * Math.pow(2, retryCount.current), 30000);
+          console.log(`Retrying WebSocket connection in ${delay}ms (attempt ${retryCount.current + 1}/${maxRetries})`);
+          
           retryTimeoutRef.current = setTimeout(() => {
             retryCount.current++;
             initializeWebSocket();
           }, delay);
+        } else {
+          console.log('Max retries reached or normal closure');
+          updateConnectionStatus('disconnected');
         }
       };
 
       wsRef.current.onerror = (error) => {
         console.error('WebSocket error:', error);
-        setConnectionStatus('error');
+        isConnectingRef.current = false;
+        updateConnectionStatus('error');
       };
 
     } catch (err) {
       console.error('Failed to initialize WebSocket:', err);
-      setConnectionStatus('error');
+      isConnectingRef.current = false;
+      updateConnectionStatus('error');
     }
-  };
+  }, [updateConnectionStatus, connectionStatus]);
 
-  const cleanupWebSocket = () => {
+  const cleanupWebSocket = useCallback(() => {
     if (retryTimeoutRef.current) {
       clearTimeout(retryTimeoutRef.current);
+      retryTimeoutRef.current = null;
     }
     
     if (wsRef.current) {
-      wsRef.current.close();
+      wsRef.current.close(1000, 'Component unmounting');
       wsRef.current = null;
     }
-  };
+    
+    isConnectingRef.current = false;
+    retryCount.current = 0;
+  }, []);
+
+  // Main initialization effect
+  useEffect(() => {
+    if (!isAuthenticated && !authUser) {
+      console.log('Not authenticated, waiting for login...');
+      setLoading(false);
+      return;
+    }
+    
+    if (authUser || user) {
+      console.log('User authenticated, loading dashboard data...');
+      loadRealTimeData();
+      
+      // Delay WebSocket initialization to avoid race conditions
+      const wsTimeout = setTimeout(() => {
+        initializeWebSocket();
+      }, 1000);
+      
+      return () => clearTimeout(wsTimeout);
+    }
+  }, [isAuthenticated, authUser, user, initializeWebSocket]);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      cleanupWebSocket();
+    };
+  }, [cleanupWebSocket]);
 
   const handleWebSocketMessage = (message) => {
     console.log('WebSocket message received:', message.type);
@@ -472,10 +521,11 @@ const UserDashboard = () => {
         
       case 'heartbeat':
         setLastUpdateTime(new Date());
+        // Don't update connection status on heartbeat - it's already connected
         break;
         
       case 'pong':
-        // Connection alive
+        // Connection alive confirmation
         break;
         
       case 'error':
@@ -585,7 +635,6 @@ const UserDashboard = () => {
 
   const markAlertAsRead = async (alertId) => {
     try {
-      // Optimistically update UI
       const newReadAlerts = new Set(readAlerts);
       newReadAlerts.add(alertId);
       setReadAlerts(newReadAlerts);
@@ -596,7 +645,6 @@ const UserDashboard = () => {
           : alert
       ));
       
-      // Make API call
       const response = await fetchWithAuth(`/api/dashboard/user/alerts/${alertId}/read`);
       
       if (!response.success) {
@@ -608,7 +656,6 @@ const UserDashboard = () => {
     } catch (err) {
       console.error('Error marking alert as read:', err);
       
-      // Revert optimistic update on error
       setReadAlerts(prev => {
         const updated = new Set(prev);
         updated.delete(alertId);
@@ -650,7 +697,16 @@ const UserDashboard = () => {
     }
   };
 
-  // Show login prompt if not authenticated
+  // Manual reconnect function
+  const manualReconnect = () => {
+    console.log('Manual reconnect triggered');
+    cleanupWebSocket();
+    retryCount.current = 0;
+    setTimeout(() => {
+      initializeWebSocket();
+    }, 1000);
+  };
+
   if (!isAuthenticated && !authUser) {
     return <LoginPrompt onLoginSuccess={handleLoginSuccess} />;
   }
@@ -724,12 +780,22 @@ const UserDashboard = () => {
           <div className="bg-red-50 border-l-4 border-red-400 p-4 rounded-lg">
             <div className="flex items-center justify-between">
               <span className="text-red-800 text-sm">{error}</span>
-              <button
-                onClick={() => setError(null)}
-                className="text-red-800 hover:text-red-900 font-bold text-lg leading-none"
-              >
-                ×
-              </button>
+              <div className="flex items-center space-x-2">
+                {error.includes('Authentication') && (
+                  <button
+                    onClick={handleLogout}
+                    className="text-red-800 hover:text-red-900 text-sm underline"
+                  >
+                    Re-login
+                  </button>
+                )}
+                <button
+                  onClick={() => setError(null)}
+                  className="text-red-800 hover:text-red-900 font-bold text-lg leading-none"
+                >
+                  ×
+                </button>
+              </div>
             </div>
           </div>
         )}
@@ -755,10 +821,19 @@ const UserDashboard = () => {
                 <span>Auto-refresh</span>
               </label>
               
-              {/* Connection Status */}
+              {/* Connection Status with Manual Reconnect */}
               <div className="flex items-center space-x-2 text-sm">
                 <div className={`w-3 h-3 rounded-full ${getConnectionStatusColor()}`}></div>
                 <span className="text-gray-600">{getConnectionStatusText()}</span>
+                {connectionStatus === 'disconnected' && (
+                  <button
+                    onClick={manualReconnect}
+                    className="text-xs text-blue-600 hover:text-blue-800 underline"
+                    title="Reconnect WebSocket"
+                  >
+                    Reconnect
+                  </button>
+                )}
               </div>
               
               {/* Last Update */}
