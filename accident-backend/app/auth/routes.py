@@ -1,7 +1,9 @@
-# auth/routes.py
+# auth/routes.py - FIXED PASSWORD CHANGE ENDPOINT
 from datetime import timedelta
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
+from pydantic import BaseModel
+from typing import Optional
 
 from models.database import get_db, User, Admin
 from models.schemas import (
@@ -15,6 +17,16 @@ from auth.dependencies import get_current_active_user, get_current_admin
 from config.settings import ACCESS_TOKEN_EXPIRE_MINUTES
 
 router = APIRouter()
+
+# Add these Pydantic models for proper request validation
+class PasswordChangeRequest(BaseModel):
+    currentPassword: str
+    newPassword: str
+
+class ProfileUpdateRequest(BaseModel):
+    username: Optional[str] = None
+    email: Optional[str] = None
+    department: Optional[str] = None
 
 # User Authentication Routes
 @router.post("/register", response_model=UserResponse)
@@ -70,21 +82,21 @@ async def get_current_user_info(current_user: User = Depends(get_current_active_
         last_login=current_user.last_login
     )
 
-# ADD THESE MISSING ENDPOINTS:
-
 @router.put("/me", response_model=UserResponse)
 async def update_user_profile(
-    user_update: dict,
+    user_update: ProfileUpdateRequest,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
     """Update current user profile"""
     try:
-        # Update allowed fields
-        if "username" in user_update:
+        updated = False
+        
+        # Update username if provided and different
+        if user_update.username and user_update.username != current_user.username:
             # Check if username already exists
             existing_user = db.query(User).filter(
-                User.username == user_update["username"],
+                User.username == user_update.username,
                 User.id != current_user.id
             ).first()
             if existing_user:
@@ -92,12 +104,14 @@ async def update_user_profile(
                     status_code=400,
                     detail="Username already exists"
                 )
-            current_user.username = user_update["username"]
+            current_user.username = user_update.username
+            updated = True
         
-        if "email" in user_update:
+        # Update email if provided and different
+        if user_update.email and user_update.email != current_user.email:
             # Check if email already exists
             existing_user = db.query(User).filter(
-                User.email == user_update["email"],
+                User.email == user_update.email,
                 User.id != current_user.id
             ).first()
             if existing_user:
@@ -105,13 +119,17 @@ async def update_user_profile(
                     status_code=400,
                     detail="Email already exists"
                 )
-            current_user.email = user_update["email"]
+            current_user.email = user_update.email
+            updated = True
         
-        if "department" in user_update:
-            current_user.department = user_update["department"]
+        # Update department if provided
+        if user_update.department:
+            current_user.department = user_update.department
+            updated = True
         
-        db.commit()
-        db.refresh(current_user)
+        if updated:
+            db.commit()
+            db.refresh(current_user)
         
         return UserResponse(
             id=current_user.id,
@@ -129,21 +147,29 @@ async def update_user_profile(
 
 @router.put("/change-password")
 async def change_password(
-    password_data: dict,
+    password_data: PasswordChangeRequest,  # Use Pydantic model instead of dict
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
-    """Change user password"""
+    """Change user password - FIXED to handle proper field names"""
     try:
         from auth.handlers import verify_password, get_password_hash
         
-        current_password = password_data.get("currentPassword")
-        new_password = password_data.get("newPassword")
+        # Get passwords from Pydantic model
+        current_password = password_data.currentPassword
+        new_password = password_data.newPassword
         
-        if not current_password or not new_password:
+        # Validate required fields
+        if not current_password:
             raise HTTPException(
                 status_code=400,
-                detail="Current password and new password are required"
+                detail="Current password is required"
+            )
+        
+        if not new_password:
+            raise HTTPException(
+                status_code=400,
+                detail="New password is required"
             )
         
         # Verify current password
@@ -153,11 +179,18 @@ async def change_password(
                 detail="Current password is incorrect"
             )
         
-        # Validate new password strength (optional)
+        # Validate new password strength
         if len(new_password) < 6:
             raise HTTPException(
                 status_code=400,
                 detail="New password must be at least 6 characters long"
+            )
+        
+        # Check if new password is different from current
+        if verify_password(new_password, current_user.hashed_password):
+            raise HTTPException(
+                status_code=400,
+                detail="New password must be different from current password"
             )
         
         # Update password
