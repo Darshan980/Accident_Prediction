@@ -1,4 +1,4 @@
-# main.py - CUSTOM CORS MIDDLEWARE FOR DYNAMIC ORIGINS
+# main.py - UPDATED to include missing dashboard routes
 import os
 import sys
 import signal
@@ -27,6 +27,9 @@ from auth.routes import router as auth_router
 from api.core import router as core_router
 from api.upload import router as upload_router
 from api.websocket import websocket_endpoint
+
+# NEW: Import the missing dashboard routes
+from api.dashboard_routes import router as dashboard_router
 
 # Import services
 from services.analysis import warmup_model, cleanup_thread_pool
@@ -89,13 +92,9 @@ class CustomCORSMiddleware(BaseHTTPMiddleware):
 def run_migration():
     """Add department column to users table if it doesn't exist"""
     try:
-        # Get the database URL - try multiple ways
         database_url = None
-        
-        # Method 1: Try to get from environment
         database_url = os.getenv("DATABASE_URL")
         
-        # Method 2: Try to get from config/settings
         if not database_url:
             try:
                 from config.settings import DATABASE_URL as SETTINGS_DB_URL
@@ -103,7 +102,6 @@ def run_migration():
             except ImportError:
                 pass
         
-        # Method 3: Default fallback
         if not database_url:
             database_url = "sqlite:///./accident_detection.db"
             
@@ -112,7 +110,6 @@ def run_migration():
         engine = create_engine(database_url)
         
         with engine.connect() as connection:
-            # Check if department column exists
             try:
                 result = connection.execute(text("SELECT department FROM users LIMIT 1"))
                 logger.info("Department column already exists")
@@ -219,13 +216,16 @@ try:
 except Exception as e:
     logger.warning(f"Could not mount snapshots directory: {str(e)}")
 
-# Include routers
+# Include routers - UPDATED to include dashboard router
 app.include_router(core_router, prefix="/api", tags=["core"])
 app.include_router(auth_router, prefix="/auth", tags=["authentication"])  
 app.include_router(upload_router, prefix="/api", tags=["upload"])
+app.include_router(dashboard_router, prefix="/api", tags=["dashboard"])  # NEW: Add dashboard routes
 
-# WebSocket endpoint
+# WebSocket endpoints
 app.websocket("/api/live/ws")(websocket_endpoint)
+# NEW: Add the alerts WebSocket from dashboard_router 
+# Note: The /ws/alerts endpoint is now handled in dashboard_routes.py
 
 # Root endpoint
 @app.get("/")
