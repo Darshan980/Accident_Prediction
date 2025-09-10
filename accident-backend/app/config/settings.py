@@ -1,4 +1,4 @@
-# config/settings.py - FIXED regex escape sequences
+# config/settings.py - FIXED CORS with your specific Vercel URL
 import os
 import re
 from pathlib import Path
@@ -26,7 +26,7 @@ FRAME_PROCESSING_INTERVAL = 2.0
 SNAPSHOTS_DIR = BASE_DIR / "snapshots"
 
 def get_cors_origins() -> List[str]:
-    """Get CORS origins - COMPREHENSIVE VERSION that handles Vercel preview URLs"""
+    """Get CORS origins - FIXED to include your specific Vercel preview URL"""
     
     # Get from environment variable first
     env_origins = os.getenv("CORS_ORIGINS", "")
@@ -56,17 +56,9 @@ def get_cors_origins() -> List[str]:
     if frontend_url and frontend_url not in origins and frontend_url != "*":
         origins.append(frontend_url)
     
-    # FIXED: Properly escaped regex patterns - using raw strings
-    vercel_patterns = [
-        # Your project patterns - FIXED with raw strings
-        r"https://accident-prediction-.*-darshan-ss-projects-.*\.vercel\.app",
-        r"https://accident-prediction-.*\.vercel\.app",
-        # Add more patterns as needed
-    ]
-    
-    # Add specific preview URLs you know about
+    # Add specific preview URLs we know about - INCLUDING YOUR CURRENT ONE
     origins.extend([
-        # Add specific preview URLs you know about
+        # Your current Vercel preview URL from console error
         "https://accident-prediction-ff5ymi7ps-darshan-ss-projects-39372c06.vercel.app",
         # Add more as you discover them
     ])
@@ -86,7 +78,7 @@ def is_allowed_origin(origin: str) -> bool:
     if origin in allowed_origins:
         return True
     
-    # FIXED: Check Vercel patterns with raw strings
+    # FIXED: Check Vercel patterns with proper escaping
     vercel_patterns = [
         r"^https://accident-prediction-[a-zA-Z0-9]+-darshan-ss-projects-[a-zA-Z0-9]+\.vercel\.app$",
         r"^https://accident-prediction-[a-zA-Z0-9-]+\.vercel\.app$",
