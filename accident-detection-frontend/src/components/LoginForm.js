@@ -38,7 +38,7 @@ const LoginForm = ({ isAdmin = false, onSwitchToRegister }) => {
           password: formData.password
         });
         console.log('Admin login successful:', userData);
-        // Redirect to dashboard
+        // Redirect to admin dashboard
         window.location.href = '/dashboard';
       } else {
         userData = await login({
@@ -46,8 +46,8 @@ const LoginForm = ({ isAdmin = false, onSwitchToRegister }) => {
           password: formData.password
         });
         console.log('User login successful:', userData);
-        // Redirect to main application
-        window.location.href = '/';
+        // Redirect to user dashboard
+        window.location.href = '/userdashboard';
       }
 
     } catch (error) {
