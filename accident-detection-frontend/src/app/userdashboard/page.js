@@ -1,46 +1,21 @@
 'use client';
 import React, { useState, useEffect, useContext } from 'react';
-import { Bell, AlertTriangle, MapPin, Clock, Eye, CheckCircle, RefreshCw } from 'lucide-react';
-import './UserDashboard.css';
+import { Bell, AlertTriangle, MapPin, Clock, Eye, CheckCircle, RefreshCw, User, Shield } from 'lucide-react';
 
-// Import your actual auth context - replace this import path with your actual AuthProvider location
-// import { useAuth } from '@/contexts/AuthContext'; // Uncomment and use your actual auth context
-
-// Temporary fallback - this should be removed once you import the real auth context
+// Mock auth context for artifact environment
 const AuthContext = React.createContext();
 const useAuth = () => {
   const context = useContext(AuthContext);
   if (!context) {
-    // Try to get user data from localStorage first
-    try {
-      const storedUser = localStorage.getItem('user');
-      if (storedUser && storedUser !== 'null') {
-        const userData = JSON.parse(storedUser);
-        const storedToken = localStorage.getItem('token');
-        
-        return {
-          user: {
-            username: userData.username || 'unknown_user',
-            role: userData.role || 'user',
-            department: userData.department || 'General',
-            email: userData.email || 'user@localhost'
-          },
-          token: storedToken || 'no-token'
-        };
-      }
-    } catch (error) {
-      console.error('Error reading user from localStorage:', error);
-    }
-    
-    // Final fallback
+    // Fallback auth data for artifact environment
     return {
       user: { 
-        username: 'guest_user', 
+        username: 'demo_user', 
         role: 'user', 
-        department: 'General',
-        email: 'guest@localhost'
+        department: 'Engineering',
+        email: 'demo@example.com'
       },
-      token: 'no-token'
+      token: 'demo-token'
     };
   }
   return context;
@@ -52,171 +27,137 @@ const UserDashboard = () => {
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [wsConnection, setWsConnection] = useState(null);
   const [connectionStatus, setConnectionStatus] = useState('disconnected');
   const [unreadCount, setUnreadCount] = useState(0);
   const [selectedAlert, setSelectedAlert] = useState(null);
   const [filter, setFilter] = useState('all');
   const [refreshing, setRefreshing] = useState(false);
   
-  // Store read alerts in localStorage to persist across refreshes
-  const [readAlerts, setReadAlerts] = useState(() => {
-    try {
-      const stored = localStorage.getItem('readAlerts');
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        // Convert array back to Set
-        return new Set(Array.isArray(parsed) ? parsed : []);
-      }
-      return new Set();
-    } catch {
-      return new Set();
-    }
-  });
+  // Use React state instead of localStorage for read alerts
+  const [readAlerts, setReadAlerts] = useState(new Set());
 
-  const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-
-  // Save read alerts to localStorage whenever it changes
-  useEffect(() => {
-    try {
-      localStorage.setItem('readAlerts', JSON.stringify(Array.from(readAlerts)));
-    } catch (error) {
-      console.error('Error saving read alerts to localStorage:', error);
-    }
-  }, [readAlerts]);
+  // Mock API base URL for demo
+  const API_BASE_URL = 'https://accident-prediction-1-mpm0.onrender.com';
 
   // Calculate unread count whenever alerts or readAlerts change
   useEffect(() => {
     const unread = alerts.filter(alert => {
-      // Check both server-side is_read and local readAlerts
       return !alert.is_read && !readAlerts.has(alert.id);
     }).length;
     
     setUnreadCount(unread);
   }, [alerts, readAlerts]);
 
-  // Initialize WebSocket connection for real-time alerts
+  // Initialize component with mock data
   useEffect(() => {
-    connectToAlerts();
-    fetchUserData();
-
-    // Set up periodic refresh for data that might not come through WebSocket
-    const refreshInterval = setInterval(fetchUserData, 60000); // Every minute
-
-    return () => {
-      if (wsConnection) {
-        wsConnection.close();
+    loadMockData();
+    
+    // Simulate periodic updates
+    const interval = setInterval(() => {
+      if (Math.random() > 0.8) { // 20% chance to add new alert
+        addRandomAlert();
       }
-      clearInterval(refreshInterval);
-    };
+    }, 10000);
+
+    return () => clearInterval(interval);
   }, []);
 
-  const connectToAlerts = () => {
-    try {
-      // Fixed WebSocket URL construction
-      const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const wsHost = API_BASE_URL.replace('http://', '').replace('https://', '');
-      const wsUrl = `${wsProtocol}//${wsHost}/ws/alerts`; // Updated endpoint path
-      
-      console.log('Connecting to WebSocket:', wsUrl);
-      const ws = new WebSocket(wsUrl);
-      
-      ws.onopen = () => {
-        console.log('Connected to real-time alert system');
-        setConnectionStatus('connected');
-        setError(null);
-        
-        // Send authentication if token exists
-        if (token && token !== 'sample-token') {
-          ws.send(JSON.stringify({
-            type: 'auth',
-            token: token
-          }));
-        } else {
-          // For demo/development mode
-          ws.send(JSON.stringify({
-            type: 'auth',
-            user: user.username
-          }));
+  const loadMockData = () => {
+    setLoading(true);
+    
+    // Simulate API delay
+    setTimeout(() => {
+      const mockAlerts = [
+        {
+          id: 1,
+          message: "High confidence accident detected at Main Street intersection",
+          sent_at: new Date().toISOString(),
+          is_read: false,
+          accident_log: {
+            confidence: 0.92,
+            severity_estimate: 'high',
+            location: 'Main Street & 5th Avenue',
+            snapshot_url: '/api/snapshots/accident_001.jpg',
+            detected_at: new Date().toISOString()
+          },
+          alert_type: 'high_confidence'
+        },
+        {
+          id: 2,
+          message: "Medium confidence incident detected at Highway 101",
+          sent_at: new Date(Date.now() - 30 * 60 * 1000).toISOString(),
+          is_read: false,
+          accident_log: {
+            confidence: 0.75,
+            severity_estimate: 'medium',
+            location: 'Highway 101, Mile 45',
+            snapshot_url: '/api/snapshots/accident_002.jpg',
+            detected_at: new Date(Date.now() - 30 * 60 * 1000).toISOString()
+          },
+          alert_type: 'medium_confidence'
+        },
+        {
+          id: 3,
+          message: "System maintenance completed successfully",
+          sent_at: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
+          is_read: true,
+          accident_log: null,
+          alert_type: 'system'
+        }
+      ];
+
+      const mockStats = {
+        user_alerts: {
+          total_alerts: mockAlerts.length,
+          unread_alerts: mockAlerts.filter(a => !a.is_read).length,
+          recent_alerts_24h: mockAlerts.length
+        },
+        system_status: {
+          recent_accidents_24h: 8,
+          model_status: 'loaded',
+          active_connections: 3
+        },
+        user_info: {
+          username: user.username,
+          department: user.department,
+          role: user.role
         }
       };
 
-      ws.onmessage = (event) => {
-        try {
-          const data = JSON.parse(event.data);
-          handleAlertMessage(data);
-        } catch (error) {
-          console.error('Error parsing alert message:', error);
-        }
-      };
-
-      ws.onclose = (event) => {
-        console.log('Alert WebSocket disconnected', event.code, event.reason);
-        setConnectionStatus('disconnected');
-        
-        // Attempt to reconnect after 5 seconds if not a clean close
-        if (event.code !== 1000) {
-          setTimeout(() => {
-            if (connectionStatus !== 'connected') {
-              console.log('Attempting to reconnect...');
-              connectToAlerts();
-            }
-          }, 5000);
-        }
-      };
-
-      ws.onerror = (error) => {
-        console.error('Alert WebSocket error:', error);
-        setConnectionStatus('error');
-        setError('Failed to connect to real-time alerts. Using polling mode.');
-      };
-
-      setWsConnection(ws);
-    } catch (error) {
-      console.error('Failed to connect to alerts:', error);
-      setConnectionStatus('error');
-      setError('WebSocket connection failed. Using polling mode.');
-    }
+      setAlerts(mockAlerts);
+      setStats(mockStats);
+      setLoading(false);
+      setConnectionStatus('connected');
+    }, 1000);
   };
 
-  const handleAlertMessage = (data) => {
-    switch (data.type) {
-      case 'new_alert':
-        setAlerts(prev => [data.alert, ...prev]);
-        
-        // Show browser notification if permission granted
-        if (Notification.permission === 'granted') {
-          new Notification('New Accident Alert', {
-            body: data.alert.message || 'New accident detected',
-            icon: '/alert-icon.png'
-          });
-        }
-        
-        playAlertSound();
-        break;
-        
-      case 'alert_updated':
-        setAlerts(prev => prev.map(alert => 
-          alert.id === data.alert.id ? data.alert : alert
-        ));
-        break;
-        
-      case 'alert_status_changed':
-        setAlerts(prev => prev.map(alert => 
-          alert.id === data.alert_id 
-            ? { ...alert, status: data.status, updated_at: data.timestamp }
-            : alert
-        ));
-        break;
-        
-      case 'connection_confirmed':
-        console.log('Real-time connection confirmed for user:', data.user);
-        setConnectionStatus('connected');
-        break;
-        
-      default:
-        console.log('Unknown alert message type:', data.type);
+  const addRandomAlert = () => {
+    const newAlert = {
+      id: Date.now(),
+      message: "New accident detected with AI analysis",
+      sent_at: new Date().toISOString(),
+      is_read: false,
+      accident_log: {
+        confidence: Math.random() * 0.3 + 0.7, // 0.7 to 1.0
+        severity_estimate: Math.random() > 0.5 ? 'high' : 'medium',
+        location: `Intersection ${Math.floor(Math.random() * 100)}`,
+        snapshot_url: '/api/snapshots/new_accident.jpg',
+        detected_at: new Date().toISOString()
+      },
+      alert_type: 'high_confidence'
+    };
+
+    setAlerts(prev => [newAlert, ...prev]);
+    
+    // Show browser notification if available
+    if ('Notification' in window && Notification.permission === 'granted') {
+      new Notification('New Accident Alert', {
+        body: newAlert.message,
+        icon: '🚨'
+      });
     }
+    
+    playAlertSound();
   };
 
   const playAlertSound = () => {
@@ -242,266 +183,27 @@ const UserDashboard = () => {
     }
   };
 
-  const fetchUserData = async () => {
-    try {
-      setRefreshing(true);
-      setError(null);
-      
-      // Create headers object
-      const headers = {
-        'Content-Type': 'application/json'
-      };
-      
-      // Add authorization header if we have a real token
-      if (token && token !== 'sample-token') {
-        headers['Authorization'] = `Bearer ${token}`;
-      }
-      
-      console.log('Fetching user data with headers:', headers);
-      
-      // Try to fetch user-specific alerts first
-      let alertsData = [];
-      let statsData = null;
-      
-      if (token && token !== 'sample-token') {
-        // Authenticated user - try user-specific endpoints
-        try {
-          const alertsResponse = await fetch(`${API_BASE_URL}/api/user/alerts`, {
-            headers: headers
-          });
-          
-          if (alertsResponse.ok) {
-            alertsData = await alertsResponse.json();
-            console.log('Fetched user alerts:', alertsData.length);
-          } else if (alertsResponse.status === 404) {
-            console.log('User alerts endpoint not found, falling back to general logs');
-            // Fallback to general logs endpoint
-            const logsResponse = await fetch(`${API_BASE_URL}/api/logs?limit=50`, {
-              headers: { 'Content-Type': 'application/json' }
-            });
-            if (logsResponse.ok) {
-              alertsData = await logsResponse.json();
-            }
-          } else {
-            throw new Error(`Failed to fetch user alerts: ${alertsResponse.status}`);
-          }
-          
-          // Try to fetch user dashboard stats
-          const statsResponse = await fetch(`${API_BASE_URL}/api/user/dashboard/stats`, {
-            headers: headers
-          });
-          
-          if (statsResponse.ok) {
-            statsData = await statsResponse.json();
-          } else if (statsResponse.status === 404) {
-            console.log('User dashboard stats not found, falling back to general stats');
-            // Fallback to general dashboard stats
-            const generalStatsResponse = await fetch(`${API_BASE_URL}/api/dashboard/stats`);
-            if (generalStatsResponse.ok) {
-              const generalStats = await generalStatsResponse.json();
-              statsData = {
-                user_alerts: {
-                  total_alerts: alertsData.length,
-                  unread_alerts: alertsData.filter(alert => !alert.is_read && !readAlerts.has(alert.id)).length,
-                  recent_alerts_24h: alertsData.filter(alert => 
-                    new Date(alert.timestamp || alert.created_at) > new Date(Date.now() - 24*60*60*1000)
-                  ).length
-                },
-                system_status: {
-                  recent_accidents_24h: generalStats.recent_activity?.accidents_24h || 0,
-                  model_status: generalStats.model_status || 'unknown',
-                  active_connections: generalStats.active_connections || 0
-                },
-                user_info: {
-                  username: user.username,
-                  department: user.department,
-                  role: user.role
-                }
-              };
-            }
-          }
-        } catch (authError) {
-          console.log('Authenticated endpoints failed:', authError);
-          // Fall back to public endpoints
-        }
-      }
-      
-      // If we don't have data yet, try public endpoints
-      if (alertsData.length === 0) {
-        try {
-          console.log('Trying public logs endpoint');
-          const logsResponse = await fetch(`${API_BASE_URL}/api/logs?limit=50`, {
-            headers: { 'Content-Type': 'application/json' }
-          });
-          
-          if (logsResponse.ok) {
-            const logsData = await logsResponse.json();
-            // Convert logs to alerts format
-            alertsData = logsData.map(log => ({
-              id: log.id,
-              message: `${log.accident_detected ? 'Accident detected' : 'No accident'} with ${(log.confidence * 100).toFixed(1)}% confidence`,
-              sent_at: log.timestamp,
-              is_read: false, // Default to unread, will be overridden by local storage
-              accident_log: {
-                confidence: log.confidence,
-                severity_estimate: log.severity_estimate,
-                location: log.location || 'Unknown Location',
-                snapshot_url: log.snapshot_url,
-                detected_at: log.timestamp
-              },
-              alert_type: log.accident_detected ? 'high_confidence' : 'low_confidence'
-            }));
-            console.log('Converted logs to alerts:', alertsData.length);
-          } else {
-            throw new Error(`Failed to fetch logs: ${logsResponse.status}`);
-          }
-        } catch (logsError) {
-          console.error('Failed to fetch logs:', logsError);
-          throw logsError;
-        }
-      }
-      
-      // Apply local read status to alerts
-      alertsData = alertsData.map(alert => ({
-        ...alert,
-        is_read: alert.is_read || readAlerts.has(alert.id)
-      }));
-      
-      // If we don't have stats yet, try public stats endpoint
-      if (!statsData) {
-        try {
-          const statsResponse = await fetch(`${API_BASE_URL}/api/dashboard/stats`);
-          if (statsResponse.ok) {
-            const generalStats = await statsResponse.json();
-            const unreadAlertsCount = alertsData.filter(alert => !alert.is_read && !readAlerts.has(alert.id)).length;
-            
-            statsData = {
-              user_alerts: {
-                total_alerts: alertsData.length,
-                unread_alerts: unreadAlertsCount,
-                recent_alerts_24h: alertsData.filter(alert => 
-                  new Date(alert.sent_at || alert.timestamp) > new Date(Date.now() - 24*60*60*1000)
-                ).length
-              },
-              system_status: {
-                recent_accidents_24h: generalStats.recent_activity?.accidents_24h || 0,
-                model_status: generalStats.model_status || 'unknown',
-                active_connections: generalStats.active_connections || 0
-              },
-              user_info: {
-                username: user.username,
-                department: user.department,
-                role: user.role
-              }
-            };
-          }
-        } catch (statsError) {
-          console.error('Failed to fetch stats:', statsError);
-        }
-      }
-      
-      // Update state with fetched data
-      setAlerts(alertsData);
-      
-      if (statsData) {
-        setStats(statsData);
-      } else {
-        // Provide fallback stats
-        const unreadAlertsCount = alertsData.filter(alert => !alert.is_read && !readAlerts.has(alert.id)).length;
-        
-        setStats({
-          user_alerts: {
-            total_alerts: alertsData.length,
-            unread_alerts: unreadAlertsCount,
-            recent_alerts_24h: alertsData.filter(alert => 
-              new Date(alert.sent_at || alert.timestamp) > new Date(Date.now() - 24*60*60*1000)
-            ).length
-          },
-          system_status: {
-            recent_accidents_24h: 0,
-            model_status: 'unknown',
-            active_connections: 0
-          },
-          user_info: {
-            username: user.username,
-            department: user.department,
-            role: user.role
-          }
-        });
-      }
-      
-    } catch (error) {
-      console.error('Error fetching user data:', error);
-      setError(`Failed to load data: ${error.message}`);
-      
-      // Set minimal fallback data
-      if (alerts.length === 0) {
-        setStats({
-          user_alerts: {
-            total_alerts: 0,
-            unread_alerts: 0,
-            recent_alerts_24h: 0
-          },
-          system_status: {
-            recent_accidents_24h: 0,
-            model_status: 'unknown',
-            active_connections: 0
-          },
-          user_info: {
-            username: user.username,
-            department: user.department,
-            role: user.role
-          }
-        });
-      }
-    } finally {
-      setLoading(false);
+  const fetchUserData = () => {
+    setRefreshing(true);
+    // Simulate refresh
+    setTimeout(() => {
       setRefreshing(false);
-    }
+      setError(null);
+    }, 1000);
   };
 
-  const markAlertAsRead = async (alertId) => {
-    try {
-      // Immediately update local state and localStorage
-      const newReadAlerts = new Set(readAlerts);
-      newReadAlerts.add(alertId);
-      setReadAlerts(newReadAlerts);
-      
-      // Update the alerts array
-      setAlerts(prev => prev.map(alert => 
-        alert.id === alertId 
-          ? { ...alert, is_read: true, read_at: new Date().toISOString() }
-          : alert
-      ));
-      
-      // Try to update server-side as well (but don't block on it)
-      const headers = {
-        'Content-Type': 'application/json'
-      };
-      
-      // Add authorization header if we have a real token
-      if (token && token !== 'sample-token') {
-        headers['Authorization'] = `Bearer ${token}`;
-      }
-      
-      const response = await fetch(`${API_BASE_URL}/api/user/alerts/${alertId}/read`, {
-        method: 'POST',
-        headers: headers
-      });
-      
-      if (response.ok) {
-        console.log('Successfully marked alert as read on server');
-      } else if (response.status === 404) {
-        console.log('Mark as read endpoint not available, using local storage only');
-      } else if (response.status === 401) {
-        console.warn('Authentication failed for mark as read, using local storage only');
-      } else {
-        console.warn('Failed to mark alert as read on server, using local storage only');
-      }
-    } catch (error) {
-      console.error('Error marking alert as read:', error);
-      // Local state is already updated, so this is fine
-    }
+  const markAlertAsRead = (alertId) => {
+    // Update local state immediately
+    const newReadAlerts = new Set(readAlerts);
+    newReadAlerts.add(alertId);
+    setReadAlerts(newReadAlerts);
+    
+    // Update the alerts array
+    setAlerts(prev => prev.map(alert => 
+      alert.id === alertId 
+        ? { ...alert, is_read: true, read_at: new Date().toISOString() }
+        : alert
+    ));
   };
 
   const requestNotificationPermission = async () => {
@@ -519,18 +221,9 @@ const UserDashboard = () => {
 
   const getAlertIcon = (alertType, severity) => {
     if (severity === 'high' || alertType === 'high_confidence') {
-      return <AlertTriangle className="alert-icon alert-icon-high" />;
+      return <AlertTriangle className="text-red-500" size={20} />;
     }
-    return <Bell className="alert-icon alert-icon-medium" />;
-  };
-
-  const getAlertBorderColor = (alert) => {
-    if (alert.accident_log?.severity_estimate === 'high') {
-      return 'border-red';
-    } else if (alert.accident_log?.severity_estimate === 'medium') {
-      return 'border-yellow';
-    }
-    return 'border-blue';
+    return <Bell className="text-blue-500" size={20} />;
   };
 
   const filteredAlerts = alerts.filter(alert => {
@@ -552,49 +245,32 @@ const UserDashboard = () => {
     return date.toLocaleDateString();
   };
 
-  const getConnectionStatusClass = () => {
-    switch (connectionStatus) {
-      case 'connected': return 'status-connected';
-      case 'connecting': return 'status-connecting';
-      case 'error': return 'status-error';
-      default: return 'status-disconnected';
-    }
-  };
-
-  const getConnectionStatusText = () => {
-    switch (connectionStatus) {
-      case 'connected': return 'Live';
-      case 'connecting': return 'Connecting...';
-      case 'error': return 'Error';
-      default: return 'Disconnected';
-    }
-  };
-
-  // Check if alert is read (either server-side or locally)
   const isAlertRead = (alert) => {
     return alert.is_read || readAlerts.has(alert.id);
   };
 
   if (loading && alerts.length === 0) {
     return (
-      <div className="loading-container">
-        <div className="loading-spinner"></div>
-        <span className="loading-text">Loading your dashboard...</span>
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-500 mx-auto mb-4"></div>
+          <span className="text-gray-600">Loading your dashboard...</span>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="dashboard-container">
-      <div className="dashboard-content">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
+      <div className="max-w-7xl mx-auto space-y-6">
         {/* Error Banner */}
         {error && (
-          <div className="error-banner">
-            <div className="error-banner-content">
-              <span>{error}</span>
+          <div className="bg-red-100 border-l-4 border-red-500 p-4 rounded-lg">
+            <div className="flex items-center justify-between">
+              <span className="text-red-700">{error}</span>
               <button
                 onClick={() => setError(null)}
-                className="error-close-btn"
+                className="text-red-500 hover:text-red-700 text-xl font-bold"
               >
                 ×
               </button>
@@ -603,23 +279,22 @@ const UserDashboard = () => {
         )}
 
         {/* Header */}
-        <div className="header-card">
-          <div className="header-content">
-            <div className="header-info">
-              <h1 className="header-title">User Dashboard</h1>
-              <p className="header-subtitle">
+        <div className="bg-white rounded-xl shadow-lg p-6">
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900">User Dashboard</h1>
+              <p className="text-gray-600">
                 Welcome back, {user?.username} | {user?.department}
               </p>
             </div>
-            <div className="header-actions">
+            <div className="flex items-center gap-4">
               {/* Connection Status */}
-              <div className="connection-status">
-                <div className={`status-indicator ${
-                  connectionStatus === 'connected' ? 'connected' : 
-                  connectionStatus === 'error' ? 'error' : 'disconnected'
+              <div className="flex items-center gap-2">
+                <div className={`w-3 h-3 rounded-full ${
+                  connectionStatus === 'connected' ? 'bg-green-500' : 'bg-gray-400'
                 }`}></div>
-                <span className={`status-text ${getConnectionStatusClass()}`}>
-                  {getConnectionStatusText()}
+                <span className="text-sm font-medium text-gray-700">
+                  {connectionStatus === 'connected' ? 'Live' : 'Offline'}
                 </span>
               </div>
               
@@ -627,19 +302,19 @@ const UserDashboard = () => {
               <button
                 onClick={fetchUserData}
                 disabled={refreshing}
-                className="icon-btn"
+                className="p-2 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
               >
-                <RefreshCw className={`icon ${refreshing ? 'spinning' : ''}`} />
+                <RefreshCw className={refreshing ? 'animate-spin' : ''} size={20} />
               </button>
               
               {/* Notification Bell */}
               <button
                 onClick={requestNotificationPermission}
-                className="notification-btn"
+                className="relative p-2 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
               >
-                <Bell className="icon" />
+                <Bell size={20} />
                 {unreadCount > 0 && (
-                  <span className="notification-badge">
+                  <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
                     {unreadCount > 9 ? '9+' : unreadCount}
                   </span>
                 )}
@@ -649,60 +324,76 @@ const UserDashboard = () => {
 
           {/* Quick Stats */}
           {stats && (
-            <div className="stats-grid">
-              <div className="stat-card stat-blue">
-                <h3 className="stat-number">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div className="bg-blue-50 rounded-lg p-4">
+                <h3 className="text-2xl font-bold text-blue-600">
                   {stats.user_alerts?.total_alerts || 0}
                 </h3>
-                <p className="stat-label">Total Alerts</p>
+                <p className="text-blue-700 text-sm font-medium">Total Alerts</p>
               </div>
-              <div className="stat-card stat-red">
-                <h3 className="stat-number">
+              <div className="bg-red-50 rounded-lg p-4">
+                <h3 className="text-2xl font-bold text-red-600">
                   {unreadCount}
                 </h3>
-                <p className="stat-label">Unread</p>
+                <p className="text-red-700 text-sm font-medium">Unread</p>
               </div>
-              <div className="stat-card stat-yellow">
-                <h3 className="stat-number">
+              <div className="bg-yellow-50 rounded-lg p-4">
+                <h3 className="text-2xl font-bold text-yellow-600">
                   {stats.user_alerts?.recent_alerts_24h || 0}
                 </h3>
-                <p className="stat-label">Last 24h</p>
+                <p className="text-yellow-700 text-sm font-medium">Last 24h</p>
               </div>
-              <div className="stat-card stat-green">
-                <h3 className="stat-number">
+              <div className="bg-green-50 rounded-lg p-4">
+                <h3 className="text-2xl font-bold text-green-600">
                   {stats.system_status?.recent_accidents_24h || 0}
                 </h3>
-                <p className="stat-label">System Detections</p>
+                <p className="text-green-700 text-sm font-medium">System Detections</p>
               </div>
             </div>
           )}
         </div>
 
         {/* Alert Filters */}
-        <div className="filter-card">
-          <div className="filter-buttons">
+        <div className="bg-white rounded-xl shadow-lg p-4">
+          <div className="flex flex-wrap gap-3 items-center">
             <button
               onClick={() => setFilter('all')}
-              className={`filter-btn ${filter === 'all' ? 'active' : ''}`}
+              className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                filter === 'all' 
+                  ? 'bg-blue-500 text-white' 
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
             >
               All Alerts ({alerts.length})
             </button>
             <button
               onClick={() => setFilter('unread')}
-              className={`filter-btn ${filter === 'unread' ? 'active' : ''}`}
+              className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                filter === 'unread' 
+                  ? 'bg-red-500 text-white' 
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
             >
               Unread ({unreadCount})
             </button>
             <button
               onClick={() => setFilter('high_priority')}
-              className={`filter-btn ${filter === 'high_priority' ? 'active' : ''}`}
+              className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                filter === 'high_priority' 
+                  ? 'bg-yellow-500 text-white' 
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
             >
               High Priority
             </button>
             <button
               onClick={fetchUserData}
               disabled={refreshing}
-              className={`refresh-btn ${refreshing ? 'disabled' : ''}`}
+              className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                refreshing 
+                  ? 'bg-gray-300 text-gray-500 cursor-not-allowed' 
+                  : 'bg-green-100 text-green-700 hover:bg-green-200'
+              }`}
             >
               {refreshing ? 'Refreshing...' : 'Refresh'}
             </button>
@@ -710,88 +401,95 @@ const UserDashboard = () => {
         </div>
 
         {/* Alerts List */}
-        <div className="alerts-container">
+        <div className="space-y-4">
           {filteredAlerts.length === 0 ? (
-            <div className="no-alerts">
-              <Bell className="no-alerts-icon" />
-              <h3 className="no-alerts-title">No Alerts</h3>
-              <p className="no-alerts-text">
+            <div className="bg-white rounded-xl shadow-lg p-12 text-center">
+              <Bell className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+              <h3 className="text-xl font-semibold text-gray-600 mb-2">No Alerts</h3>
+              <p className="text-gray-500">
                 {filter === 'unread' ? 'No unread alerts' : 
                  filter === 'high_priority' ? 'No high priority alerts' : 
                  'No alerts to display'}
               </p>
-              {connectionStatus !== 'connected' && connectionStatus !== 'disabled' && (
-                <p className="no-alerts-warning">
-                  Real-time updates unavailable. Click refresh to check for new alerts.
-                </p>
-              )}
             </div>
           ) : (
             filteredAlerts.map((alert) => (
               <div
                 key={alert.id}
-                className={`alert-card ${getAlertBorderColor(alert)} ${
-                  !isAlertRead(alert) ? 'unread' : ''
-                }`}
+                className={`bg-white rounded-xl shadow-lg p-6 border-l-4 ${
+                  alert.accident_log?.severity_estimate === 'high' 
+                    ? 'border-red-500' 
+                    : alert.accident_log?.severity_estimate === 'medium' 
+                    ? 'border-yellow-500' 
+                    : 'border-blue-500'
+                } ${!isAlertRead(alert) ? 'bg-blue-50' : ''}`}
               >
-                <div className="alert-content">
-                  <div className="alert-main">
-                    <div className="alert-left">
-                      <div className="alert-icon-container">
-                        {getAlertIcon(alert.alert_type, alert.accident_log?.severity_estimate)}
-                      </div>
-                      <div className="alert-details">
-                        <div className="alert-header">
-                          <h3 className="alert-title">
-                            Alert #{alert.id}
-                          </h3>
-                          {!isAlertRead(alert) && (
-                            <span className="badge badge-new">New</span>
-                          )}
-                          <span className={`badge severity-${alert.accident_log?.severity_estimate || 'low'}`}>
-                            {alert.accident_log?.severity_estimate?.toUpperCase() || 'LOW'} SEVERITY
+                <div className="flex items-start justify-between">
+                  <div className="flex items-start gap-4 flex-1">
+                    <div className="mt-1">
+                      {getAlertIcon(alert.alert_type, alert.accident_log?.severity_estimate)}
+                    </div>
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-2">
+                        <h3 className="text-lg font-semibold text-gray-900">
+                          Alert #{alert.id}
+                        </h3>
+                        {!isAlertRead(alert) && (
+                          <span className="bg-blue-500 text-white text-xs px-2 py-1 rounded-full">
+                            New
                           </span>
+                        )}
+                        {alert.accident_log?.severity_estimate && (
+                          <span className={`text-xs px-2 py-1 rounded-full font-medium ${
+                            alert.accident_log.severity_estimate === 'high' 
+                              ? 'bg-red-100 text-red-800'
+                              : alert.accident_log.severity_estimate === 'medium'
+                              ? 'bg-yellow-100 text-yellow-800'
+                              : 'bg-green-100 text-green-800'
+                          }`}>
+                            {alert.accident_log.severity_estimate.toUpperCase()} SEVERITY
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-gray-700 mb-3">{alert.message}</p>
+                      <div className="flex items-center gap-4 text-sm text-gray-600">
+                        <div className="flex items-center gap-1">
+                          <MapPin size={14} />
+                          <span>{alert.accident_log?.location || 'Unknown Location'}</span>
                         </div>
-                        <p className="alert-message">{alert.message}</p>
-                        <div className="alert-meta">
-                          <div className="meta-item">
-                            <MapPin className="meta-icon" />
-                            <span>{alert.accident_log?.location || 'Unknown Location'}</span>
-                          </div>
-                          <div className="meta-item">
-                            <Clock className="meta-icon" />
-                            <span>{formatTimestamp(alert.sent_at)}</span>
-                          </div>
-                          {alert.accident_log?.confidence && (
-                            <div className="meta-item">
-                              <span className="confidence">
-                                Confidence: {(alert.accident_log.confidence * 100).toFixed(1)}%
-                              </span>
-                            </div>
-                          )}
+                        <div className="flex items-center gap-1">
+                          <Clock size={14} />
+                          <span>{formatTimestamp(alert.sent_at)}</span>
                         </div>
+                        {alert.accident_log?.confidence && (
+                          <div className="flex items-center gap-1">
+                            <span>
+                              Confidence: {(alert.accident_log.confidence * 100).toFixed(1)}%
+                            </span>
+                          </div>
+                        )}
                       </div>
                     </div>
-                    <div className="alert-actions">
-                      {alert.accident_log?.snapshot_url && (
-                        <button
-                          onClick={() => setSelectedAlert(alert)}
-                          className="action-btn secondary"
-                        >
-                          <Eye className="btn-icon" />
-                          View
-                        </button>
-                      )}
-                      {!isAlertRead(alert) && (
-                        <button
-                          onClick={() => markAlertAsRead(alert.id)}
-                          className="action-btn primary"
-                        >
-                          <CheckCircle className="btn-icon" />
-                          Mark Read
-                        </button>
-                      )}
-                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {alert.accident_log?.snapshot_url && (
+                      <button
+                        onClick={() => setSelectedAlert(alert)}
+                        className="px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition-colors flex items-center gap-1"
+                      >
+                        <Eye size={16} />
+                        View
+                      </button>
+                    )}
+                    {!isAlertRead(alert) && (
+                      <button
+                        onClick={() => markAlertAsRead(alert.id)}
+                        className="px-3 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors flex items-center gap-1"
+                      >
+                        <CheckCircle size={16} />
+                        Mark Read
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
@@ -801,23 +499,25 @@ const UserDashboard = () => {
 
         {/* Alert Detail Modal */}
         {selectedAlert && (
-          <div className="modal-overlay">
-            <div className="modal">
-              <div className="modal-content">
-                <div className="modal-header">
-                  <h3 className="modal-title">Alert Details - #{selectedAlert.id}</h3>
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-xl max-w-2xl w-full max-h-[90vh] overflow-auto">
+              <div className="p-6">
+                <div className="flex items-center justify-between mb-6">
+                  <h3 className="text-2xl font-bold text-gray-900">
+                    Alert Details - #{selectedAlert.id}
+                  </h3>
                   <button
                     onClick={() => setSelectedAlert(null)}
-                    className="modal-close"
+                    className="text-gray-400 hover:text-gray-600 text-2xl font-bold"
                   >
                     ×
                   </button>
                 </div>
                 
-                <div className="modal-body">
-                  <div className="modal-info">
-                    <h4 className="modal-section-title">Alert Information</h4>
-                    <div className="info-list">
+                <div className="space-y-6">
+                  <div>
+                    <h4 className="text-lg font-semibold text-gray-900 mb-3">Alert Information</h4>
+                    <div className="space-y-2 text-sm">
                       <p><strong>Message:</strong> {selectedAlert.message}</p>
                       <p><strong>Type:</strong> {selectedAlert.alert_type}</p>
                       <p><strong>Sent:</strong> {new Date(selectedAlert.sent_at).toLocaleString()}</p>
@@ -826,54 +526,49 @@ const UserDashboard = () => {
                         <p><strong>Read at:</strong> {new Date(selectedAlert.read_at).toLocaleString()}</p>
                       )}
                     </div>
-                    
-                    {selectedAlert.accident_log && (
-                      <div className="modal-incident-details">
-                        <h4 className="modal-section-title">Incident Details</h4>
-                        <div className="info-list">
-                          <p><strong>Location:</strong> {selectedAlert.accident_log.location}</p>
-                          <p><strong>Confidence:</strong> {(selectedAlert.accident_log.confidence * 100).toFixed(1)}%</p>
-                          <p><strong>Severity:</strong> {selectedAlert.accident_log.severity_estimate}</p>
-                          {selectedAlert.accident_log.detected_at && (
-                            <p><strong>Detected at:</strong> {new Date(selectedAlert.accident_log.detected_at).toLocaleString()}</p>
-                          )}
-                        </div>
-                      </div>
-                    )}
                   </div>
                   
-                  <div className="modal-image">
-                    {selectedAlert.accident_log?.snapshot_url && (
-                      <div>
-                        <h4 className="modal-section-title">Snapshot</h4>
-                        <img
-                          src={`${API_BASE_URL}${selectedAlert.accident_log.snapshot_url}`}
-                          alt="Incident snapshot"
-                          className="incident-image"
-                          onError={(e) => {
-                            e.target.src = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="300" height="200" viewBox="0 0 300 200"><rect width="300" height="200" fill="%23f3f4f6"/><text x="150" y="100" text-anchor="middle" fill="%236b7280">Image not available</text></svg>';
-                          }}
-                        />
+                  {selectedAlert.accident_log && (
+                    <div>
+                      <h4 className="text-lg font-semibold text-gray-900 mb-3">Incident Details</h4>
+                      <div className="space-y-2 text-sm">
+                        <p><strong>Location:</strong> {selectedAlert.accident_log.location}</p>
+                        <p><strong>Confidence:</strong> {(selectedAlert.accident_log.confidence * 100).toFixed(1)}%</p>
+                        <p><strong>Severity:</strong> {selectedAlert.accident_log.severity_estimate}</p>
+                        {selectedAlert.accident_log.detected_at && (
+                          <p><strong>Detected at:</strong> {new Date(selectedAlert.accident_log.detected_at).toLocaleString()}</p>
+                        )}
                       </div>
-                    )}
-                  </div>
+                    </div>
+                  )}
+                  
+                  {selectedAlert.accident_log?.snapshot_url && (
+                    <div>
+                      <h4 className="text-lg font-semibold text-gray-900 mb-3">Snapshot</h4>
+                      <div className="bg-gray-100 rounded-lg p-4 text-center">
+                        <div className="w-full h-48 bg-gray-200 rounded-lg flex items-center justify-center">
+                          <span className="text-gray-500">Image placeholder</span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
                 
-                <div className="modal-footer">
+                <div className="flex gap-3 mt-6 pt-6 border-t">
                   {!isAlertRead(selectedAlert) && (
                     <button
                       onClick={() => {
                         markAlertAsRead(selectedAlert.id);
                         setSelectedAlert(null);
                       }}
-                      className="action-btn primary"
+                      className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors"
                     >
                       Mark as Read
                     </button>
                   )}
                   <button
                     onClick={() => setSelectedAlert(null)}
-                    className="action-btn secondary"
+                    className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg transition-colors"
                   >
                     Close
                   </button>
@@ -884,71 +579,61 @@ const UserDashboard = () => {
         )}
 
         {/* Quick Actions */}
-        <div className="quick-actions-card">
-          <h3 className="quick-actions-title">Quick Actions</h3>
-          <div className="quick-actions-grid">
-            <button
-              onClick={() => window.location.href = '/live'}
-              className="quick-action-btn green"
-            >
-              <div className="quick-action-content">
-                <div className="quick-action-icon">🔴</div>
-                <div className="quick-action-label">Live Detection</div>
-              </div>
+        <div className="bg-white rounded-xl shadow-lg p-6">
+          <h3 className="text-xl font-semibold text-gray-900 mb-4">Quick Actions</h3>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <button className="p-4 bg-green-50 hover:bg-green-100 rounded-lg transition-colors text-center">
+              <div className="text-2xl mb-2">🔴</div>
+              <div className="text-green-800 font-medium">Live Detection</div>
             </button>
             <button
               onClick={fetchUserData}
               disabled={refreshing}
-              className={`quick-action-btn blue ${refreshing ? 'disabled' : ''}`}
+              className={`p-4 rounded-lg transition-colors text-center ${
+                refreshing 
+                  ? 'bg-gray-100 text-gray-400' 
+                  : 'bg-blue-50 hover:bg-blue-100'
+              }`}
             >
-              <div className="quick-action-content">
-                <div className="quick-action-icon">🔄</div>
-                <div className="quick-action-label">
-                  {refreshing ? 'Refreshing...' : 'Refresh Alerts'}
-                </div>
+              <div className="text-2xl mb-2">🔄</div>
+              <div className="text-blue-800 font-medium">
+                {refreshing ? 'Refreshing...' : 'Refresh Alerts'}
               </div>
             </button>
             <button
               onClick={requestNotificationPermission}
-              className="quick-action-btn yellow"
+              className="p-4 bg-yellow-50 hover:bg-yellow-100 rounded-lg transition-colors text-center"
             >
-              <div className="quick-action-content">
-                <div className="quick-action-icon">🔔</div>
-                <div className="quick-action-label">Enable Notifications</div>
-              </div>
+              <div className="text-2xl mb-2">🔔</div>
+              <div className="text-yellow-800 font-medium">Enable Notifications</div>
             </button>
-            <button
-              onClick={() => window.location.href = '/profile'}
-              className="quick-action-btn gray"
-            >
-              <div className="quick-action-content">
-                <div className="quick-action-icon">👤</div>
-                <div className="quick-action-label">Profile Settings</div>
-              </div>
+            <button className="p-4 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors text-center">
+              <div className="text-2xl mb-2">👤</div>
+              <div className="text-gray-800 font-medium">Profile Settings</div>
             </button>
           </div>
         </div>
 
-        {/* Connection Status Footer */}
-        <div className="status-footer">
-          <div className="status-footer-content">
-            <div className="status-info">
-              <span className="status-item">
+        {/* Status Footer */}
+        <div className="bg-white rounded-xl shadow-lg p-4">
+          <div className="flex items-center justify-between text-sm text-gray-600">
+            <div className="flex items-center gap-4">
+              <span>
                 <strong>System Status:</strong> 
-                <span className={connectionStatus === 'connected' ? 'status-online' : 'status-offline'}>
-                  {connectionStatus === 'connected' ? ' Online' : ' Offline'}
+                <span className={connectionStatus === 'connected' ? 'text-green-600 ml-1' : 'text-red-600 ml-1'}>
+                  {connectionStatus === 'connected' ? 'Online' : 'Offline'}
                 </span>
               </span>
               {stats && (
-                <span className="status-item">
+                <span>
                   <strong>Model Status:</strong> 
-                  <span className={stats.system_status?.model_status === 'loaded' ? 'status-online' : 'status-offline'}>
-                    {stats.system_status?.model_status === 'loaded' ? ' Active' : ' Inactive'}
+                  <span className={stats.system_status?.model_status === 'loaded' ? 'text-green-600 ml-1' : 'text-red-600 ml-1'}>
+                    {stats.system_status?.model_status === 'loaded' ? 'Active' : 'Inactive'}
                   </span>
                 </span>
               )}
             </div>
-            <div className="last-updated">
+            <div>
               Last updated: {new Date().toLocaleTimeString()}
             </div>
           </div>
