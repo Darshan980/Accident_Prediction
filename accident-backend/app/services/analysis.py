@@ -1,4 +1,4 @@
-# services/analysis.py - Complete Fixed version with better error handling
+# services/analysis.py - Real-time analysis with database integration
 import cv2
 import numpy as np
 import time
@@ -8,7 +8,13 @@ from PIL import Image
 import io
 from typing import Dict, Optional
 from concurrent.futures import ThreadPoolExecutor
+from sqlalchemy.orm import Session
+from datetime import datetime
+import uuid
+import os
+
 from config.settings import MAX_PREDICTION_TIME, THREAD_POOL_SIZE
+from models.database import SessionLocal, AccidentLog
 
 logger = logging.getLogger(__name__)
 
@@ -51,6 +57,106 @@ except ImportError as e:
     
     accident_model = MockModel()
 
+def save_snapshot(frame: np.ndarray, frame_id: str) -> Optional[str]:
+    """Save frame snapshot to disk and return the file path"""
+    try:
+        # Create snapshots directory if it doesn't exist
+        snapshots_dir = "static/snapshots"
+        os.makedirs(snapshots_dir, exist_ok=True)
+        
+        # Generate filename with timestamp
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"snapshot_{frame_id}_{timestamp}.jpg"
+        filepath = os.path.join(snapshots_dir, filename)
+        
+        # Save the frame
+        success = cv2.imwrite(filepath, frame)
+        
+        if success:
+            # Return URL path for web access
+            snapshot_url = f"/static/snapshots/{filename}"
+            logger.info(f"Snapshot saved: {snapshot_url}")
+            return snapshot_url
+        else:
+            logger.error(f"Failed to save snapshot: {filepath}")
+            return None
+            
+    except Exception as e:
+        logger.error(f"Error saving snapshot: {str(e)}")
+        return None
+
+def save_to_database(
+    analysis_result: dict, 
+    frame_id: str, 
+    source: str, 
+    location: str = None,
+    snapshot_url: str = None
+) -> Optional[int]:
+    """Save analysis result to database and return the log ID"""
+    db = SessionLocal()
+    try:
+        # Determine severity based on confidence
+        severity = None
+        if analysis_result.get('accident_detected'):
+            confidence = analysis_result.get('confidence', 0)
+            if confidence >= 0.85:
+                severity = "high"
+            elif confidence >= 0.65:
+                severity = "medium"
+            else:
+                severity = "low"
+        
+        # Create accident log entry
+        accident_log = AccidentLog(
+            timestamp=datetime.now(),
+            video_source=source,
+            confidence=analysis_result.get('confidence', 0.0),
+            accident_detected=analysis_result.get('accident_detected', False),
+            predicted_class=analysis_result.get('predicted_class', 'unknown'),
+            processing_time=analysis_result.get('processing_time', 0.0),
+            snapshot_url=snapshot_url,
+            frame_id=frame_id,
+            analysis_type=analysis_result.get('analysis_type', 'realtime'),
+            status="new" if analysis_result.get('accident_detected') else "processed",
+            location=location,
+            severity_estimate=severity,
+            created_at=datetime.now(),
+            updated_at=datetime.now()
+        )
+        
+        db.add(accident_log)
+        db.commit()
+        db.refresh(accident_log)
+        
+        logger.info(f"Saved analysis result to database with ID: {accident_log.id}")
+        
+        # If it's a high-confidence accident, trigger real-time alert
+        if analysis_result.get('accident_detected') and analysis_result.get('confidence', 0) >= 0.7:
+            asyncio.create_task(trigger_realtime_alert(accident_log))
+        
+        return accident_log.id
+        
+    except Exception as e:
+        logger.error(f"Error saving to database: {str(e)}")
+        db.rollback()
+        return None
+    finally:
+        db.close()
+
+async def trigger_realtime_alert(accident_log: AccidentLog):
+    """Trigger real-time alert through WebSocket"""
+    try:
+        # Import here to avoid circular imports
+        from api.dashboard import broadcast_real_accident
+        
+        # Broadcast the accident to all connected WebSocket clients
+        await broadcast_real_accident(accident_log)
+        
+        logger.info(f"Real-time alert triggered for accident log ID: {accident_log.id}")
+        
+    except Exception as e:
+        logger.error(f"Error triggering real-time alert: {str(e)}")
+
 def run_ml_prediction_sync(frame: np.ndarray) -> dict:
     """Run ML prediction synchronously with comprehensive error handling"""
     start_time = time.time()
@@ -83,7 +189,7 @@ def run_ml_prediction_sync(frame: np.ndarray) -> dict:
                     "error": f"Invalid frame shape: {frame.shape}"
                 }
         
-        # Check if model exists (for both real and mock models)
+        # Check if model exists
         if not hasattr(accident_model, 'predict'):
             return {
                 "accident_detected": False, 
@@ -92,9 +198,6 @@ def run_ml_prediction_sync(frame: np.ndarray) -> dict:
                 "processing_time": time.time() - start_time, 
                 "error": "Model does not have predict method"
             }
-        
-        # Note: We don't check if model.model is None for mock model compatibility
-        # The mock model intentionally has model=None
         
         # Resize frame for efficiency and model compatibility
         try:
@@ -169,6 +272,191 @@ async def run_ml_prediction_async(frame: np.ndarray) -> dict:
             "error": str(e)
         }
 
+async def analyze_frame_with_logging(
+    frame: np.ndarray = None, 
+    frame_bytes: Optional[bytes] = None, 
+    metadata: Optional[Dict] = None,
+    source: str = "webcam",
+    frame_number: Optional[int] = None,
+    session_id: Optional[str] = None,
+    location: Optional[str] = None,
+    save_to_db: bool = True,
+    save_snapshot_on_accident: bool = True,
+    **kwargs
+) -> Dict:
+    """
+    Analyze frame with comprehensive logging, database storage, and real-time alerts.
+    This is the main function used by websocket connections.
+    """
+    start_time = time.time()
+    
+    # Extract additional parameters from kwargs if not provided directly
+    if frame_number is None:
+        frame_number = kwargs.get('frame_number')
+    if session_id is None:
+        session_id = kwargs.get('session_id')
+    if source == "webcam" and 'source' in kwargs:
+        source = kwargs['source']
+    if location is None:
+        location = kwargs.get('location')
+    
+    # Generate unique frame ID
+    if metadata and 'frame_id' in metadata:
+        frame_id = metadata['frame_id']
+    elif frame_number is not None:
+        frame_id = f"{source}_{session_id or 'unknown'}_{frame_number}"
+    else:
+        frame_id = f"{source}_{session_id or 'unknown'}_{uuid.uuid4().hex[:8]}"
+    
+    logger.info(f"Starting analysis for frame {frame_id} from source: {source}")
+    
+    try:
+        # Handle both frame_bytes and frame parameters
+        if frame_bytes is not None:
+            try:
+                # Decode bytes to numpy array using opencv
+                nparr = np.frombuffer(frame_bytes, np.uint8)
+                frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+                
+                if frame is None:
+                    raise ValueError("Failed to decode image bytes")
+                    
+                logger.debug(f"Frame {frame_id} - Converted from bytes to array, Shape: {frame.shape}")
+                
+            except Exception as e:
+                logger.error(f"Failed to convert frame_bytes to numpy array for frame {frame_id}: {str(e)}")
+                return create_error_result(frame_id, source, frame_number, session_id, 
+                                         "bytes_conversion_error", f"Failed to convert frame bytes: {str(e)}", start_time)
+        
+        # Validate frame
+        if frame is None or frame.size == 0:
+            logger.warning(f"Invalid frame received for frame {frame_id}")
+            return create_error_result(frame_id, source, frame_number, session_id, 
+                                     "invalid_frame", "Invalid or empty frame", start_time)
+        
+        # Log frame info
+        logger.debug(f"Frame {frame_id} - Shape: {frame.shape}, Type: {frame.dtype}, Source: {source}")
+        
+        # Run prediction
+        result = await run_ml_prediction_async(frame)
+        
+        # Save snapshot if accident detected and requested
+        snapshot_url = None
+        if save_snapshot_on_accident and result.get('accident_detected') and result.get('confidence', 0) >= 0.7:
+            snapshot_url = save_snapshot(frame, frame_id)
+            result['snapshot_url'] = snapshot_url
+        
+        # Add metadata to result
+        result.update({
+            "frame_id": frame_id,
+            "source": source,
+            "frame_number": frame_number,
+            "session_id": session_id,
+            "location": location,
+            "timestamp": time.time(),
+            "total_processing_time": time.time() - start_time,
+            "analysis_type": "realtime_websocket"
+        })
+        
+        # Save to database if requested
+        if save_to_db:
+            db_id = save_to_database(result, frame_id, source, location, snapshot_url)
+            result['database_id'] = db_id
+        
+        # Log results
+        confidence = result.get('confidence', 0.0)
+        accident_detected = result.get('accident_detected', False)
+        
+        if accident_detected:
+            logger.warning(f"ACCIDENT DETECTED - Frame {frame_id} from {source}, Confidence: {confidence:.2f}")
+        else:
+            logger.debug(f"Frame {frame_id} from {source} - No accident detected, Confidence: {confidence:.2f}")
+        
+        logger.info(f"Completed analysis for frame {frame_id} from {source} in {result['total_processing_time']:.2f}s")
+        
+        return result
+        
+    except Exception as e:
+        processing_time = time.time() - start_time
+        logger.error(f"Error analyzing frame {frame_id} from {source}: {str(e)}")
+        
+        return create_error_result(frame_id, source, frame_number, session_id, 
+                                 "analysis_error", str(e), start_time)
+
+def create_error_result(frame_id, source, frame_number, session_id, predicted_class, error, start_time):
+    """Create standardized error result"""
+    processing_time = time.time() - start_time
+    return {
+        "frame_id": frame_id,
+        "source": source,
+        "frame_number": frame_number,
+        "session_id": session_id,
+        "accident_detected": False,
+        "confidence": 0.0,
+        "predicted_class": predicted_class,
+        "processing_time": processing_time,
+        "total_processing_time": processing_time,
+        "error": error,
+        "timestamp": time.time()
+    }
+
+async def get_recent_analysis_stats(hours: int = 24) -> Dict:
+    """Get recent analysis statistics from database"""
+    db = SessionLocal()
+    try:
+        from datetime import datetime, timedelta
+        
+        cutoff_time = datetime.now() - timedelta(hours=hours)
+        
+        # Total analyses in period
+        total_analyses = db.query(AccidentLog).filter(
+            AccidentLog.created_at >= cutoff_time
+        ).count()
+        
+        # Accident detections
+        accidents_detected = db.query(AccidentLog).filter(
+            AccidentLog.created_at >= cutoff_time,
+            AccidentLog.accident_detected == True
+        ).count()
+        
+        # High confidence detections
+        high_confidence_accidents = db.query(AccidentLog).filter(
+            AccidentLog.created_at >= cutoff_time,
+            AccidentLog.accident_detected == True,
+            AccidentLog.confidence >= 0.8
+        ).count()
+        
+        # Average confidence
+        from sqlalchemy import func
+        avg_confidence = db.query(func.avg(AccidentLog.confidence)).filter(
+            AccidentLog.created_at >= cutoff_time
+        ).scalar() or 0
+        
+        # Average processing time
+        avg_processing_time = db.query(func.avg(AccidentLog.processing_time)).filter(
+            AccidentLog.created_at >= cutoff_time
+        ).scalar() or 0
+        
+        return {
+            "period_hours": hours,
+            "total_analyses": total_analyses,
+            "accidents_detected": accidents_detected,
+            "high_confidence_accidents": high_confidence_accidents,
+            "accident_rate": (accidents_detected / total_analyses * 100) if total_analyses > 0 else 0,
+            "average_confidence": float(avg_confidence),
+            "average_processing_time": float(avg_processing_time),
+            "timestamp": datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        logger.error(f"Error getting analysis stats: {str(e)}")
+        return {
+            "error": str(e),
+            "timestamp": datetime.now().isoformat()
+        }
+    finally:
+        db.close()
+
 def get_model_info() -> Dict[str, any]:
     """Get information about the loaded model"""
     try:
@@ -195,145 +483,8 @@ def get_model_info() -> Dict[str, any]:
             "error": str(e)
         }
 
-async def analyze_frame_with_logging(
-    frame: np.ndarray = None, 
-    frame_bytes: Optional[bytes] = None, 
-    metadata: Optional[Dict] = None,
-    source: str = "webcam",
-    frame_number: Optional[int] = None,
-    session_id: Optional[str] = None,
-    **kwargs  # Accept any additional keyword arguments for compatibility
-) -> Dict:
-    """
-    Analyze frame with comprehensive logging and error handling.
-    This is the main function used by websocket connections.
-    
-    Args:
-        frame: numpy array of the frame
-        frame_bytes: optional bytes representation of the frame
-        metadata: optional metadata dictionary
-        source: source of the frame (default: "webcam")
-        frame_number: frame sequence number (optional)
-        session_id: session identifier (optional)
-        **kwargs: additional keyword arguments for compatibility
-    """
-    start_time = time.time()
-    
-    # Extract additional parameters from kwargs if not provided directly
-    if frame_number is None:
-        frame_number = kwargs.get('frame_number')
-    if session_id is None:
-        session_id = kwargs.get('session_id')
-    if source == "webcam" and 'source' in kwargs:
-        source = kwargs['source']
-    
-    # Extract frame_id from metadata or use frame_number/source combination
-    if metadata and 'frame_id' in metadata:
-        frame_id = metadata['frame_id']
-    elif frame_number is not None:
-        frame_id = f"{source}_{frame_number}"
-    else:
-        frame_id = f"{source}_{int(time.time() * 1000)}"
-    
-    logger.info(f"Starting analysis for frame {frame_id} from source: {source}")
-    
-    try:
-        # Handle both frame_bytes and frame parameters
-        if frame_bytes is not None:
-            # Convert bytes to numpy array
-            try:
-                # Decode bytes to numpy array using opencv
-                nparr = np.frombuffer(frame_bytes, np.uint8)
-                frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-                
-                if frame is None:
-                    raise ValueError("Failed to decode image bytes")
-                    
-                logger.debug(f"Frame {frame_id} - Converted from bytes to array, Shape: {frame.shape}")
-                
-            except Exception as e:
-                logger.error(f"Failed to convert frame_bytes to numpy array for frame {frame_id}: {str(e)}")
-                return {
-                    "frame_id": frame_id,
-                    "source": source,
-                    "frame_number": frame_number,
-                    "session_id": session_id,
-                    "accident_detected": False,
-                    "confidence": 0.0,
-                    "predicted_class": "bytes_conversion_error",
-                    "processing_time": time.time() - start_time,
-                    "error": f"Failed to convert frame bytes: {str(e)}",
-                    "timestamp": time.time()
-                }
-        
-        # Validate frame
-        if frame is None or frame.size == 0:
-            logger.warning(f"Invalid frame received for frame {frame_id}")
-            return {
-                "frame_id": frame_id,
-                "source": source,
-                "frame_number": frame_number,
-                "session_id": session_id,
-                "accident_detected": False,
-                "confidence": 0.0,
-                "predicted_class": "invalid_frame",
-                "processing_time": time.time() - start_time,
-                "error": "Invalid or empty frame",
-                "timestamp": time.time()
-            }
-        
-        # Log frame info
-        logger.debug(f"Frame {frame_id} - Shape: {frame.shape}, Type: {frame.dtype}, Source: {source}")
-        
-        # Run prediction
-        result = await run_ml_prediction_async(frame)
-        
-        # Add metadata
-        result.update({
-            "frame_id": frame_id,
-            "source": source,
-            "frame_number": frame_number,
-            "session_id": session_id,
-            "timestamp": time.time(),
-            "total_processing_time": time.time() - start_time
-        })
-        
-        # Log results
-        confidence = result.get('confidence', 0.0)
-        accident_detected = result.get('accident_detected', False)
-        
-        if accident_detected:
-            logger.warning(f"ACCIDENT DETECTED - Frame {frame_id} from {source}, Confidence: {confidence:.2f}")
-        else:
-            logger.debug(f"Frame {frame_id} from {source} - No accident detected, Confidence: {confidence:.2f}")
-        
-        logger.info(f"Completed analysis for frame {frame_id} from {source} in {result['total_processing_time']:.2f}s")
-        
-        return result
-        
-    except Exception as e:
-        processing_time = time.time() - start_time
-        logger.error(f"Error analyzing frame {frame_id} from {source}: {str(e)}")
-        
-        return {
-            "frame_id": frame_id,
-            "source": source,
-            "frame_number": frame_number,
-            "session_id": session_id,
-            "accident_detected": False,
-            "confidence": 0.0,
-            "predicted_class": "analysis_error",
-            "processing_time": processing_time,
-            "total_processing_time": processing_time,
-            "error": str(e),
-            "timestamp": time.time()
-        }
-
 async def warmup_model():
-    """
-    Warm up the model by running a dummy prediction.
-    This helps reduce cold start latency for the first real prediction.
-    """
+    """Warm up the model by running a dummy prediction"""
     logger.info("Warming up model...")
     try:
         # Create a dummy frame for warmup
@@ -344,7 +495,7 @@ async def warmup_model():
         model_info = get_model_info()
         logger.info(f"Model info: {model_info}")
         
-        # Run an async dummy prediction to properly warm up the async pipeline
+        # Run an async dummy prediction
         result = await run_ml_prediction_async(dummy_frame)
         
         if result.get('error'):
@@ -383,10 +534,7 @@ async def warmup_model():
         }
 
 def cleanup_thread_pool():
-    """
-    Cleanup the thread pool executor gracefully.
-    Should be called during application shutdown.
-    """
+    """Cleanup the thread pool executor gracefully"""
     logger.info("Shutting down ML thread pool...")
     try:
         ml_thread_pool.shutdown(wait=True, timeout=10)
@@ -394,20 +542,8 @@ def cleanup_thread_pool():
     except Exception as e:
         logger.error(f"Error during thread pool cleanup: {str(e)}")
 
-# Optional: Add a context manager for the thread pool
-class MLThreadPoolManager:
-    """Context manager for ML thread pool lifecycle"""
-    
-    def __enter__(self):
-        logger.info("ML thread pool initialized")
-        return ml_thread_pool
-    
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        cleanup_thread_pool()
-
-# Health check function for the model
 def model_health_check() -> Dict:
-    """Check the health of the ML model"""
+    """Check the health of the ML model and database connectivity"""
     try:
         model_info = get_model_info()
         
@@ -415,26 +551,42 @@ def model_health_check() -> Dict:
         test_frame = np.zeros((64, 64, 3), dtype=np.uint8)
         test_result = run_ml_prediction_sync(test_frame)
         
+        # Database connectivity test
+        db = SessionLocal()
+        try:
+            db.execute("SELECT 1")
+            db_healthy = True
+            db_error = None
+        except Exception as e:
+            db_healthy = False
+            db_error = str(e)
+        finally:
+            db.close()
+        
         return {
-            "status": "healthy" if not test_result.get('error') else "degraded",
+            "status": "healthy" if not test_result.get('error') and db_healthy else "degraded",
             "model_info": model_info,
             "test_prediction": {
                 "success": not test_result.get('error'),
                 "processing_time": test_result.get('processing_time', 0),
                 "error": test_result.get('error')
-            }
+            },
+            "database": {
+                "connected": db_healthy,
+                "error": db_error
+            },
+            "timestamp": datetime.now().isoformat()
         }
     except Exception as e:
         return {
             "status": "unhealthy",
-            "error": str(e)
+            "error": str(e),
+            "timestamp": datetime.now().isoformat()
         }
 
-# Additional utility functions for backward compatibility
+# Backward compatibility functions
 def analyze_frame(frame_data, frame_number: int = None, session_id: str = None, source: str = "webcam"):
-    """
-    Synchronous wrapper for analyze_frame_with_logging for backward compatibility
-    """
+    """Synchronous wrapper for analyze_frame_with_logging for backward compatibility"""
     import asyncio
     
     try:
@@ -452,7 +604,6 @@ def analyze_frame(frame_data, frame_number: int = None, session_id: str = None, 
         )
     )
 
-# Legacy function names for backward compatibility
 async def process_frame(frame, **kwargs):
     """Legacy function name - redirects to analyze_frame_with_logging"""
     return await analyze_frame_with_logging(frame=frame, **kwargs)
