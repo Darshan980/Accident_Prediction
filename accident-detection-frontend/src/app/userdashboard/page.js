@@ -1,28 +1,192 @@
 'use client';
 import React, { useState, useEffect, useContext, useCallback, useRef } from 'react';
 import { Bell, AlertTriangle, MapPin, Clock, Eye, CheckCircle, RefreshCw, User, Shield, Activity, TrendingUp } from 'lucide-react';
-import './userDashboard.css';
 
-// Mock auth context for artifact environment
+// IMPORTANT: Import your real auth context from the correct file
+// Remove the mock auth and use the real one from your auth file
 const AuthContext = React.createContext();
+
+// This should match your real useAuth implementation
 const useAuth = () => {
   const context = useContext(AuthContext);
   if (!context) {
+    // If no auth context, check localStorage for stored auth
+    const storedToken = localStorage.getItem('token');
+    const storedUser = localStorage.getItem('user');
+    
+    if (storedToken && storedUser && storedUser !== 'null') {
+      try {
+        const userData = JSON.parse(storedUser);
+        userData.token = storedToken;
+        
+        return {
+          user: userData,
+          token: storedToken,
+          isAuthenticated: true
+        };
+      } catch (error) {
+        console.error('Error parsing stored auth data:', error);
+      }
+    }
+    
+    // Fallback for testing - but indicate not authenticated
     return {
-      user: { 
-        username: 'demo_user', 
-        role: 'user', 
-        department: 'Engineering',
-        email: 'demo@example.com'
-      },
-      token: 'demo-token'
+      user: null,
+      token: null,
+      isAuthenticated: false
     };
   }
   return context;
 };
 
+const LoginPrompt = ({ onLoginSuccess }) => {
+  const [credentials, setCredentials] = useState({ username: '', password: '' });
+  const [loginError, setLoginError] = useState('');
+  const [isLogging, setIsLogging] = useState(false);
+
+  const API_BASE_URL = process.env.REACT_APP_API_URL || 'https://accident-prediction-1-mpm0.onrender.com';
+
+  const handleLogin = async (e) => {
+    e.preventDefault();
+    setLoginError('');
+    setIsLogging(true);
+
+    try {
+      console.log('Attempting login to:', API_BASE_URL);
+      
+      const response = await fetch(`${API_BASE_URL}/auth/login`, {
+        method: 'POST',
+        mode: 'cors',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify({
+          username: credentials.username,
+          password: credentials.password
+        })
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        console.log('Login successful, storing auth data');
+        
+        // Store the token
+        localStorage.setItem('token', data.access_token);
+        
+        // Create user object
+        const userData = {
+          id: data.user_id || Date.now(),
+          username: credentials.username,
+          role: 'user',
+          email: data.email || `${credentials.username}@example.com`,
+          department: data.department || 'General',
+          token: data.access_token,
+          loginTime: new Date().toISOString()
+        };
+        
+        localStorage.setItem('user', JSON.stringify(userData));
+        console.log('Auth data stored, calling onLoginSuccess');
+        
+        onLoginSuccess(userData);
+      } else {
+        const errorData = await response.json().catch(() => ({ detail: 'Login failed' }));
+        throw new Error(errorData.detail || 'Invalid credentials');
+      }
+    } catch (error) {
+      console.error('Login error:', error);
+      
+      // Demo fallback
+      if (credentials.username === 'demo' && credentials.password === 'password') {
+        console.log('Using demo credentials');
+        const userData = {
+          id: 1,
+          username: 'demo',
+          role: 'user',
+          email: 'demo@example.com',
+          department: 'Demo',
+          token: 'demo-token-' + Date.now(),
+          loginTime: new Date().toISOString(),
+          isDemo: true
+        };
+        
+        localStorage.setItem('token', userData.token);
+        localStorage.setItem('user', JSON.stringify(userData));
+        onLoginSuccess(userData);
+        return;
+      }
+      
+      setLoginError(error.message || 'Login failed. Try demo/password for demo access.');
+    } finally {
+      setIsLogging(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="max-w-md w-full bg-white rounded-lg shadow-md p-6">
+        <div className="text-center mb-6">
+          <h2 className="text-2xl font-bold text-gray-900">Dashboard Login</h2>
+          <p className="text-gray-600 mt-2">Sign in to access your dashboard</p>
+        </div>
+
+        {loginError && (
+          <div className="bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded-lg mb-4">
+            {loginError}
+          </div>
+        )}
+
+        <form onSubmit={handleLogin} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Username</label>
+            <input
+              type="text"
+              value={credentials.username}
+              onChange={(e) => setCredentials({...credentials, username: e.target.value})}
+              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              required
+            />
+          </div>
+          
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Password</label>
+            <input
+              type="password"
+              value={credentials.password}
+              onChange={(e) => setCredentials({...credentials, password: e.target.value})}
+              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              required
+            />
+          </div>
+
+          <button
+            type="submit"
+            disabled={isLogging}
+            className="w-full bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isLogging ? 'Signing in...' : 'Sign In'}
+          </button>
+        </form>
+
+        <div className="mt-6 text-center">
+          <div className="text-sm text-gray-600">
+            Demo credentials:
+            <br />
+            Username: <code className="bg-gray-100 px-1">demo</code>
+            <br />
+            Password: <code className="bg-gray-100 px-1">password</code>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const UserDashboard = () => {
-  const { user, token } = useAuth();
+  // Get real auth state
+  const authData = useAuth();
+  const { user, token, isAuthenticated } = authData;
+
   const [alerts, setAlerts] = useState([]);
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -32,9 +196,9 @@ const UserDashboard = () => {
   const [selectedAlert, setSelectedAlert] = useState(null);
   const [filter, setFilter] = useState('all');
   const [refreshing, setRefreshing] = useState(false);
-  const [wsConnection, setWsConnection] = useState(null);
   const [lastUpdateTime, setLastUpdateTime] = useState(new Date());
   const [autoRefresh, setAutoRefresh] = useState(true);
+  const [authUser, setAuthUser] = useState(user);
   
   // Use React state instead of localStorage for read alerts
   const [readAlerts, setReadAlerts] = useState(new Set());
@@ -51,6 +215,38 @@ const UserDashboard = () => {
   // WebSocket URL
   const WS_URL = API_BASE_URL.replace('http', 'ws') + '/api/dashboard/ws/alerts';
 
+  // Handle login success
+  const handleLoginSuccess = (userData) => {
+    console.log('Login successful, updating auth user:', userData);
+    setAuthUser(userData);
+    setError(null);
+    // Component will re-render and load data
+  };
+
+  // Handle logout
+  const handleLogout = () => {
+    console.log('Logging out...');
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    setAuthUser(null);
+    cleanupWebSocket();
+  };
+
+  // Check authentication on mount
+  useEffect(() => {
+    if (!isAuthenticated && !authUser) {
+      console.log('Not authenticated, waiting for login...');
+      setLoading(false);
+      return;
+    }
+    
+    if (authUser || user) {
+      console.log('User authenticated, loading dashboard data...');
+      loadRealTimeData();
+      initializeWebSocket();
+    }
+  }, [isAuthenticated, authUser, user]);
+
   // Calculate unread count whenever alerts or readAlerts change
   useEffect(() => {
     const unread = alerts.filter(alert => {
@@ -60,25 +256,31 @@ const UserDashboard = () => {
     setUnreadCount(unread);
   }, [alerts, readAlerts]);
 
-  // Initialize component with real API calls
+  // Auto-refresh effect
   useEffect(() => {
-    loadRealTimeData();
-    initializeWebSocket();
+    if (!authUser && !user) return;
     
-    // Auto-refresh every 30 seconds if enabled
     const interval = setInterval(() => {
       if (autoRefresh && !refreshing) {
         loadRealTimeData(false); // Silent refresh
       }
     }, 30000);
 
-    return () => {
-      clearInterval(interval);
-      cleanupWebSocket();
-    };
-  }, [autoRefresh, refreshing]);
+    return () => clearInterval(interval);
+  }, [autoRefresh, refreshing, authUser, user]);
+
+  const getCurrentUser = () => authUser || user;
+  const getCurrentToken = () => {
+    const currentUser = getCurrentUser();
+    return currentUser?.token || token || localStorage.getItem('token');
+  };
 
   const loadRealTimeData = async (showLoading = true) => {
+    if (!getCurrentUser()) {
+      console.log('No user found, skipping data load');
+      return;
+    }
+
     if (showLoading) setLoading(true);
     setError(null);
     
@@ -114,18 +316,26 @@ const UserDashboard = () => {
 
   const fetchWithAuth = async (endpoint) => {
     const url = `${API_BASE_URL}${endpoint}`;
+    const currentToken = getCurrentToken();
+    
+    console.log('Making authenticated request to:', endpoint, 'with token:', currentToken ? 'present' : 'missing');
     
     try {
       const response = await fetch(url, {
         method: 'GET',
+        mode: 'cors',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
+          'Accept': 'application/json',
+          'Authorization': `Bearer ${currentToken}`,
         },
-        timeout: 10000, // 10 second timeout
       });
 
       if (!response.ok) {
+        if (response.status === 401 || response.status === 403) {
+          console.log('Authentication failed, token may be invalid');
+          throw new Error('Authentication failed. Please log in again.');
+        }
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
 
@@ -133,14 +343,21 @@ const UserDashboard = () => {
       return data;
       
     } catch (err) {
-      if (err.name === 'AbortError' || err.message.includes('timeout')) {
-        throw new Error('Request timeout - please check your connection');
+      console.error('Fetch error:', err);
+      if (err.message.includes('fetch') || err.message.includes('NetworkError')) {
+        throw new Error('Network connection error - please check your connection');
       }
-      throw new Error(err.message || 'Network request failed');
+      throw err;
     }
   };
 
   const initializeWebSocket = () => {
+    const currentUser = getCurrentUser();
+    if (!currentUser) {
+      console.log('No user for WebSocket connection');
+      return;
+    }
+
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       return; // Already connected
     }
@@ -157,6 +374,7 @@ const UserDashboard = () => {
         // Send subscription message
         wsRef.current.send(JSON.stringify({
           type: 'subscribe',
+          user_id: currentUser.id,
           timestamp: new Date().toISOString()
         }));
       };
@@ -212,7 +430,6 @@ const UserDashboard = () => {
     switch (message.type) {
       case 'new_alert':
       case 'accident_alert':
-        // Add new alert to the beginning of the list
         const newAlert = {
           id: message.data.id,
           message: message.data.message,
@@ -228,27 +445,21 @@ const UserDashboard = () => {
         };
         
         setAlerts(prev => {
-          // Check if alert already exists
           if (prev.some(alert => alert.id === newAlert.id)) {
             return prev;
           }
           return [newAlert, ...prev];
         });
         
-        // Show browser notification
         showNotification(newAlert);
-        
-        // Play alert sound
         playAlertSound();
         
-        // Update stats
         setStats(prev => prev ? {
           ...prev,
           total_alerts: prev.total_alerts + 1,
           unread_alerts: prev.unread_alerts + 1,
           last_24h_detections: prev.last_24h_detections + 1
         } : null);
-        
         break;
         
       case 'connection':
@@ -260,7 +471,6 @@ const UserDashboard = () => {
         break;
         
       case 'heartbeat':
-        // Update connection info
         setLastUpdateTime(new Date());
         break;
         
@@ -294,7 +504,6 @@ const UserDashboard = () => {
         notification.close();
       };
       
-      // Auto close after 10 seconds
       setTimeout(() => notification.close(), 10000);
     }
   };
@@ -308,7 +517,6 @@ const UserDashboard = () => {
       oscillator.connect(gainNode);
       gainNode.connect(audioContext.destination);
       
-      // Create alert sound pattern
       oscillator.frequency.setValueAtTime(800, audioContext.currentTime);
       oscillator.frequency.setValueAtTime(1000, audioContext.currentTime + 0.1);
       oscillator.frequency.setValueAtTime(800, audioContext.currentTime + 0.2);
@@ -353,13 +561,14 @@ const UserDashboard = () => {
       }
     ];
 
+    const currentUser = getCurrentUser();
     const demoStats = {
       total_alerts: demoAlerts.length,
       unread_alerts: demoAlerts.filter(a => !a.read).length,
       last_24h_detections: 8,
       user_uploads: 12,
       user_accuracy: "94.5%",
-      department: user?.department || 'Demo',
+      department: currentUser?.department || 'Demo',
       last_activity: new Date().toISOString(),
       user_since: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
     };
@@ -427,7 +636,6 @@ const UserDashboard = () => {
       if (permission === 'granted') {
         alert('Browser notifications enabled! You will now receive real-time alerts.');
         
-        // Send test notification
         new Notification('Notifications Enabled', {
           body: 'You will now receive real-time accident alerts',
           icon: '/favicon.ico'
@@ -442,20 +650,23 @@ const UserDashboard = () => {
     }
   };
 
-  const sendHeartbeat = useCallback(() => {
-    if (wsRef.current?.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify({
-        type: 'ping',
-        timestamp: new Date().toISOString()
-      }));
-    }
-  }, []);
+  // Show login prompt if not authenticated
+  if (!isAuthenticated && !authUser) {
+    return <LoginPrompt onLoginSuccess={handleLoginSuccess} />;
+  }
 
-  // Send periodic heartbeat
-  useEffect(() => {
-    const heartbeatInterval = setInterval(sendHeartbeat, 30000);
-    return () => clearInterval(heartbeatInterval);
-  }, [sendHeartbeat]);
+  const currentUser = getCurrentUser();
+
+  if (loading && alerts.length === 0) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+          <span className="mt-4 text-gray-600 block">Loading your dashboard...</span>
+        </div>
+      </div>
+    );
+  }
 
   const getAlertIcon = (alertType, severity) => {
     if (severity === 'high' || alertType === 'high_confidence') {
@@ -505,17 +716,6 @@ const UserDashboard = () => {
     return alert.read || readAlerts.has(alert.id);
   };
 
-  if (loading && alerts.length === 0) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-          <span className="mt-4 text-gray-600 block">Loading your dashboard...</span>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="min-h-screen bg-gray-50 p-4">
       <div className="max-w-7xl mx-auto space-y-6">
@@ -540,7 +740,7 @@ const UserDashboard = () => {
             <div>
               <h1 className="text-3xl font-bold text-gray-900">Real-time Dashboard</h1>
               <p className="text-gray-600 mt-1">
-                Welcome back, {user?.username} | {user?.department}
+                Welcome back, {currentUser?.username} | {currentUser?.department}
               </p>
             </div>
             <div className="flex items-center space-x-4 mt-4 md:mt-0">
@@ -588,6 +788,15 @@ const UserDashboard = () => {
                     {unreadCount > 9 ? '9+' : unreadCount}
                   </span>
                 )}
+              </button>
+
+              {/* Logout Button */}
+              <button
+                onClick={handleLogout}
+                className="p-2 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-colors"
+                title="Logout"
+              >
+                <User size={20} />
               </button>
             </div>
           </div>
@@ -868,11 +1077,12 @@ const UserDashboard = () => {
                   {getConnectionStatusText()}
                 </span>
               </span>
-              {stats && (
+              {currentUser && (
                 <span className="flex items-center space-x-2">
-                  <strong>Data Source:</strong> 
+                  <strong>User:</strong> 
                   <span className="text-blue-600 font-medium">
-                    Live Database
+                    {currentUser.username}
+                    {currentUser.isDemo && <span className="text-orange-600 ml-1">(Demo)</span>}
                   </span>
                 </span>
               )}
