@@ -1,9 +1,11 @@
-# auth/routes.py - FIXED PASSWORD CHANGE ENDPOINT
+# auth/routes.py - COMPLETE FIX for 422 error
 from datetime import timedelta
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
+from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 from typing import Optional
+import logging
 
 from models.database import get_db, User, Admin
 from models.schemas import (
@@ -16,17 +18,48 @@ from auth.handlers import (
 from auth.dependencies import get_current_active_user, get_current_admin
 from config.settings import ACCESS_TOKEN_EXPIRE_MINUTES
 
+# Setup logging
+logger = logging.getLogger(__name__)
+
 router = APIRouter()
 
-# Add these Pydantic models for proper request validation
+# Properly defined Pydantic models
 class PasswordChangeRequest(BaseModel):
     currentPassword: str
     newPassword: str
+    
+    class Config:
+        # Allow extra fields to be ignored
+        extra = "ignore"
 
 class ProfileUpdateRequest(BaseModel):
     username: Optional[str] = None
     email: Optional[str] = None
     department: Optional[str] = None
+    
+    class Config:
+        extra = "ignore"
+
+# Import password functions at module level to avoid import issues
+try:
+    from passlib.context import CryptContext
+    pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+    
+    def verify_password(plain_password: str, hashed_password: str) -> bool:
+        """Verify a plain password against its hash"""
+        return pwd_context.verify(plain_password, hashed_password)
+    
+    def get_password_hash(password: str) -> str:
+        """Generate password hash"""
+        return pwd_context.hash(password)
+        
+except ImportError:
+    logger.error("passlib not available, using fallback")
+    # Fallback - import from handlers
+    try:
+        from auth.handlers import verify_password, get_password_hash
+    except ImportError:
+        logger.error("Cannot import password functions")
 
 # User Authentication Routes
 @router.post("/register", response_model=UserResponse)
@@ -45,6 +78,7 @@ async def register_user(user: UserCreate, db: Session = Depends(get_db)):
     except HTTPException:
         raise
     except Exception as e:
+        logger.error(f"Registration failed: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Registration failed: {str(e)}")
 
 @router.post("/login", response_model=Token)
@@ -143,37 +177,62 @@ async def update_user_profile(
         raise
     except Exception as e:
         db.rollback()
+        logger.error(f"Profile update failed: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Profile update failed: {str(e)}")
 
+# ALTERNATIVE VERSION - Accept raw dict for debugging
 @router.put("/change-password")
 async def change_password(
-    password_data: PasswordChangeRequest,  # Use Pydantic model instead of dict
+    request: Request,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
-    """Change user password - FIXED to handle proper field names"""
+    """Change user password - Enhanced version with better error handling"""
     try:
-        from auth.handlers import verify_password, get_password_hash
+        # Get raw JSON data
+        raw_data = await request.json()
+        logger.info(f"Received password change data: {raw_data}")
         
-        # Get passwords from Pydantic model
-        current_password = password_data.currentPassword
-        new_password = password_data.newPassword
+        # Try to parse with Pydantic first
+        try:
+            password_data = PasswordChangeRequest(**raw_data)
+            current_password = password_data.currentPassword
+            new_password = password_data.newPassword
+        except ValidationError as e:
+            logger.error(f"Pydantic validation error: {e}")
+            # Fallback to dict access
+            current_password = raw_data.get("currentPassword")
+            new_password = raw_data.get("newPassword")
         
         # Validate required fields
         if not current_password:
+            logger.error("Current password missing")
             raise HTTPException(
                 status_code=400,
                 detail="Current password is required"
             )
         
         if not new_password:
+            logger.error("New password missing") 
             raise HTTPException(
                 status_code=400,
                 detail="New password is required"
             )
         
+        logger.info("Password fields validated successfully")
+        
         # Verify current password
-        if not verify_password(current_password, current_user.hashed_password):
+        try:
+            password_valid = verify_password(current_password, current_user.hashed_password)
+            logger.info(f"Current password verification: {password_valid}")
+        except Exception as e:
+            logger.error(f"Password verification error: {e}")
+            raise HTTPException(
+                status_code=500,
+                detail="Password verification failed"
+            )
+        
+        if not password_valid:
             raise HTTPException(
                 status_code=400,
                 detail="Current password is incorrect"
@@ -194,17 +253,29 @@ async def change_password(
             )
         
         # Update password
-        current_user.hashed_password = get_password_hash(new_password)
-        db.commit()
+        try:
+            new_hashed_password = get_password_hash(new_password)
+            current_user.hashed_password = new_hashed_password
+            db.commit()
+            logger.info("Password updated successfully")
+        except Exception as e:
+            logger.error(f"Password update error: {e}")
+            db.rollback()
+            raise HTTPException(
+                status_code=500,
+                detail="Failed to update password"
+            )
         
-        return {"message": "Password updated successfully"}
+        return {"message": "Password updated successfully", "success": True}
+        
     except HTTPException:
         raise
     except Exception as e:
         db.rollback()
+        logger.error(f"Password change failed: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Password change failed: {str(e)}")
 
-# Admin Authentication Routes
+# Admin Authentication Routes (unchanged)
 @router.post("/admin/register", response_model=AdminResponse)
 async def register_admin(
     admin: AdminCreate, 
