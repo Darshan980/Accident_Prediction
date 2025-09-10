@@ -28,8 +28,8 @@ from api.core import router as core_router
 from api.upload import router as upload_router
 from api.websocket import websocket_endpoint
 
-# NEW: Import the missing dashboard routes
-from api.dashboard_routes import router as dashboard_router
+# FIXED: Import the dashboard routes (changed from dashboard_routes to dashboard)
+from api.dashboard import router as dashboard_router
 
 # Import services
 from services.analysis import warmup_model, cleanup_thread_pool
@@ -220,12 +220,11 @@ except Exception as e:
 app.include_router(core_router, prefix="/api", tags=["core"])
 app.include_router(auth_router, prefix="/auth", tags=["authentication"])  
 app.include_router(upload_router, prefix="/api", tags=["upload"])
-app.include_router(dashboard_router, prefix="/api", tags=["dashboard"])  # NEW: Add dashboard routes
+app.include_router(dashboard_router, prefix="/api", tags=["dashboard"])  # FIXED: Add dashboard routes
 
 # WebSocket endpoints
 app.websocket("/api/live/ws")(websocket_endpoint)
-# NEW: Add the alerts WebSocket from dashboard_router 
-# Note: The /ws/alerts endpoint is now handled in dashboard_routes.py
+# Note: The /ws/alerts endpoint is now handled in api/dashboard.py
 
 # Root endpoint
 @app.get("/")
