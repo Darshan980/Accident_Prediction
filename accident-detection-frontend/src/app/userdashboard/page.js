@@ -1,6 +1,7 @@
 'use client';
 import React, { useState, useEffect, useContext } from 'react';
 import { Bell, AlertTriangle, MapPin, Clock, Eye, CheckCircle, RefreshCw, User, Shield } from 'lucide-react';
+import './UserDashboard.css'; // Import the CSS file
 
 // Mock auth context for artifact environment
 const AuthContext = React.createContext();
@@ -251,26 +252,26 @@ const UserDashboard = () => {
 
   if (loading && alerts.length === 0) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-500 mx-auto mb-4"></div>
-          <span className="text-gray-600">Loading your dashboard...</span>
+      <div className="loading-container">
+        <div className="loading-content">
+          <div className="spinner"></div>
+          <span className="loading-text">Loading your dashboard...</span>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
-      <div className="max-w-7xl mx-auto space-y-6">
+    <div className="dashboard-container">
+      <div className="dashboard-wrapper">
         {/* Error Banner */}
         {error && (
-          <div className="bg-red-100 border-l-4 border-red-500 p-4 rounded-lg">
-            <div className="flex items-center justify-between">
-              <span className="text-red-700">{error}</span>
+          <div className="error-banner">
+            <div className="error-content">
+              <span className="error-message">{error}</span>
               <button
                 onClick={() => setError(null)}
-                className="text-red-500 hover:text-red-700 text-xl font-bold"
+                className="error-close"
               >
                 ×
               </button>
@@ -279,21 +280,19 @@ const UserDashboard = () => {
         )}
 
         {/* Header */}
-        <div className="bg-white rounded-xl shadow-lg p-6">
-          <div className="flex items-center justify-between mb-6">
+        <div className="card dashboard-section">
+          <div className="card-header">
             <div>
-              <h1 className="text-3xl font-bold text-gray-900">User Dashboard</h1>
-              <p className="text-gray-600">
+              <h1>User Dashboard</h1>
+              <p className="card-subtitle">
                 Welcome back, {user?.username} | {user?.department}
               </p>
             </div>
-            <div className="flex items-center gap-4">
+            <div className="card-actions">
               {/* Connection Status */}
-              <div className="flex items-center gap-2">
-                <div className={`w-3 h-3 rounded-full ${
-                  connectionStatus === 'connected' ? 'bg-green-500' : 'bg-gray-400'
-                }`}></div>
-                <span className="text-sm font-medium text-gray-700">
+              <div className="status-indicator">
+                <div className={`status-dot ${connectionStatus === 'connected' ? 'connected' : 'disconnected'}`}></div>
+                <span className="status-text">
                   {connectionStatus === 'connected' ? 'Live' : 'Offline'}
                 </span>
               </div>
@@ -302,7 +301,7 @@ const UserDashboard = () => {
               <button
                 onClick={fetchUserData}
                 disabled={refreshing}
-                className="p-2 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                className="btn btn-icon"
               >
                 <RefreshCw className={refreshing ? 'animate-spin' : ''} size={20} />
               </button>
@@ -310,11 +309,12 @@ const UserDashboard = () => {
               {/* Notification Bell */}
               <button
                 onClick={requestNotificationPermission}
-                className="relative p-2 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                className="btn btn-icon"
+                style={{ position: 'relative' }}
               >
                 <Bell size={20} />
                 {unreadCount > 0 && (
-                  <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
+                  <span className="notification-badge">
                     {unreadCount > 9 ? '9+' : unreadCount}
                   </span>
                 )}
@@ -324,76 +324,61 @@ const UserDashboard = () => {
 
           {/* Quick Stats */}
           {stats && (
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              <div className="bg-blue-50 rounded-lg p-4">
-                <h3 className="text-2xl font-bold text-blue-600">
+            <div className="stats-grid">
+              <div className="stat-card blue">
+                <h3 className="stat-number blue">
                   {stats.user_alerts?.total_alerts || 0}
                 </h3>
-                <p className="text-blue-700 text-sm font-medium">Total Alerts</p>
+                <p className="stat-label blue">Total Alerts</p>
               </div>
-              <div className="bg-red-50 rounded-lg p-4">
-                <h3 className="text-2xl font-bold text-red-600">
+              <div className="stat-card red">
+                <h3 className="stat-number red">
                   {unreadCount}
                 </h3>
-                <p className="text-red-700 text-sm font-medium">Unread</p>
+                <p className="stat-label red">Unread</p>
               </div>
-              <div className="bg-yellow-50 rounded-lg p-4">
-                <h3 className="text-2xl font-bold text-yellow-600">
+              <div className="stat-card yellow">
+                <h3 className="stat-number yellow">
                   {stats.user_alerts?.recent_alerts_24h || 0}
                 </h3>
-                <p className="text-yellow-700 text-sm font-medium">Last 24h</p>
+                <p className="stat-label yellow">Last 24h</p>
               </div>
-              <div className="bg-green-50 rounded-lg p-4">
-                <h3 className="text-2xl font-bold text-green-600">
+              <div className="stat-card green">
+                <h3 className="stat-number green">
                   {stats.system_status?.recent_accidents_24h || 0}
                 </h3>
-                <p className="text-green-700 text-sm font-medium">System Detections</p>
+                <p className="stat-label green">System Detections</p>
               </div>
             </div>
           )}
         </div>
 
         {/* Alert Filters */}
-        <div className="bg-white rounded-xl shadow-lg p-4">
-          <div className="flex flex-wrap gap-3 items-center">
+        <div className="card dashboard-section">
+          <div className="filters">
             <button
               onClick={() => setFilter('all')}
-              className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-                filter === 'all' 
-                  ? 'bg-blue-500 text-white' 
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-              }`}
+              className={`filter-btn ${filter === 'all' ? 'active' : 'inactive'}`}
             >
               All Alerts ({alerts.length})
             </button>
             <button
               onClick={() => setFilter('unread')}
-              className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-                filter === 'unread' 
-                  ? 'bg-red-500 text-white' 
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-              }`}
+              className={`filter-btn ${filter === 'unread' ? 'active red' : 'inactive'}`}
             >
               Unread ({unreadCount})
             </button>
             <button
               onClick={() => setFilter('high_priority')}
-              className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-                filter === 'high_priority' 
-                  ? 'bg-yellow-500 text-white' 
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-              }`}
+              className={`filter-btn ${filter === 'high_priority' ? 'active yellow' : 'inactive'}`}
             >
               High Priority
             </button>
             <button
               onClick={fetchUserData}
               disabled={refreshing}
-              className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-                refreshing 
-                  ? 'bg-gray-300 text-gray-500 cursor-not-allowed' 
-                  : 'bg-green-100 text-green-700 hover:bg-green-200'
-              }`}
+              className={`filter-btn ${refreshing ? '' : 'active green'}`}
+              disabled={refreshing}
             >
               {refreshing ? 'Refreshing...' : 'Refresh'}
             </button>
@@ -401,12 +386,12 @@ const UserDashboard = () => {
         </div>
 
         {/* Alerts List */}
-        <div className="space-y-4">
+        <div className="dashboard-section">
           {filteredAlerts.length === 0 ? (
-            <div className="bg-white rounded-xl shadow-lg p-12 text-center">
-              <Bell className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-              <h3 className="text-xl font-semibold text-gray-600 mb-2">No Alerts</h3>
-              <p className="text-gray-500">
+            <div className="card empty-state">
+              <Bell className="empty-icon" />
+              <h3 className="empty-title">No Alerts</h3>
+              <p className="empty-description">
                 {filter === 'unread' ? 'No unread alerts' : 
                  filter === 'high_priority' ? 'No high priority alerts' : 
                  'No alerts to display'}
@@ -416,53 +401,53 @@ const UserDashboard = () => {
             filteredAlerts.map((alert) => (
               <div
                 key={alert.id}
-                className={`bg-white rounded-xl shadow-lg p-6 border-l-4 ${
+                className={`alert-card ${
                   alert.accident_log?.severity_estimate === 'high' 
-                    ? 'border-red-500' 
+                    ? 'high-severity' 
                     : alert.accident_log?.severity_estimate === 'medium' 
-                    ? 'border-yellow-500' 
-                    : 'border-blue-500'
-                } ${!isAlertRead(alert) ? 'bg-blue-50' : ''}`}
+                    ? 'medium-severity' 
+                    : 'low-severity'
+                } ${!isAlertRead(alert) ? 'unread' : ''}`}
               >
-                <div className="flex items-start justify-between">
-                  <div className="flex items-start gap-4 flex-1">
-                    <div className="mt-1">
+                <div className="alert-content">
+                  <div className="alert-main">
+                    <div className="alert-icon">
                       {getAlertIcon(alert.alert_type, alert.accident_log?.severity_estimate)}
                     </div>
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-2">
-                        <h3 className="text-lg font-semibold text-gray-900">
+                    <div className="alert-details">
+                      <div className="alert-header">
+                        <h3 className="alert-title">
                           Alert #{alert.id}
                         </h3>
                         {!isAlertRead(alert) && (
-                          <span className="bg-blue-500 text-white text-xs px-2 py-1 rounded-full">
+                          <span className="alert-badge new">
                             New
                           </span>
                         )}
                         {alert.accident_log?.severity_estimate && (
-                          <span className={`text-xs px-2 py-1 rounded-full font-medium ${
+                          <span className={`alert-badge ${
                             alert.accident_log.severity_estimate === 'high' 
-                              ? 'bg-red-100 text-red-800'
+                              ? 'high'
                               : alert.accident_log.severity_estimate === 'medium'
-                              ? 'bg-yellow-100 text-yellow-800'
-                              : 'bg-green-100 text-green-800'
+                              ? 'medium'
+                              : 'low'
                           }`}>
                             {alert.accident_log.severity_estimate.toUpperCase()} SEVERITY
                           </span>
                         )}
                       </div>
-                      <p className="text-gray-700 mb-3">{alert.message}</p>
-                      <div className="flex items-center gap-4 text-sm text-gray-600">
-                        <div className="flex items-center gap-1">
+                      <p className="alert-message">{alert.message}</p>
+                      <div className="alert-meta">
+                        <div className="alert-meta-item">
                           <MapPin size={14} />
                           <span>{alert.accident_log?.location || 'Unknown Location'}</span>
                         </div>
-                        <div className="flex items-center gap-1">
+                        <div className="alert-meta-item">
                           <Clock size={14} />
                           <span>{formatTimestamp(alert.sent_at)}</span>
                         </div>
                         {alert.accident_log?.confidence && (
-                          <div className="flex items-center gap-1">
+                          <div className="alert-meta-item">
                             <span>
                               Confidence: {(alert.accident_log.confidence * 100).toFixed(1)}%
                             </span>
@@ -471,11 +456,11 @@ const UserDashboard = () => {
                       </div>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="alert-actions">
                     {alert.accident_log?.snapshot_url && (
                       <button
                         onClick={() => setSelectedAlert(alert)}
-                        className="px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition-colors flex items-center gap-1"
+                        className="btn btn-secondary"
                       >
                         <Eye size={16} />
                         View
@@ -484,7 +469,7 @@ const UserDashboard = () => {
                     {!isAlertRead(alert) && (
                       <button
                         onClick={() => markAlertAsRead(alert.id)}
-                        className="px-3 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors flex items-center gap-1"
+                        className="btn btn-primary"
                       >
                         <CheckCircle size={16} />
                         Mark Read
@@ -499,25 +484,25 @@ const UserDashboard = () => {
 
         {/* Alert Detail Modal */}
         {selectedAlert && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-xl max-w-2xl w-full max-h-[90vh] overflow-auto">
-              <div className="p-6">
-                <div className="flex items-center justify-between mb-6">
-                  <h3 className="text-2xl font-bold text-gray-900">
+          <div className="modal-overlay">
+            <div className="modal-content">
+              <div className="card-content">
+                <div className="modal-header">
+                  <h3 className="modal-title">
                     Alert Details - #{selectedAlert.id}
                   </h3>
                   <button
                     onClick={() => setSelectedAlert(null)}
-                    className="text-gray-400 hover:text-gray-600 text-2xl font-bold"
+                    className="modal-close"
                   >
                     ×
                   </button>
                 </div>
                 
-                <div className="space-y-6">
-                  <div>
-                    <h4 className="text-lg font-semibold text-gray-900 mb-3">Alert Information</h4>
-                    <div className="space-y-2 text-sm">
+                <div>
+                  <div className="modal-section">
+                    <h4 className="modal-section-title">Alert Information</h4>
+                    <div className="modal-info">
                       <p><strong>Message:</strong> {selectedAlert.message}</p>
                       <p><strong>Type:</strong> {selectedAlert.alert_type}</p>
                       <p><strong>Sent:</strong> {new Date(selectedAlert.sent_at).toLocaleString()}</p>
@@ -529,9 +514,9 @@ const UserDashboard = () => {
                   </div>
                   
                   {selectedAlert.accident_log && (
-                    <div>
-                      <h4 className="text-lg font-semibold text-gray-900 mb-3">Incident Details</h4>
-                      <div className="space-y-2 text-sm">
+                    <div className="modal-section">
+                      <h4 className="modal-section-title">Incident Details</h4>
+                      <div className="modal-info">
                         <p><strong>Location:</strong> {selectedAlert.accident_log.location}</p>
                         <p><strong>Confidence:</strong> {(selectedAlert.accident_log.confidence * 100).toFixed(1)}%</p>
                         <p><strong>Severity:</strong> {selectedAlert.accident_log.severity_estimate}</p>
@@ -543,32 +528,32 @@ const UserDashboard = () => {
                   )}
                   
                   {selectedAlert.accident_log?.snapshot_url && (
-                    <div>
-                      <h4 className="text-lg font-semibold text-gray-900 mb-3">Snapshot</h4>
-                      <div className="bg-gray-100 rounded-lg p-4 text-center">
-                        <div className="w-full h-48 bg-gray-200 rounded-lg flex items-center justify-center">
-                          <span className="text-gray-500">Image placeholder</span>
+                    <div className="modal-section">
+                      <h4 className="modal-section-title">Snapshot</h4>
+                      <div className="modal-image-placeholder">
+                        <div className="modal-image-box">
+                          <span className="modal-image-text">Image placeholder</span>
                         </div>
                       </div>
                     </div>
                   )}
                 </div>
                 
-                <div className="flex gap-3 mt-6 pt-6 border-t">
+                <div className="modal-actions">
                   {!isAlertRead(selectedAlert) && (
                     <button
                       onClick={() => {
                         markAlertAsRead(selectedAlert.id);
                         setSelectedAlert(null);
                       }}
-                      className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors"
+                      className="btn btn-primary"
                     >
                       Mark as Read
                     </button>
                   )}
                   <button
                     onClick={() => setSelectedAlert(null)}
-                    className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg transition-colors"
+                    className="btn btn-secondary"
                   >
                     Close
                   </button>
@@ -579,55 +564,51 @@ const UserDashboard = () => {
         )}
 
         {/* Quick Actions */}
-        <div className="bg-white rounded-xl shadow-lg p-6">
-          <h3 className="text-xl font-semibold text-gray-900 mb-4">Quick Actions</h3>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <button className="p-4 bg-green-50 hover:bg-green-100 rounded-lg transition-colors text-center">
-              <div className="text-2xl mb-2">🔴</div>
-              <div className="text-green-800 font-medium">Live Detection</div>
+        <div className="card dashboard-section">
+          <h3 className="modal-section-title" style={{ marginBottom: '16px' }}>Quick Actions</h3>
+          <div className="quick-actions-grid">
+            <button className="quick-action-btn green">
+              <div className="quick-action-emoji">🔴</div>
+              <div className="quick-action-label green">Live Detection</div>
             </button>
             <button
               onClick={fetchUserData}
               disabled={refreshing}
-              className={`p-4 rounded-lg transition-colors text-center ${
-                refreshing 
-                  ? 'bg-gray-100 text-gray-400' 
-                  : 'bg-blue-50 hover:bg-blue-100'
-              }`}
+              className={`quick-action-btn ${refreshing ? 'gray' : 'blue'}`}
             >
-              <div className="text-2xl mb-2">🔄</div>
-              <div className="text-blue-800 font-medium">
+              <div className="quick-action-emoji">🔄</div>
+              <div className={`quick-action-label ${refreshing ? 'disabled' : 'blue'}`}>
                 {refreshing ? 'Refreshing...' : 'Refresh Alerts'}
               </div>
             </button>
             <button
               onClick={requestNotificationPermission}
-              className="p-4 bg-yellow-50 hover:bg-yellow-100 rounded-lg transition-colors text-center"
+              className="quick-action-btn yellow"
             >
-              <div className="text-2xl mb-2">🔔</div>
-              <div className="text-yellow-800 font-medium">Enable Notifications</div>
+              <div className="quick-action-emoji">🔔</div>
+              <div className="quick-action-label yellow">Enable Notifications</div>
             </button>
-            <button className="p-4 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors text-center">
-              <div className="text-2xl mb-2">👤</div>
-              <div className="text-gray-800 font-medium">Profile Settings</div>
+            <button className="quick-action-btn gray">
+              <div className="quick-action-emoji">👤</div>
+              <div className="quick-action-label gray">Profile Settings</div>
             </button>
           </div>
         </div>
 
         {/* Status Footer */}
-        <div className="bg-white rounded-xl shadow-lg p-4">
-          <div className="flex items-center justify-between text-sm text-gray-600">
-            <div className="flex items-center gap-4">
+        <div className="card dashboard-section">
+          <div className="status-footer">
+            <div className="status-info">
               <span>
                 <strong>System Status:</strong> 
-                <span className={connectionStatus === 'connected' ? 'text-green-600 ml-1' : 'text-red-600 ml-1'}>
+                <span className={connectionStatus === 'connected' ? 'status-value online' : 'status-value offline'}>
                   {connectionStatus === 'connected' ? 'Online' : 'Offline'}
                 </span>
               </span>
               {stats && (
                 <span>
                   <strong>Model Status:</strong> 
-                  <span className={stats.system_status?.model_status === 'loaded' ? 'text-green-600 ml-1' : 'text-red-600 ml-1'}>
+                  <span className={stats.system_status?.model_status === 'loaded' ? 'status-value active' : 'status-value inactive'}>
                     {stats.system_status?.model_status === 'loaded' ? 'Active' : 'Inactive'}
                   </span>
                 </span>
