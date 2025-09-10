@@ -1,6 +1,7 @@
 'use client';
 import React, { useState, useEffect, useContext, useCallback, useRef } from 'react';
 import { Bell, AlertTriangle, MapPin, Clock, Eye, CheckCircle, RefreshCw, User, Shield, Activity, TrendingUp } from 'lucide-react';
+import './userDashboard.css';
 
 // Mock auth context for artifact environment
 const AuthContext = React.createContext();
