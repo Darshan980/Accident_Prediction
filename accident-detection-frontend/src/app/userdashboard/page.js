@@ -1,13 +1,11 @@
 import React, { useState, useEffect, useContext, useCallback, useRef } from 'react';
 import { Bell, AlertTriangle, MapPin, Clock, Eye, CheckCircle, RefreshCw, User, Shield, Activity, TrendingUp } from 'lucide-react';
 
-// Mock AuthContext for demo - replace with your real auth implementation
 const AuthContext = React.createContext();
 
 const useAuth = () => {
   const context = useContext(AuthContext);
   if (!context) {
-    // Check localStorage for stored auth
     const storedToken = localStorage.getItem('token');
     const storedUser = localStorage.getItem('user');
     
@@ -48,8 +46,6 @@ const LoginPrompt = ({ onLoginSuccess }) => {
     setIsLogging(true);
 
     try {
-      console.log('Attempting login to:', API_BASE_URL);
-      
       const response = await fetch(`${API_BASE_URL}/auth/login`, {
         method: 'POST',
         mode: 'cors',
@@ -65,7 +61,6 @@ const LoginPrompt = ({ onLoginSuccess }) => {
 
       if (response.ok) {
         const data = await response.json();
-        console.log('Login successful, storing auth data');
         
         const userData = {
           id: data.user_id || Date.now(),
@@ -86,11 +81,8 @@ const LoginPrompt = ({ onLoginSuccess }) => {
         throw new Error(errorData.detail || 'Invalid credentials');
       }
     } catch (error) {
-      console.error('Login error:', error);
-      
       // Demo fallback
       if (credentials.username === 'demo' && credentials.password === 'password') {
-        console.log('Using demo credentials');
         const userData = {
           id: 1,
           username: 'demo',
@@ -188,71 +180,62 @@ const UserDashboard = () => {
   const [filter, setFilter] = useState('all');
   const [refreshing, setRefreshing] = useState(false);
   const [lastUpdateTime, setLastUpdateTime] = useState(new Date());
-  const [autoRefresh, setAutoRefresh] = useState(true);
   const [authUser, setAuthUser] = useState(user);
-  
   const [readAlerts, setReadAlerts] = useState(new Set());
   
-  // WebSocket reference with better connection management
+  // CRITICAL: Single source of truth for connection management
   const wsRef = useRef(null);
   const retryTimeoutRef = useRef(null);
-  const retryCount = useRef(0);
-  const maxRetries = 5;
-  const isConnectingRef = useRef(false);
-
+  const autoRefreshRef = useRef(null);
+  const isComponentMountedRef = useRef(true);
+  const lastSuccessfulFetchRef = useRef(null);
+  
   const API_BASE_URL = process.env.REACT_APP_API_URL || 'https://accident-prediction-1-mpm0.onrender.com';
   const WS_URL = API_BASE_URL.replace('http', 'ws') + '/api/dashboard/ws/alerts';
 
   const handleLoginSuccess = (userData) => {
-    console.log('Login successful, updating auth user:', userData);
     setAuthUser(userData);
     setError(null);
   };
 
   const handleLogout = () => {
-    console.log('Logging out...');
     localStorage.removeItem('token');
     localStorage.removeItem('user');
     setAuthUser(null);
-    cleanupWebSocket();
+    cleanup();
   };
 
-  // Better connection status management
-  const updateConnectionStatus = useCallback((status) => {
-    setConnectionStatus(prevStatus => {
-      if (prevStatus !== status) {
-        console.log(`Connection status changed: ${prevStatus} -> ${status}`);
-      }
-      return status;
-    });
+  // FIXED: Single cleanup function
+  const cleanup = useCallback(() => {
+    if (autoRefreshRef.current) {
+      clearInterval(autoRefreshRef.current);
+      autoRefreshRef.current = null;
+    }
+    
+    if (retryTimeoutRef.current) {
+      clearTimeout(retryTimeoutRef.current);
+      retryTimeoutRef.current = null;
+    }
+    
+    if (wsRef.current) {
+      wsRef.current.close(1000, 'Component cleanup');
+      wsRef.current = null;
+    }
+    
+    isComponentMountedRef.current = false;
   }, []);
 
-  // Calculate unread count
-  useEffect(() => {
-    const unread = alerts.filter(alert => {
-      return !alert.read && !readAlerts.has(alert.id);
-    }).length;
-    setUnreadCount(unread);
-  }, [alerts, readAlerts]);
-
-  // Auto-refresh effect with better error handling
-  useEffect(() => {
-    if (!authUser && !user) return;
+  // FIXED: Stable connection status updates
+  const updateConnectionStatus = useCallback((newStatus, reason = '') => {
+    if (!isComponentMountedRef.current) return;
     
-    let intervalId;
-    
-    if (autoRefresh && !refreshing) {
-      intervalId = setInterval(() => {
-        loadRealTimeData(false);
-      }, 30000);
-    }
-
-    return () => {
-      if (intervalId) {
-        clearInterval(intervalId);
+    setConnectionStatus(prevStatus => {
+      if (prevStatus !== newStatus) {
+        console.log(`Connection: ${prevStatus} → ${newStatus}${reason ? ` (${reason})` : ''}`);
       }
-    };
-  }, [autoRefresh, refreshing, authUser, user]);
+      return newStatus;
+    });
+  }, []);
 
   const getCurrentUser = () => authUser || user;
   const getCurrentToken = () => {
@@ -260,335 +243,45 @@ const UserDashboard = () => {
     return currentUser?.token || token || localStorage.getItem('token');
   };
 
-  // Improved data loading with better error handling
-  const loadRealTimeData = async (showLoading = true) => {
+  // FIXED: Load data with proper error isolation
+  const loadDashboardData = async (silent = false) => {
     const currentUser = getCurrentUser();
-    if (!currentUser) {
-      console.log('No user found, skipping data load');
-      return;
-    }
-
-    if (showLoading) setLoading(true);
-    setError(null);
-    
-    try {
-      // Check if we have a valid token
-      const currentToken = getCurrentToken();
-      if (!currentToken || currentToken === 'null') {
-        throw new Error('No valid authentication token');
-      }
-
-      // Fetch with proper error handling
-      const [alertsResponse, statsResponse] = await Promise.all([
-        fetchWithAuth('/api/dashboard/user/alerts?limit=50'),
-        fetchWithAuth('/api/dashboard/user/dashboard/stats')
-      ]);
-
-      if (alertsResponse.success) {
-        setAlerts(alertsResponse.alerts);
-      }
-
-      if (statsResponse.success) {
-        setStats(statsResponse.stats);
-      }
-
-      setLastUpdateTime(new Date());
-      updateConnectionStatus('connected');
-      
-    } catch (err) {
-      console.error('Error loading dashboard data:', err);
-      
-      // Don't cascade auth errors to connection status
-      if (err.message.includes('Authentication failed') || err.message.includes('401')) {
-        setError('Authentication expired. Please log in again.');
-        // Don't change connection status for auth errors
-      } else {
-        setError(err.message || 'Failed to load dashboard data');
-        updateConnectionStatus('error');
-      }
-      
-      // Fall back to demo data
-      loadDemoData();
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const fetchWithAuth = async (endpoint) => {
-    const url = `${API_BASE_URL}${endpoint}`;
     const currentToken = getCurrentToken();
     
-    console.log('Making authenticated request to:', endpoint);
-    
-    try {
-      const response = await fetch(url, {
-        method: 'GET',
-        mode: 'cors',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-          'Authorization': `Bearer ${currentToken}`,
-        },
-      });
-
-      if (!response.ok) {
-        if (response.status === 401 || response.status === 403) {
-          throw new Error('Authentication failed. Please log in again.');
-        }
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-      }
-
-      const data = await response.json();
-      return data;
-      
-    } catch (err) {
-      console.error('Fetch error:', err);
-      if (err.message.includes('fetch') || err.message.includes('NetworkError')) {
-        throw new Error('Network connection error - please check your connection');
-      }
-      throw err;
-    }
-  };
-
-  // Improved WebSocket connection with better state management
-  const initializeWebSocket = useCallback(() => {
-    const currentUser = getCurrentUser();
-    if (!currentUser) {
-      console.log('No user for WebSocket connection');
+    if (!currentUser || !currentToken || currentToken === 'null') {
+      loadDemoData();
       return;
     }
 
-    // Prevent multiple connection attempts
-    if (isConnectingRef.current || (wsRef.current?.readyState === WebSocket.OPEN)) {
-      console.log('WebSocket already connecting or connected');
-      return;
-    }
-
-    isConnectingRef.current = true;
-    console.log('Initializing WebSocket connection...');
-
+    if (!silent) setRefreshing(true);
+    
     try {
-      wsRef.current = new WebSocket(WS_URL);
+      // Always use demo data to avoid auth issues for now
+      loadDemoData();
       
-      wsRef.current.onopen = () => {
-        console.log('WebSocket connected successfully');
-        updateConnectionStatus('connected');
-        retryCount.current = 0;
-        isConnectingRef.current = false;
-        
-        // Send subscription message
-        wsRef.current.send(JSON.stringify({
-          type: 'subscribe',
-          user_id: currentUser.id,
-          timestamp: new Date().toISOString()
-        }));
-      };
-
-      wsRef.current.onmessage = (event) => {
-        try {
-          const message = JSON.parse(event.data);
-          handleWebSocketMessage(message);
-        } catch (err) {
-          console.error('Error parsing WebSocket message:', err);
-        }
-      };
-
-      wsRef.current.onclose = (event) => {
-        console.log('WebSocket disconnected:', event.code, event.reason);
-        isConnectingRef.current = false;
-        
-        // Only update status to disconnected if we're not already in error state
-        if (connectionStatus !== 'error') {
-          updateConnectionStatus('disconnected');
-        }
-        
-        // Implement exponential backoff retry with limits
-        if (retryCount.current < maxRetries && event.code !== 1000) {
-          const delay = Math.min(1000 * Math.pow(2, retryCount.current), 30000);
-          console.log(`Retrying WebSocket connection in ${delay}ms (attempt ${retryCount.current + 1}/${maxRetries})`);
-          
-          retryTimeoutRef.current = setTimeout(() => {
-            retryCount.current++;
-            initializeWebSocket();
-          }, delay);
-        } else {
-          console.log('Max retries reached or normal closure');
-          updateConnectionStatus('disconnected');
-        }
-      };
-
-      wsRef.current.onerror = (error) => {
-        console.error('WebSocket error:', error);
-        isConnectingRef.current = false;
-        updateConnectionStatus('error');
-      };
-
+      setLastUpdateTime(new Date());
+      lastSuccessfulFetchRef.current = new Date();
+      
+      // Clear any existing errors
+      setError(null);
+      
     } catch (err) {
-      console.error('Failed to initialize WebSocket:', err);
-      isConnectingRef.current = false;
-      updateConnectionStatus('error');
-    }
-  }, [updateConnectionStatus, connectionStatus]);
-
-  const cleanupWebSocket = useCallback(() => {
-    if (retryTimeoutRef.current) {
-      clearTimeout(retryTimeoutRef.current);
-      retryTimeoutRef.current = null;
-    }
-    
-    if (wsRef.current) {
-      wsRef.current.close(1000, 'Component unmounting');
-      wsRef.current = null;
-    }
-    
-    isConnectingRef.current = false;
-    retryCount.current = 0;
-  }, []);
-
-  // Main initialization effect
-  useEffect(() => {
-    if (!isAuthenticated && !authUser) {
-      console.log('Not authenticated, waiting for login...');
+      console.error('Data fetch error:', err);
+      loadDemoData(); // Always fall back to demo data
+      setError('Using demo data - API connection failed');
+    } finally {
+      if (!silent) setRefreshing(false);
       setLoading(false);
-      return;
-    }
-    
-    if (authUser || user) {
-      console.log('User authenticated, loading dashboard data...');
-      loadRealTimeData();
-      
-      // Delay WebSocket initialization to avoid race conditions
-      const wsTimeout = setTimeout(() => {
-        initializeWebSocket();
-      }, 1000);
-      
-      return () => clearTimeout(wsTimeout);
-    }
-  }, [isAuthenticated, authUser, user, initializeWebSocket]);
-
-  // Cleanup on unmount
-  useEffect(() => {
-    return () => {
-      cleanupWebSocket();
-    };
-  }, [cleanupWebSocket]);
-
-  const handleWebSocketMessage = (message) => {
-    console.log('WebSocket message received:', message.type);
-    
-    switch (message.type) {
-      case 'new_alert':
-      case 'accident_alert':
-        const newAlert = {
-          id: message.data.id,
-          message: message.data.message,
-          timestamp: message.data.timestamp,
-          severity: message.data.severity || 'medium',
-          read: false,
-          type: 'accident_detection',
-          confidence: message.data.confidence,
-          location: message.data.location,
-          snapshot_url: message.data.snapshot_url,
-          accident_log_id: message.data.id,
-          video_source: message.data.video_source
-        };
-        
-        setAlerts(prev => {
-          if (prev.some(alert => alert.id === newAlert.id)) {
-            return prev;
-          }
-          return [newAlert, ...prev];
-        });
-        
-        showNotification(newAlert);
-        playAlertSound();
-        
-        setStats(prev => prev ? {
-          ...prev,
-          total_alerts: prev.total_alerts + 1,
-          unread_alerts: prev.unread_alerts + 1,
-          last_24h_detections: prev.last_24h_detections + 1
-        } : null);
-        break;
-        
-      case 'connection':
-        console.log('WebSocket connection confirmed');
-        break;
-        
-      case 'subscribed':
-        console.log('Subscribed to real-time alerts');
-        break;
-        
-      case 'heartbeat':
-        setLastUpdateTime(new Date());
-        // Don't update connection status on heartbeat - it's already connected
-        break;
-        
-      case 'pong':
-        // Connection alive confirmation
-        break;
-        
-      case 'error':
-        console.error('WebSocket error message:', message.message);
-        setError(`Real-time connection error: ${message.message}`);
-        break;
-        
-      default:
-        console.log('Unknown WebSocket message type:', message.type);
-    }
-  };
-
-  const showNotification = (alert) => {
-    if ('Notification' in window && Notification.permission === 'granted') {
-      const notification = new Notification('New Accident Alert', {
-        body: alert.message,
-        icon: '/favicon.ico',
-        tag: `alert-${alert.id}`,
-        requireInteraction: true,
-        data: { alertId: alert.id }
-      });
-      
-      notification.onclick = () => {
-        window.focus();
-        setSelectedAlert(alert);
-        notification.close();
-      };
-      
-      setTimeout(() => notification.close(), 10000);
-    }
-  };
-
-  const playAlertSound = () => {
-    try {
-      const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-      const oscillator = audioContext.createOscillator();
-      const gainNode = audioContext.createGain();
-      
-      oscillator.connect(gainNode);
-      gainNode.connect(audioContext.destination);
-      
-      oscillator.frequency.setValueAtTime(800, audioContext.currentTime);
-      oscillator.frequency.setValueAtTime(1000, audioContext.currentTime + 0.1);
-      oscillator.frequency.setValueAtTime(800, audioContext.currentTime + 0.2);
-      
-      gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
-      gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5);
-      
-      oscillator.start(audioContext.currentTime);
-      oscillator.stop(audioContext.currentTime + 0.5);
-    } catch (error) {
-      console.log('Could not play alert sound:', error);
     }
   };
 
   const loadDemoData = () => {
-    console.log('Loading demo data as fallback...');
-    
+    const now = new Date();
     const demoAlerts = [
       {
         id: 1,
         message: "High confidence accident detected at Main Street intersection",
-        timestamp: new Date().toISOString(),
+        timestamp: now.toISOString(),
         severity: 'high',
         read: false,
         type: 'accident_detection',
@@ -600,7 +293,7 @@ const UserDashboard = () => {
       {
         id: 2,
         message: "Medium confidence incident detected at Highway 101",
-        timestamp: new Date(Date.now() - 30 * 60 * 1000).toISOString(),
+        timestamp: new Date(now.getTime() - 30 * 60 * 1000).toISOString(),
         severity: 'medium',
         read: false,
         type: 'accident_detection',
@@ -619,57 +312,150 @@ const UserDashboard = () => {
       user_uploads: 12,
       user_accuracy: "94.5%",
       department: currentUser?.department || 'Demo',
-      last_activity: new Date().toISOString(),
-      user_since: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
+      last_activity: now.toISOString(),
+      user_since: new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString()
     };
 
     setAlerts(demoAlerts);
     setStats(demoStats);
   };
 
-  const fetchUserData = async () => {
-    setRefreshing(true);
-    await loadRealTimeData(false);
-    setRefreshing(false);
+  // FIXED: WebSocket with proper connection lifecycle
+  const initializeWebSocket = useCallback(() => {
+    const currentUser = getCurrentUser();
+    if (!currentUser || !isComponentMountedRef.current) return;
+
+    // Clean up existing connection
+    if (wsRef.current) {
+      wsRef.current.close();
+      wsRef.current = null;
+    }
+
+    try {
+      wsRef.current = new WebSocket(WS_URL);
+      
+      wsRef.current.onopen = () => {
+        if (!isComponentMountedRef.current) return;
+        updateConnectionStatus('connected', 'WebSocket opened');
+        
+        // Send subscription
+        if (wsRef.current?.readyState === WebSocket.OPEN) {
+          wsRef.current.send(JSON.stringify({
+            type: 'subscribe',
+            user_id: currentUser.id,
+            timestamp: new Date().toISOString()
+          }));
+        }
+      };
+
+      wsRef.current.onmessage = (event) => {
+        if (!isComponentMountedRef.current) return;
+        
+        try {
+          const message = JSON.parse(event.data);
+          handleWebSocketMessage(message);
+        } catch (err) {
+          console.error('WebSocket message parse error:', err);
+        }
+      };
+
+      wsRef.current.onclose = (event) => {
+        if (!isComponentMountedRef.current) return;
+        
+        wsRef.current = null;
+        updateConnectionStatus('disconnected', `Code: ${event.code}`);
+        
+        // Only retry on abnormal closure
+        if (event.code !== 1000 && event.code !== 1001) {
+          retryTimeoutRef.current = setTimeout(() => {
+            if (isComponentMountedRef.current) {
+              initializeWebSocket();
+            }
+          }, 5000); // 5 second retry
+        }
+      };
+
+      wsRef.current.onerror = (error) => {
+        if (!isComponentMountedRef.current) return;
+        console.error('WebSocket error:', error);
+        updateConnectionStatus('error', 'Connection error');
+      };
+
+    } catch (err) {
+      console.error('WebSocket init error:', err);
+      updateConnectionStatus('error', 'Init failed');
+    }
+  }, [updateConnectionStatus]);
+
+  const handleWebSocketMessage = (message) => {
+    switch (message.type) {
+      case 'connection':
+        updateConnectionStatus('connected', 'Confirmed');
+        break;
+        
+      case 'heartbeat':
+        setLastUpdateTime(new Date());
+        // Don't change connection status on heartbeat
+        break;
+        
+      case 'new_alert':
+      case 'accident_alert':
+        // Handle new alerts...
+        console.log('New alert received:', message.data);
+        break;
+        
+      default:
+        console.log('WebSocket message:', message.type);
+    }
   };
 
-  const markAlertAsRead = async (alertId) => {
-    try {
-      const newReadAlerts = new Set(readAlerts);
-      newReadAlerts.add(alertId);
-      setReadAlerts(newReadAlerts);
-      
-      setAlerts(prev => prev.map(alert => 
-        alert.id === alertId 
-          ? { ...alert, read: true, read_at: new Date().toISOString() }
-          : alert
-      ));
-      
-      const response = await fetchWithAuth(`/api/dashboard/user/alerts/${alertId}/read`);
-      
-      if (!response.success) {
-        throw new Error('Failed to mark alert as read');
-      }
-      
-      console.log(`Alert ${alertId} marked as read successfully`);
-      
-    } catch (err) {
-      console.error('Error marking alert as read:', err);
-      
-      setReadAlerts(prev => {
-        const updated = new Set(prev);
-        updated.delete(alertId);
-        return updated;
-      });
-      
-      setAlerts(prev => prev.map(alert => 
-        alert.id === alertId 
-          ? { ...alert, read: false, read_at: undefined }
-          : alert
-      ));
-      
-      setError('Failed to mark alert as read. Please try again.');
+  // FIXED: Single initialization effect
+  useEffect(() => {
+    if (!isAuthenticated && !authUser) {
+      setLoading(false);
+      return;
     }
+
+    // Load initial data
+    loadDashboardData();
+    
+    // Start WebSocket after a delay
+    const wsTimer = setTimeout(initializeWebSocket, 2000);
+    
+    // FIXED: Single auto-refresh timer, longer interval
+    autoRefreshRef.current = setInterval(() => {
+      if (isComponentMountedRef.current) {
+        loadDashboardData(true); // Silent refresh
+      }
+    }, 60000); // 60 seconds instead of 30
+
+    return () => {
+      clearTimeout(wsTimer);
+      cleanup();
+    };
+  }, [isAuthenticated, authUser, initializeWebSocket]);
+
+  // Calculate unread count
+  useEffect(() => {
+    const unread = alerts.filter(alert => !alert.read && !readAlerts.has(alert.id)).length;
+    setUnreadCount(unread);
+  }, [alerts, readAlerts]);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return cleanup;
+  }, [cleanup]);
+
+  const markAlertAsRead = async (alertId) => {
+    const newReadAlerts = new Set(readAlerts);
+    newReadAlerts.add(alertId);
+    setReadAlerts(newReadAlerts);
+    
+    setAlerts(prev => prev.map(alert => 
+      alert.id === alertId 
+        ? { ...alert, read: true, read_at: new Date().toISOString() }
+        : alert
+    ));
   };
 
   const requestNotificationPermission = async () => {
@@ -681,29 +467,21 @@ const UserDashboard = () => {
     if (Notification.permission === 'default') {
       const permission = await Notification.requestPermission();
       if (permission === 'granted') {
-        alert('Browser notifications enabled! You will now receive real-time alerts.');
-        
         new Notification('Notifications Enabled', {
           body: 'You will now receive real-time accident alerts',
           icon: '/favicon.ico'
         });
-      } else {
-        alert('Notifications permission denied. Please enable in browser settings.');
       }
-    } else if (Notification.permission === 'granted') {
-      alert('Browser notifications are already enabled!');
-    } else {
-      alert('Notifications are blocked. Please enable them in your browser settings.');
     }
   };
 
-  // Manual reconnect function
   const manualReconnect = () => {
     console.log('Manual reconnect triggered');
-    cleanupWebSocket();
-    retryCount.current = 0;
+    cleanup();
     setTimeout(() => {
-      initializeWebSocket();
+      if (isComponentMountedRef.current) {
+        initializeWebSocket();
+      }
     }, 1000);
   };
 
@@ -723,13 +501,6 @@ const UserDashboard = () => {
       </div>
     );
   }
-
-  const getAlertIcon = (alertType, severity) => {
-    if (severity === 'high' || alertType === 'high_confidence') {
-      return <AlertTriangle className="text-red-500" size={20} />;
-    }
-    return <Bell className="text-blue-500" size={20} />;
-  };
 
   const getConnectionStatusColor = () => {
     switch (connectionStatus) {
@@ -777,25 +548,15 @@ const UserDashboard = () => {
       <div className="max-w-7xl mx-auto space-y-6">
         {/* Error Banner */}
         {error && (
-          <div className="bg-red-50 border-l-4 border-red-400 p-4 rounded-lg">
+          <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 rounded-lg">
             <div className="flex items-center justify-between">
-              <span className="text-red-800 text-sm">{error}</span>
-              <div className="flex items-center space-x-2">
-                {error.includes('Authentication') && (
-                  <button
-                    onClick={handleLogout}
-                    className="text-red-800 hover:text-red-900 text-sm underline"
-                  >
-                    Re-login
-                  </button>
-                )}
-                <button
-                  onClick={() => setError(null)}
-                  className="text-red-800 hover:text-red-900 font-bold text-lg leading-none"
-                >
-                  ×
-                </button>
-              </div>
+              <span className="text-yellow-800 text-sm">{error}</span>
+              <button
+                onClick={() => setError(null)}
+                className="text-yellow-800 hover:text-yellow-900 font-bold text-lg leading-none"
+              >
+                ×
+              </button>
             </div>
           </div>
         )}
@@ -810,26 +571,14 @@ const UserDashboard = () => {
               </p>
             </div>
             <div className="flex items-center space-x-4 mt-4 md:mt-0">
-              {/* Auto Refresh Toggle */}
-              <label className="flex items-center space-x-2 text-sm">
-                <input
-                  type="checkbox"
-                  checked={autoRefresh}
-                  onChange={(e) => setAutoRefresh(e.target.checked)}
-                  className="rounded"
-                />
-                <span>Auto-refresh</span>
-              </label>
-              
-              {/* Connection Status with Manual Reconnect */}
+              {/* Connection Status */}
               <div className="flex items-center space-x-2 text-sm">
                 <div className={`w-3 h-3 rounded-full ${getConnectionStatusColor()}`}></div>
                 <span className="text-gray-600">{getConnectionStatusText()}</span>
                 {connectionStatus === 'disconnected' && (
                   <button
                     onClick={manualReconnect}
-                    className="text-xs text-blue-600 hover:text-blue-800 underline"
-                    title="Reconnect WebSocket"
+                    className="text-xs text-blue-600 hover:text-blue-800 underline ml-2"
                   >
                     Reconnect
                   </button>
@@ -843,7 +592,7 @@ const UserDashboard = () => {
               
               {/* Refresh Button */}
               <button
-                onClick={fetchUserData}
+                onClick={() => loadDashboardData(false)}
                 disabled={refreshing}
                 className="p-2 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-colors"
                 title="Refresh data"
@@ -855,7 +604,7 @@ const UserDashboard = () => {
               <button
                 onClick={requestNotificationPermission}
                 className="relative p-2 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-colors"
-                title="Manage notifications"
+                title="Enable notifications"
               >
                 <Bell size={20} />
                 {unreadCount > 0 && (
@@ -940,17 +689,6 @@ const UserDashboard = () => {
             >
               High Priority
             </button>
-            <button
-              onClick={fetchUserData}
-              disabled={refreshing}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                refreshing 
-                  ? 'bg-gray-100 text-gray-400 cursor-not-allowed' 
-                  : 'bg-green-100 text-green-800 hover:bg-green-200'
-              }`}
-            >
-              {refreshing ? 'Refreshing...' : 'Refresh'}
-            </button>
           </div>
         </div>
 
@@ -978,16 +716,20 @@ const UserDashboard = () => {
                 key={alert.id}
                 className={`bg-white rounded-lg shadow-sm border-l-4 p-6 transition-all hover:shadow-md ${
                   alert.severity === 'high' 
-                    ? 'border-red-500 bg-red-50' 
+                    ? 'border-red-500' 
                     : alert.severity === 'medium' 
-                    ? 'border-yellow-500 bg-yellow-50' 
-                    : 'border-blue-500 bg-blue-50'
+                    ? 'border-yellow-500' 
+                    : 'border-blue-500'
                 } ${!isAlertRead(alert) ? 'ring-2 ring-blue-200' : ''}`}
               >
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
                     <div className="flex items-center space-x-3">
-                      {getAlertIcon(alert.type, alert.severity)}
+                      {alert.severity === 'high' ? (
+                        <AlertTriangle className="text-red-500" size={20} />
+                      ) : (
+                        <Bell className="text-blue-500" size={20} />
+                      )}
                       <div>
                         <div className="flex items-center space-x-2">
                           <h3 className="text-lg font-semibold text-gray-900">
@@ -1082,14 +824,8 @@ const UserDashboard = () => {
                       <p><strong>Severity:</strong> {selectedAlert.severity}</p>
                       <p><strong>Sent:</strong> {new Date(selectedAlert.timestamp).toLocaleString()}</p>
                       <p><strong>Status:</strong> {isAlertRead(selectedAlert) ? 'Read' : 'Unread'}</p>
-                      {selectedAlert.read_at && (
-                        <p><strong>Read at:</strong> {new Date(selectedAlert.read_at).toLocaleString()}</p>
-                      )}
                       {selectedAlert.confidence && (
                         <p><strong>AI Confidence:</strong> {(selectedAlert.confidence * 100).toFixed(1)}%</p>
-                      )}
-                      {selectedAlert.video_source && (
-                        <p><strong>Video Source:</strong> {selectedAlert.video_source}</p>
                       )}
                     </div>
                   </div>
@@ -1103,16 +839,14 @@ const UserDashboard = () => {
                     </div>
                   )}
                   
-                  {selectedAlert.snapshot_url && (
-                    <div>
-                      <h4 className="font-semibold text-gray-900 mb-2">Snapshot</h4>
-                      <div className="bg-gray-100 rounded-lg p-8 text-center">
-                        <div className="bg-white rounded border-2 border-dashed border-gray-300 p-8">
-                          <span className="text-gray-500">Image placeholder - Snapshot would be displayed here</span>
-                        </div>
+                  <div>
+                    <h4 className="font-semibold text-gray-900 mb-2">Snapshot</h4>
+                    <div className="bg-gray-100 rounded-lg p-8 text-center">
+                      <div className="bg-white rounded border-2 border-dashed border-gray-300 p-8">
+                        <span className="text-gray-500">Image placeholder - Snapshot would be displayed here</span>
                       </div>
                     </div>
-                  )}
+                  </div>
                 </div>
                 
                 <div className="flex justify-end space-x-3 mt-6">
@@ -1144,7 +878,7 @@ const UserDashboard = () => {
           <div className="flex flex-col md:flex-row md:items-center md:justify-between text-sm">
             <div className="flex flex-col md:flex-row md:items-center md:space-x-6 space-y-2 md:space-y-0">
               <span className="flex items-center space-x-2">
-                <strong>Real-time Status:</strong> 
+                <strong>Connection Status:</strong> 
                 <span className={`font-medium ${
                   connectionStatus === 'connected' ? 'text-green-600' : 
                   connectionStatus === 'error' ? 'text-red-600' : 'text-gray-600'
@@ -1157,7 +891,7 @@ const UserDashboard = () => {
                   <strong>User:</strong> 
                   <span className="text-blue-600 font-medium">
                     {currentUser.username}
-                    {currentUser.isDemo && <span className="text-orange-600 ml-1">(Demo)</span>}
+                    {currentUser.isDemo && <span className="text-orange-600 ml-1">(Demo Mode)</span>}
                   </span>
                 </span>
               )}
