@@ -183,8 +183,9 @@ const UserDashboard = () => {
   const [lastUpdateTime, setLastUpdateTime] = useState(new Date());
   const [authUser, setAuthUser] = useState(user);
   const [readAlerts, setReadAlerts] = useState(new Set());
+  const [isUsingRealAPI, setIsUsingRealAPI] = useState(false);
   
-  // CRITICAL: Single source of truth for connection management
+  // Connection management refs
   const wsRef = useRef(null);
   const retryTimeoutRef = useRef(null);
   const autoRefreshRef = useRef(null);
@@ -206,7 +207,7 @@ const UserDashboard = () => {
     cleanup();
   };
 
-  // FIXED: Single cleanup function
+  // Cleanup function
   const cleanup = useCallback(() => {
     if (autoRefreshRef.current) {
       clearInterval(autoRefreshRef.current);
@@ -226,7 +227,7 @@ const UserDashboard = () => {
     isComponentMountedRef.current = false;
   }, []);
 
-  // FIXED: Stable connection status updates
+  // Connection status updates
   const updateConnectionStatus = useCallback((newStatus, reason = '') => {
     if (!isComponentMountedRef.current) return;
     
@@ -244,38 +245,73 @@ const UserDashboard = () => {
     return currentUser?.token || token || localStorage.getItem('token');
   };
 
-  // FIXED: Load data with proper error isolation
-  const loadDashboardData = async (silent = false) => {
-    const currentUser = getCurrentUser();
-    const currentToken = getCurrentToken();
-    
-    if (!currentUser || !currentToken || currentToken === 'null') {
-      loadDemoData();
-      return;
+  // Load real API data
+  const loadAPIData = async (currentToken, currentUser) => {
+    const headers = {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+      'Authorization': `Bearer ${currentToken}`
+    };
+
+    // Fetch alerts
+    const alertsResponse = await fetch(`${API_BASE_URL}/api/dashboard/alerts`, {
+      method: 'GET',
+      mode: 'cors',
+      headers: headers
+    });
+
+    if (!alertsResponse.ok) {
+      throw new Error(`Alerts API error: ${alertsResponse.status}`);
     }
 
-    if (!silent) setRefreshing(true);
+    const alertsData = await alertsResponse.json();
     
-    try {
-      // Always use demo data to avoid auth issues for now
-      loadDemoData();
-      
-      setLastUpdateTime(new Date());
-      lastSuccessfulFetchRef.current = new Date();
-      
-      // Clear any existing errors
-      setError(null);
-      
-    } catch (err) {
-      console.error('Data fetch error:', err);
-      loadDemoData(); // Always fall back to demo data
-      setError('Using demo data - API connection failed');
-    } finally {
-      if (!silent) setRefreshing(false);
-      setLoading(false);
+    // Fetch stats
+    const statsResponse = await fetch(`${API_BASE_URL}/api/dashboard/stats`, {
+      method: 'GET',
+      mode: 'cors',
+      headers: headers
+    });
+
+    if (!statsResponse.ok) {
+      throw new Error(`Stats API error: ${statsResponse.status}`);
     }
+
+    const statsData = await statsResponse.json();
+
+    // Process and set the data
+    const processedAlerts = (alertsData.alerts || alertsData || []).map(alert => ({
+      id: alert.id || alert.alert_id || Math.random(),
+      message: alert.message || alert.description || 'New alert',
+      timestamp: alert.timestamp || alert.created_at || new Date().toISOString(),
+      severity: alert.severity || alert.priority || 'medium',
+      read: alert.read || false,
+      type: alert.type || alert.alert_type || 'general',
+      confidence: alert.confidence || alert.ai_confidence || null,
+      location: alert.location || alert.address || 'Unknown Location',
+      snapshot_url: alert.snapshot_url || alert.image_url || null,
+      accident_log_id: alert.accident_log_id || alert.log_id || null
+    }));
+
+    const processedStats = {
+      total_alerts: statsData.total_alerts || processedAlerts.length,
+      unread_alerts: statsData.unread_alerts || processedAlerts.filter(a => !a.read).length,
+      last_24h_detections: statsData.last_24h_detections || statsData.detections_24h || 0,
+      user_uploads: statsData.user_uploads || statsData.uploads || 0,
+      user_accuracy: statsData.user_accuracy || statsData.accuracy || 'N/A',
+      department: currentUser?.department || statsData.department || 'General',
+      last_activity: statsData.last_activity || new Date().toISOString(),
+      user_since: statsData.user_since || currentUser?.loginTime || new Date().toISOString()
+    };
+
+    setAlerts(processedAlerts);
+    setStats(processedStats);
+    setIsUsingRealAPI(true);
+    
+    return { alerts: processedAlerts, stats: processedStats };
   };
 
+  // Load demo data fallback
   const loadDemoData = () => {
     const now = new Date();
     const demoAlerts = [
@@ -302,6 +338,18 @@ const UserDashboard = () => {
         location: 'Highway 101, Mile 45',
         snapshot_url: '/api/snapshots/accident_002.jpg',
         accident_log_id: 2
+      },
+      {
+        id: 3,
+        message: "Low confidence event detected at Oak Street",
+        timestamp: new Date(now.getTime() - 60 * 60 * 1000).toISOString(),
+        severity: 'low',
+        read: true,
+        type: 'accident_detection',
+        confidence: 0.58,
+        location: 'Oak Street & 3rd Avenue',
+        snapshot_url: '/api/snapshots/accident_003.jpg',
+        accident_log_id: 3
       }
     ];
 
@@ -319,12 +367,63 @@ const UserDashboard = () => {
 
     setAlerts(demoAlerts);
     setStats(demoStats);
+    setIsUsingRealAPI(false);
   };
 
-  // FIXED: WebSocket with proper connection lifecycle
+  // Main data loading function
+  const loadDashboardData = async (silent = false) => {
+    const currentUser = getCurrentUser();
+    const currentToken = getCurrentToken();
+    
+    if (!currentUser || !currentToken || currentToken === 'null') {
+      loadDemoData();
+      setLoading(false);
+      return;
+    }
+
+    // Skip API calls for demo user
+    if (currentUser.isDemo) {
+      loadDemoData();
+      setLoading(false);
+      return;
+    }
+
+    if (!silent) setRefreshing(true);
+    
+    try {
+      console.log('Attempting to fetch real API data...');
+      
+      // Try to load real API data
+      const apiData = await loadAPIData(currentToken, currentUser);
+      
+      setLastUpdateTime(new Date());
+      lastSuccessfulFetchRef.current = new Date();
+      setError(null);
+      
+      console.log('Successfully loaded real API data:', {
+        alertsCount: apiData.alerts.length,
+        statsLoaded: !!apiData.stats
+      });
+      
+    } catch (err) {
+      console.error('API fetch error, falling back to demo data:', err);
+      loadDemoData();
+      setError(`API connection failed: ${err.message}. Using demo data.`);
+    } finally {
+      if (!silent) setRefreshing(false);
+      setLoading(false);
+    }
+  };
+
+  // WebSocket initialization
   const initializeWebSocket = useCallback(() => {
     const currentUser = getCurrentUser();
-    if (!currentUser || !isComponentMountedRef.current) return;
+    const currentToken = getCurrentToken();
+    
+    if (!currentUser || currentUser.isDemo || !currentToken || !isComponentMountedRef.current) {
+      console.log('Skipping WebSocket for demo user or invalid auth');
+      return;
+    }
 
     // Clean up existing connection
     if (wsRef.current) {
@@ -333,13 +432,17 @@ const UserDashboard = () => {
     }
 
     try {
-      wsRef.current = new WebSocket(WS_URL);
+      const wsUrlWithAuth = `${WS_URL}?token=${encodeURIComponent(currentToken)}`;
+      console.log('Connecting to WebSocket:', wsUrlWithAuth);
+      
+      wsRef.current = new WebSocket(wsUrlWithAuth);
       
       wsRef.current.onopen = () => {
         if (!isComponentMountedRef.current) return;
+        console.log('WebSocket connected successfully');
         updateConnectionStatus('connected', 'WebSocket opened');
         
-        // Send subscription
+        // Send subscription message
         if (wsRef.current?.readyState === WebSocket.OPEN) {
           wsRef.current.send(JSON.stringify({
             type: 'subscribe',
@@ -363,16 +466,18 @@ const UserDashboard = () => {
       wsRef.current.onclose = (event) => {
         if (!isComponentMountedRef.current) return;
         
+        console.log('WebSocket closed:', event.code, event.reason);
         wsRef.current = null;
         updateConnectionStatus('disconnected', `Code: ${event.code}`);
         
-        // Only retry on abnormal closure
-        if (event.code !== 1000 && event.code !== 1001) {
+        // Only retry on abnormal closure for real users
+        if (event.code !== 1000 && event.code !== 1001 && !currentUser.isDemo) {
           retryTimeoutRef.current = setTimeout(() => {
             if (isComponentMountedRef.current) {
+              console.log('Retrying WebSocket connection...');
               initializeWebSocket();
             }
-          }, 5000); // 5 second retry
+          }, 5000);
         }
       };
 
@@ -388,7 +493,10 @@ const UserDashboard = () => {
     }
   }, [updateConnectionStatus]);
 
+  // Handle WebSocket messages
   const handleWebSocketMessage = (message) => {
+    console.log('WebSocket message received:', message);
+    
     switch (message.type) {
       case 'connection':
         updateConnectionStatus('connected', 'Confirmed');
@@ -396,39 +504,90 @@ const UserDashboard = () => {
         
       case 'heartbeat':
         setLastUpdateTime(new Date());
-        // Don't change connection status on heartbeat
         break;
         
       case 'new_alert':
       case 'accident_alert':
-        // Handle new alerts...
-        console.log('New alert received:', message.data);
+        if (message.data) {
+          const newAlert = {
+            id: message.data.id || Date.now(),
+            message: message.data.message || 'New real-time alert',
+            timestamp: message.data.timestamp || new Date().toISOString(),
+            severity: message.data.severity || 'medium',
+            read: false,
+            type: message.data.type || 'real_time',
+            confidence: message.data.confidence || null,
+            location: message.data.location || 'Unknown Location',
+            snapshot_url: message.data.snapshot_url || null,
+            accident_log_id: message.data.accident_log_id || null
+          };
+          
+          // Add new alert to the top of the list
+          setAlerts(prev => [newAlert, ...prev]);
+          
+          // Update stats
+          setStats(prev => prev ? {
+            ...prev,
+            total_alerts: prev.total_alerts + 1,
+            unread_alerts: prev.unread_alerts + 1
+          } : null);
+          
+          // Show browser notification if permitted
+          if (Notification.permission === 'granted') {
+            new Notification(`New Alert: ${message.data.severity?.toUpperCase() || 'MEDIUM'}`, {
+              body: newAlert.message,
+              icon: '/favicon.ico',
+              badge: '/favicon.ico'
+            });
+          }
+          
+          console.log('New alert added from WebSocket:', newAlert);
+        }
+        break;
+        
+      case 'alert_update':
+        if (message.data && message.data.id) {
+          setAlerts(prev => prev.map(alert => 
+            alert.id === message.data.id 
+              ? { ...alert, ...message.data }
+              : alert
+          ));
+          console.log('Alert updated from WebSocket:', message.data);
+        }
         break;
         
       default:
-        console.log('WebSocket message:', message.type);
+        console.log('Unknown WebSocket message type:', message.type);
     }
   };
 
-  // FIXED: Single initialization effect
+  // Initialize dashboard
   useEffect(() => {
     if (!isAuthenticated && !authUser) {
       setLoading(false);
       return;
     }
 
+    console.log('Initializing dashboard for user:', getCurrentUser());
+    
     // Load initial data
     loadDashboardData();
     
-    // Start WebSocket after a delay
-    const wsTimer = setTimeout(initializeWebSocket, 2000);
+    // Start WebSocket after initial data load
+    const wsTimer = setTimeout(() => {
+      initializeWebSocket();
+    }, 2000);
     
-    // FIXED: Single auto-refresh timer, longer interval
-    autoRefreshRef.current = setInterval(() => {
-      if (isComponentMountedRef.current) {
-        loadDashboardData(true); // Silent refresh
-      }
-    }, 60000); // 60 seconds instead of 30
+    // Set up auto-refresh for real users
+    const currentUser = getCurrentUser();
+    if (!currentUser?.isDemo) {
+      autoRefreshRef.current = setInterval(() => {
+        if (isComponentMountedRef.current) {
+          console.log('Auto-refreshing data...');
+          loadDashboardData(true);
+        }
+      }, 60000); // 60 seconds
+    }
 
     return () => {
       clearTimeout(wsTimer);
@@ -448,6 +607,10 @@ const UserDashboard = () => {
   }, [cleanup]);
 
   const markAlertAsRead = async (alertId) => {
+    const currentUser = getCurrentUser();
+    const currentToken = getCurrentToken();
+    
+    // Update local state immediately
     const newReadAlerts = new Set(readAlerts);
     newReadAlerts.add(alertId);
     setReadAlerts(newReadAlerts);
@@ -457,6 +620,24 @@ const UserDashboard = () => {
         ? { ...alert, read: true, read_at: new Date().toISOString() }
         : alert
     ));
+
+    // Try to update on server if not demo user
+    if (currentUser && !currentUser.isDemo && currentToken && isUsingRealAPI) {
+      try {
+        await fetch(`${API_BASE_URL}/api/dashboard/alerts/${alertId}/read`, {
+          method: 'POST',
+          mode: 'cors',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${currentToken}`
+          }
+        });
+        console.log('Alert marked as read on server:', alertId);
+      } catch (err) {
+        console.error('Failed to mark alert as read on server:', err);
+        // Don't revert local state - keep it marked as read locally
+      }
+    }
   };
 
   const requestNotificationPermission = async () => {
@@ -478,9 +659,11 @@ const UserDashboard = () => {
 
   const manualReconnect = () => {
     console.log('Manual reconnect triggered');
+    setError(null);
     cleanup();
     setTimeout(() => {
       if (isComponentMountedRef.current) {
+        loadDashboardData();
         initializeWebSocket();
       }
     }, 1000);
@@ -547,7 +730,7 @@ const UserDashboard = () => {
   return (
     <div className="min-h-screen bg-gray-50 p-4">
       <div className="max-w-7xl mx-auto space-y-6">
-        {/* Error Banner */}
+        {/* Error/Status Banner */}
         {error && (
           <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 rounded-lg">
             <div className="flex items-center justify-between">
@@ -561,6 +744,31 @@ const UserDashboard = () => {
             </div>
           </div>
         )}
+
+        {/* API Status Banner */}
+        <div className={`border-l-4 p-4 rounded-lg ${
+          isUsingRealAPI 
+            ? 'bg-green-50 border-green-400' 
+            : 'bg-blue-50 border-blue-400'
+        }`}>
+          <div className="flex items-center justify-between">
+            <span className={`text-sm font-medium ${
+              isUsingRealAPI ? 'text-green-800' : 'text-blue-800'
+            }`}>
+              {isUsingRealAPI 
+                ? '🟢 Connected to Live API - Real-time data active' 
+                : '🔵 Demo Mode - Sample data displayed'}
+            </span>
+            {!isUsingRealAPI && !currentUser?.isDemo && (
+              <button
+                onClick={manualReconnect}
+                className="text-blue-800 hover:text-blue-900 text-sm underline"
+              >
+                Try Reconnect
+              </button>
+            )}
+          </div>
+        </div>
 
         {/* Header */}
         <div className="bg-white rounded-lg shadow-sm p-6">
@@ -576,7 +784,7 @@ const UserDashboard = () => {
               <div className="flex items-center space-x-2 text-sm">
                 <div className={`w-3 h-3 rounded-full ${getConnectionStatusColor()}`}></div>
                 <span className="text-gray-600">{getConnectionStatusText()}</span>
-                {connectionStatus === 'disconnected' && (
+                {connectionStatus === 'disconnected' && !currentUser?.isDemo && (
                   <button
                     onClick={manualReconnect}
                     className="text-xs text-blue-600 hover:text-blue-800 underline ml-2"
@@ -688,7 +896,7 @@ const UserDashboard = () => {
                   : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
               }`}
             >
-              High Priority
+              High Priority ({alerts.filter(a => a.severity === 'high').length})
             </button>
           </div>
         </div>
@@ -710,6 +918,11 @@ const UserDashboard = () => {
                   Real-time monitoring active
                 </p>
               )}
+              {isUsingRealAPI && (
+                <p className="mt-1 text-xs text-blue-600">
+                  Connected to live API - New alerts will appear here
+                </p>
+              )}
             </div>
           ) : (
             filteredAlerts.map((alert) => (
@@ -720,19 +933,23 @@ const UserDashboard = () => {
                     ? 'border-red-500' 
                     : alert.severity === 'medium' 
                     ? 'border-yellow-500' 
+                    : alert.severity === 'low'
+                    ? 'border-green-500'
                     : 'border-blue-500'
-                } ${!isAlertRead(alert) ? 'ring-2 ring-blue-200' : ''}`}
+                } ${!isAlertRead(alert) ? 'ring-2 ring-blue-200 bg-blue-50' : ''}`}
               >
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
                     <div className="flex items-center space-x-3">
                       {alert.severity === 'high' ? (
                         <AlertTriangle className="text-red-500" size={20} />
+                      ) : alert.severity === 'low' ? (
+                        <CheckCircle className="text-green-500" size={20} />
                       ) : (
                         <Bell className="text-blue-500" size={20} />
                       )}
                       <div>
-                        <div className="flex items-center space-x-2">
+                        <div className="flex items-center space-x-2 flex-wrap">
                           <h3 className="text-lg font-semibold text-gray-900">
                             Alert #{alert.id}
                           </h3>
@@ -747,14 +964,21 @@ const UserDashboard = () => {
                                 ? 'bg-red-100 text-red-800'
                                 : alert.severity === 'medium'
                                 ? 'bg-yellow-100 text-yellow-800'
+                                : alert.severity === 'low'
+                                ? 'bg-green-100 text-green-800'
                                 : 'bg-blue-100 text-blue-800'
                             }`}>
                               {alert.severity} SEVERITY
                             </span>
                           )}
+                          {alert.type === 'real_time' && (
+                            <span className="px-2 py-1 text-xs font-medium bg-purple-100 text-purple-800 rounded-full">
+                              LIVE
+                            </span>
+                          )}
                         </div>
                         <p className="text-gray-700 mt-1">{alert.message}</p>
-                        <div className="flex items-center space-x-4 mt-2 text-sm text-gray-500">
+                        <div className="flex items-center space-x-4 mt-2 text-sm text-gray-500 flex-wrap">
                           <div className="flex items-center space-x-1">
                             <MapPin size={14} />
                             <span>{alert.location || 'Unknown Location'}</span>
@@ -767,6 +991,12 @@ const UserDashboard = () => {
                             <div className="flex items-center space-x-1">
                               <TrendingUp size={14} />
                               <span>Confidence: {(alert.confidence * 100).toFixed(1)}%</span>
+                            </div>
+                          )}
+                          {alert.type && (
+                            <div className="flex items-center space-x-1">
+                              <Shield size={14} />
+                              <span>Type: {alert.type.replace('_', ' ')}</span>
                             </div>
                           )}
                         </div>
@@ -821,12 +1051,22 @@ const UserDashboard = () => {
                     <h4 className="font-semibold text-gray-900 mb-2">Alert Information</h4>
                     <div className="bg-gray-50 rounded-lg p-4 space-y-2 text-sm">
                       <p><strong>Message:</strong> {selectedAlert.message}</p>
-                      <p><strong>Type:</strong> {selectedAlert.type}</p>
-                      <p><strong>Severity:</strong> {selectedAlert.severity}</p>
-                      <p><strong>Sent:</strong> {new Date(selectedAlert.timestamp).toLocaleString()}</p>
+                      <p><strong>Type:</strong> {selectedAlert.type?.replace('_', ' ') || 'N/A'}</p>
+                      <p><strong>Severity:</strong> <span className={`font-medium ${
+                        selectedAlert.severity === 'high' ? 'text-red-600' :
+                        selectedAlert.severity === 'medium' ? 'text-yellow-600' :
+                        selectedAlert.severity === 'low' ? 'text-green-600' : 'text-blue-600'
+                      }`}>{selectedAlert.severity?.toUpperCase() || 'N/A'}</span></p>
+                      <p><strong>Timestamp:</strong> {new Date(selectedAlert.timestamp).toLocaleString()}</p>
                       <p><strong>Status:</strong> {isAlertRead(selectedAlert) ? 'Read' : 'Unread'}</p>
                       {selectedAlert.confidence && (
                         <p><strong>AI Confidence:</strong> {(selectedAlert.confidence * 100).toFixed(1)}%</p>
+                      )}
+                      {selectedAlert.accident_log_id && (
+                        <p><strong>Log ID:</strong> {selectedAlert.accident_log_id}</p>
+                      )}
+                      {isUsingRealAPI && (
+                        <p><strong>Data Source:</strong> <span className="text-green-600 font-medium">Live API</span></p>
                       )}
                     </div>
                   </div>
@@ -843,9 +1083,19 @@ const UserDashboard = () => {
                   <div>
                     <h4 className="font-semibold text-gray-900 mb-2">Snapshot</h4>
                     <div className="bg-gray-100 rounded-lg p-8 text-center">
-                      <div className="bg-white rounded border-2 border-dashed border-gray-300 p-8">
-                        <span className="text-gray-500">Image placeholder - Snapshot would be displayed here</span>
-                      </div>
+                      {selectedAlert.snapshot_url ? (
+                        <div className="bg-white rounded border-2 border-dashed border-gray-300 p-8">
+                          <span className="text-gray-500">
+                            Image: {selectedAlert.snapshot_url}
+                            <br />
+                            <span className="text-xs">(Image would be displayed here in production)</span>
+                          </span>
+                        </div>
+                      ) : (
+                        <div className="bg-white rounded border-2 border-dashed border-gray-300 p-8">
+                          <span className="text-gray-500">No snapshot available for this alert</span>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -859,7 +1109,7 @@ const UserDashboard = () => {
                       }}
                       className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
                     >
-                      Mark as Read
+                      Mark as Read & Close
                     </button>
                   )}
                   <button
@@ -887,12 +1137,20 @@ const UserDashboard = () => {
                   {getConnectionStatusText()}
                 </span>
               </span>
+              <span className="flex items-center space-x-2">
+                <strong>Data Source:</strong> 
+                <span className={`font-medium ${
+                  isUsingRealAPI ? 'text-green-600' : 'text-blue-600'
+                }`}>
+                  {isUsingRealAPI ? 'Live API' : 'Demo Mode'}
+                </span>
+              </span>
               {currentUser && (
                 <span className="flex items-center space-x-2">
                   <strong>User:</strong> 
                   <span className="text-blue-600 font-medium">
                     {currentUser.username}
-                    {currentUser.isDemo && <span className="text-orange-600 ml-1">(Demo Mode)</span>}
+                    {currentUser.isDemo && <span className="text-orange-600 ml-1">(Demo)</span>}
                   </span>
                 </span>
               )}
