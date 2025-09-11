@@ -1,4 +1,4 @@
-# main.py - COMPLETE FIXED version with all dashboard routes working
+# main.py - FINAL FIXED VERSION
 import os
 import sys
 import signal
@@ -25,7 +25,7 @@ from config.settings import SNAPSHOTS_DIR, PORT, HOST, get_cors_origins, is_allo
 # Import models and database
 from models.database import create_tables, SessionLocal, get_db, User, AccidentLog
 from auth.handlers import create_default_super_admin
-from auth.dependencies import get_current_active_user, get_current_user_optional
+from auth.dependencies import get_current_active_user, get_optional_user
 
 # Import routers (but not dashboard - we'll define it here)
 from auth.routes import router as auth_router
@@ -133,7 +133,7 @@ async def lifespan(app: FastAPI):
     """Application lifespan manager"""
     # Startup
     logger.info("=" * 80)
-    logger.info("STARTING ACCIDENT DETECTION API v2.4.0 - COMPLETE DASHBOARD FIX")
+    logger.info("STARTING ACCIDENT DETECTION API v2.4.1 - IMPORT ERROR FIXED")
     logger.info("=" * 80)
     
     try:
@@ -179,9 +179,9 @@ async def lifespan(app: FastAPI):
 
 # Create FastAPI app
 app = FastAPI(
-    title="Accident Detection API - Complete Dashboard Fix",
+    title="Accident Detection API - Import Error Fixed",
     description="AI-powered accident detection system with fully working dashboard",
-    version="2.4.0",
+    version="2.4.1",
     lifespan=lifespan,
     docs_url="/docs",
     redoc_url="/redoc",
@@ -310,7 +310,7 @@ async def dashboard_health():
                 "/api/dashboard/user/dashboard/stats",
                 "/api/dashboard/ws/alerts"
             ],
-            "version": "2.4.0"
+            "version": "2.4.1"
         }
     except Exception as e:
         logger.error(f"Dashboard health check failed: {str(e)}")
@@ -531,7 +531,7 @@ async def get_user_dashboard_stats(
 async def mark_alert_read(
     alert_id: int,
     db: Session = Depends(get_db),
-    current_user: Optional[User] = Depends(get_current_user_optional)
+    current_user: Optional[User] = Depends(get_optional_user)
 ):
     """Mark alert as read - Auth optional"""
     try:
@@ -753,7 +753,7 @@ async def root():
     """Root endpoint"""
     return {
         "message": "Accident Detection API is running",
-        "version": "2.4.0",
+        "version": "2.4.1",
         "status": "operational",
         "dashboard_status": "fully_integrated",
         "cors": "custom_middleware_enabled",
@@ -813,7 +813,7 @@ if __name__ == "__main__":
     import uvicorn
     
     print("=" * 80)
-    print("🚀 ACCIDENT DETECTION API v2.4.0 - COMPLETE DASHBOARD FIX")
+    print("🚀 ACCIDENT DETECTION API v2.4.1 - IMPORT ERROR FIXED")
     print("=" * 80)
     print(f"📍 Server URL: http://{HOST}:{PORT}")
     print(f"📍 API Docs: http://{HOST}:{PORT}/docs")
