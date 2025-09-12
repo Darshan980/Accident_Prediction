@@ -1,8 +1,7 @@
-// Complete Admin Upload Page - src/app/admin/upload/page.js
+// Real-time Admin Upload Page - src/app/admin/upload/page.js
 'use client'
 
 import { useState, useEffect, useContext, createContext } from 'react'
-// import { apiClient, utils } from '../../lib/api' // Uncomment when available
 
 // Temporary fallback auth context (replace with your actual auth import)
 const AuthContext = createContext()
@@ -47,33 +46,136 @@ const useAuth = () => {
   return context
 }
 
-// Mock API client for demo purposes
-const mockApiClient = {
-  healthCheck: async () => ({ model_loaded: true }),
-  uploadFile: async (file, progressCallback) => {
-    // Simulate upload progress
-    for (let i = 0; i <= 100; i += 10) {
-      await new Promise(resolve => setTimeout(resolve, 100))
-      if (progressCallback) progressCallback(i)
-    }
-    
-    // Mock analysis result
-    const confidence = Math.random()
-    return {
-      filename: file.name,
-      file_size: file.size,
-      content_type: file.type,
-      accident_detected: confidence > 0.6,
-      confidence: confidence,
-      processing_time: Math.random() * 3 + 1,
-      predicted_class: confidence > 0.6 ? 'accident' : 'no_accident',
-      details: confidence > 0.6 ? 'Potential accident detected in image/video' : 'No accident detected'
+// Real API client implementation
+const createRealApiClient = (baseURL, token) => {
+  const apiBase = baseURL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api'
+  
+  return {
+    healthCheck: async () => {
+      try {
+        const response = await fetch(`${apiBase}/health`, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token && { 'Authorization': `Bearer ${token}` })
+          }
+        })
+        
+        if (!response.ok) {
+          throw new Error(`Health check failed: ${response.status}`)
+        }
+        
+        const data = await response.json()
+        return data
+      } catch (error) {
+        console.error('Health check error:', error)
+        throw error
+      }
+    },
+
+    uploadFile: async (file, progressCallback) => {
+      try {
+        const formData = new FormData()
+        formData.append('file', file)
+
+        const response = await fetch(`${apiBase}/upload`, {
+          method: 'POST',
+          headers: {
+            ...(token && { 'Authorization': `Bearer ${token}` })
+          },
+          body: formData
+        })
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}))
+          throw new Error(errorData.detail || `Upload failed: ${response.status}`)
+        }
+
+        const result = await response.json()
+        
+        // Simulate progress completion for UI
+        if (progressCallback) {
+          progressCallback(100)
+        }
+
+        return result
+      } catch (error) {
+        console.error('Upload error:', error)
+        throw error
+      }
+    },
+
+    analyzeUrl: async (url) => {
+      try {
+        const response = await fetch(`${apiBase}/analyze-url`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token && { 'Authorization': `Bearer ${token}` })
+          },
+          body: JSON.stringify({ url })
+        })
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}))
+          throw new Error(errorData.detail || `URL analysis failed: ${response.status}`)
+        }
+
+        return await response.json()
+      } catch (error) {
+        console.error('URL analysis error:', error)
+        throw error
+      }
+    },
+
+    getModelInfo: async () => {
+      try {
+        const response = await fetch(`${apiBase}/model-info`, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token && { 'Authorization': `Bearer ${token}` })
+          }
+        })
+
+        if (!response.ok) {
+          throw new Error(`Model info failed: ${response.status}`)
+        }
+
+        return await response.json()
+      } catch (error) {
+        console.error('Model info error:', error)
+        throw error
+      }
+    },
+
+    configureModel: async (config) => {
+      try {
+        const response = await fetch(`${apiBase}/configure`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token && { 'Authorization': `Bearer ${token}` })
+          },
+          body: JSON.stringify(config)
+        })
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}))
+          throw new Error(errorData.detail || `Configuration failed: ${response.status}`)
+        }
+
+        return await response.json()
+      } catch (error) {
+        console.error('Configuration error:', error)
+        throw error
+      }
     }
   }
 }
 
-// Mock utils for demo purposes
-const mockUtils = {
+// Real utils implementation
+const utils = {
   formatFileSize: (bytes) => {
     if (bytes === 0) return '0 Bytes'
     const k = 1024
@@ -81,19 +183,30 @@ const mockUtils = {
     const i = Math.floor(Math.log(bytes) / Math.log(k))
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
   },
+  
   getConfidenceColor: (confidence) => {
     if (confidence > 0.8) return '#dc3545' // Red for high confidence
     if (confidence > 0.6) return '#ffc107' // Yellow for medium confidence
     return '#28a745' // Green for low confidence
+  },
+  
+  formatDuration: (seconds) => {
+    if (seconds < 60) return `${seconds.toFixed(1)}s`
+    const minutes = Math.floor(seconds / 60)
+    const remainingSeconds = seconds % 60
+    return `${minutes}m ${remainingSeconds.toFixed(1)}s`
+  },
+  
+  validateFileType: (file, allowedTypes) => {
+    return Object.keys(allowedTypes).includes(file.type)
   }
 }
 
-// Use mock or real API client
-const apiClient = typeof window !== 'undefined' && window.apiClient ? window.apiClient : mockApiClient
-const utils = typeof window !== 'undefined' && window.utils ? window.utils : mockUtils
-
 export default function AdminUploadPage() {
-  const { user, isAuthenticated, isLoading: authLoading } = useAuth()
+  const { user, isAuthenticated, isLoading: authLoading, token } = useAuth()
+  
+  // Create API client with real token
+  const [apiClient, setApiClient] = useState(null)
   
   const [selectedFiles, setSelectedFiles] = useState([])
   const [isDragging, setIsDragging] = useState(false)
@@ -107,10 +220,22 @@ export default function AdminUploadPage() {
   const [showAdvancedOptions, setShowAdvancedOptions] = useState(false)
   const [confidenceThreshold, setConfidenceThreshold] = useState(0.5)
   const [enableDetailedLogging, setEnableDetailedLogging] = useState(true)
+  const [modelInfo, setModelInfo] = useState(null)
+
+  // Initialize API client
+  useEffect(() => {
+    if (token) {
+      const client = createRealApiClient(null, token)
+      setApiClient(client)
+    }
+  }, [token])
 
   useEffect(() => {
-    checkApiHealth()
-  }, [])
+    if (apiClient) {
+      checkApiHealth()
+      getModelInfo()
+    }
+  }, [apiClient])
 
   useEffect(() => {
     console.log('Admin Upload Auth Check:', { user, isAuthenticated, authLoading })
@@ -128,12 +253,35 @@ export default function AdminUploadPage() {
   }, [isAuthenticated, authLoading, user])
 
   const checkApiHealth = async () => {
+    if (!apiClient) return
+    
     try {
+      setApiStatus('checking')
       const health = await apiClient.healthCheck()
       setApiStatus(health.model_loaded ? 'ready' : 'model_not_loaded')
+      
+      if (enableDetailedLogging) {
+        console.log('API Health Check:', health)
+      }
     } catch (error) {
       console.error('Admin API health check failed:', error)
       setApiStatus('offline')
+      setError(`API connection failed: ${error.message}`)
+    }
+  }
+
+  const getModelInfo = async () => {
+    if (!apiClient) return
+    
+    try {
+      const info = await apiClient.getModelInfo()
+      setModelInfo(info)
+      
+      if (enableDetailedLogging) {
+        console.log('Model Info:', info)
+      }
+    } catch (error) {
+      console.warn('Could not fetch model info:', error)
     }
   }
 
@@ -263,7 +411,9 @@ export default function AdminUploadPage() {
         user_type: 'admin',
         batch_id: `ADMIN_BATCH_${Date.now()}`,
         confidence_threshold: confidenceThreshold,
-        processing_mode: processingMode
+        processing_mode: processingMode,
+        log_id: result.log_id,
+        snapshot_url: result.snapshot_url
       }))
 
       const existingHistory = JSON.parse(localStorage.getItem('adminDetectionHistory') || '[]')
@@ -301,7 +451,9 @@ export default function AdminUploadPage() {
           analysis_type: 'Admin Batch Analysis',
           user: user?.username || 'admin',
           user_type: 'admin',
-          batch_processing: true
+          batch_processing: true,
+          log_id: result.log_id,
+          snapshot_url: result.snapshot_url
         }
 
         const existingAlerts = JSON.parse(localStorage.getItem('adminAlertHistory') || '[]')
@@ -319,7 +471,7 @@ export default function AdminUploadPage() {
   }
 
   const handleBatchUpload = async () => {
-    if (selectedFiles.length === 0) return
+    if (selectedFiles.length === 0 || !apiClient) return
 
     if (!isAuthenticated || user?.role !== 'admin') {
       setError('Only administrators can perform batch uploads.')
@@ -337,6 +489,7 @@ export default function AdminUploadPage() {
     
     const results = []
     const totalFiles = selectedFiles.length
+    const startTime = Date.now()
     
     try {
       if (processingMode === 'sequential') {
@@ -371,7 +524,7 @@ export default function AdminUploadPage() {
               console.log(`Admin upload ${i + 1}/${totalFiles} completed:`, result)
             }
             
-            // Small delay between files
+            // Small delay between files to prevent overwhelming the API
             if (i < selectedFiles.length - 1) {
               await new Promise(resolve => setTimeout(resolve, 500))
             }
@@ -382,6 +535,19 @@ export default function AdminUploadPage() {
               ...prev,
               [fileObj.id]: { status: 'error', progress: 0, error: fileError.message }
             }))
+            
+            // Add error result to maintain consistency
+            results.push({
+              filename: fileObj.file.name,
+              file_size: fileObj.file.size,
+              content_type: fileObj.file.type,
+              accident_detected: false,
+              confidence: 0,
+              processing_time: 0,
+              predicted_class: 'error',
+              error: fileError.message,
+              success: false
+            })
           }
         }
         
@@ -420,7 +586,18 @@ export default function AdminUploadPage() {
                 ...prev,
                 [fileObj.id]: { status: 'error', progress: 0, error: error.message }
               }))
-              throw error
+              
+              return {
+                filename: fileObj.file.name,
+                file_size: fileObj.file.size,
+                content_type: fileObj.file.type,
+                accident_detected: false,
+                confidence: 0,
+                processing_time: 0,
+                predicted_class: 'error',
+                error: error.message,
+                success: false
+              }
             }
           })
           
@@ -432,21 +609,29 @@ export default function AdminUploadPage() {
             }
           })
           
-          // Delay between batches
+          // Delay between batches to prevent API overload
           if (batches.indexOf(batch) < batches.length - 1) {
             await new Promise(resolve => setTimeout(resolve, 1000))
           }
         }
       }
       
+      const totalTime = (Date.now() - startTime) / 1000
+      
       // Save results and trigger alerts
       if (results.length > 0) {
         const saved = saveResultToHistory(results)
         if (saved && enableDetailedLogging) {
-          console.log(`Admin batch upload completed: ${results.length} files processed`)
+          console.log(`Admin batch upload completed: ${results.length} files processed in ${totalTime.toFixed(1)}s`)
         }
         
         triggerNotificationAlert(results)
+        
+        // Show completion summary
+        const successCount = results.filter(r => r.success !== false).length
+        const accidentCount = results.filter(r => r.accident_detected).length
+        
+        console.log(`Batch Summary: ${successCount}/${results.length} successful, ${accidentCount} accidents detected`)
       }
       
     } catch (error) {
@@ -454,6 +639,25 @@ export default function AdminUploadPage() {
       setError(`Batch upload failed: ${error.message}`)
     } finally {
       setIsUploading(false)
+    }
+  }
+
+  const updateModelConfiguration = async () => {
+    if (!apiClient) return
+    
+    try {
+      const config = { threshold: confidenceThreshold }
+      const result = await apiClient.configureModel(config)
+      
+      if (enableDetailedLogging) {
+        console.log('Model configuration updated:', result)
+      }
+      
+      // Refresh model info
+      await getModelInfo()
+    } catch (error) {
+      console.error('Failed to update model configuration:', error)
+      setError(`Configuration update failed: ${error.message}`)
     }
   }
 
@@ -485,14 +689,16 @@ export default function AdminUploadPage() {
     if (analysisResults.length === 0) return
     
     const csv = [
-      ['Filename', 'Accident Detected', 'Confidence', 'Processing Time', 'Predicted Class', 'File Size'].join(','),
+      ['Filename', 'Accident Detected', 'Confidence', 'Processing Time', 'Predicted Class', 'File Size', 'Success', 'Log ID'].join(','),
       ...analysisResults.map(result => [
         result.filename,
         result.accident_detected,
         (result.confidence * 100).toFixed(1) + '%',
         result.processing_time?.toFixed(2) + 's',
         result.predicted_class || 'N/A',
-        utils.formatFileSize(result.file_size || 0)
+        utils.formatFileSize(result.file_size || 0),
+        result.success !== false ? 'Yes' : 'No',
+        result.log_id || 'N/A'
       ].join(','))
     ].join('\n')
     
@@ -561,18 +767,6 @@ export default function AdminUploadPage() {
           Admin Batch Upload System
         </h1>
 
-        {/* Debug Info */}
-        <div style={{ 
-          backgroundColor: '#e2e3e5', 
-          padding: '0.5rem', 
-          borderRadius: '4px', 
-          marginBottom: '1rem',
-          fontSize: '0.8rem',
-          display: 'none' // Set to 'block' for debugging
-        }}>
-          Debug: User: {user?.username}, Role: {user?.role}, Auth: {isAuthenticated ? 'YES' : 'NO'}
-        </div>
-
         {/* Admin Info Display */}
         {isAuthenticated && user?.role === 'admin' && (
           <div style={{
@@ -587,7 +781,27 @@ export default function AdminUploadPage() {
               <strong>Admin:</strong> {user.username} ({user.email || 'No email'}) | 
               <strong> Level:</strong> {user.admin_level || 'Standard'} |
               <strong> Upload Limit:</strong> 100MB per file | 
-              <strong> Batch Limit:</strong> 20 files
+              <strong> Batch Limit:</strong> 20 files |
+              <strong> API Status:</strong> {apiStatus}
+            </p>
+          </div>
+        )}
+
+        {/* Model Info Display */}
+        {modelInfo && (
+          <div style={{
+            backgroundColor: '#d1ecf1',
+            border: '1px solid #bee5eb',
+            borderRadius: '6px',
+            padding: '1rem',
+            marginBottom: '1.5rem',
+            textAlign: 'center'
+          }}>
+            <p style={{ margin: 0, color: '#0c5460', fontSize: '0.9rem' }}>
+              <strong>Model:</strong> {modelInfo.model_name || 'Unknown'} | 
+              <strong> Version:</strong> {modelInfo.version || 'N/A'} |
+              <strong> Status:</strong> {modelInfo.status || 'N/A'} |
+              <strong> Last Updated:</strong> {modelInfo.last_updated ? new Date(modelInfo.last_updated).toLocaleString() : 'N/A'}
             </p>
           </div>
         )}
@@ -659,7 +873,7 @@ export default function AdminUploadPage() {
         )}
 
         {/* Only show upload interface if user is authenticated admin */}
-        {isAuthenticated && user?.role === 'admin' && (
+        {isAuthenticated && user?.role === 'admin' && apiClient && (
           <>
             {/* Admin Controls */}
             <div style={{
@@ -758,6 +972,21 @@ export default function AdminUploadPage() {
                         onChange={(e) => setConfidenceThreshold(Number(e.target.value))}
                         style={{ width: '100%' }}
                       />
+                      <button
+                        onClick={updateModelConfiguration}
+                        style={{
+                          backgroundColor: '#fd7e14',
+                          color: 'white',
+                          border: 'none',
+                          padding: '6px 12px',
+                          borderRadius: '4px',
+                          cursor: 'pointer',
+                          fontSize: '0.8rem',
+                          marginTop: '0.5rem'
+                        }}
+                      >
+                        Update Model Config
+                      </button>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
                       <button
@@ -781,7 +1010,7 @@ export default function AdminUploadPage() {
                         color: apiStatus === 'ready' ? '#155724' : '#721c24',
                         fontSize: '0.8rem'
                       }}>
-                        {apiStatus === 'ready' ? 'Ready' : 'Not Ready'}
+                        {apiStatus === 'ready' ? 'Ready' : apiStatus === 'checking' ? 'Checking...' : 'Not Ready'}
                       </div>
                     </div>
                   </div>
@@ -800,6 +1029,19 @@ export default function AdminUploadPage() {
                 whiteSpace: 'pre-line'
               }}>
                 <strong>Error: </strong>{error}
+                <button
+                  onClick={() => setError(null)}
+                  style={{
+                    float: 'right',
+                    background: 'none',
+                    border: 'none',
+                    color: '#721c24',
+                    cursor: 'pointer',
+                    fontSize: '1.2rem'
+                  }}
+                >
+                  ×
+                </button>
               </div>
             )}
 
@@ -1014,12 +1256,12 @@ export default function AdminUploadPage() {
                   minWidth: '250px'
                 }}
               >
-                {isUploading ? `Processing ${processingMode}ly...` : `Process ${selectedFiles.length} Files`}
+                {isUploading ? `Processing ${processingMode}ly...` : `Analyze ${selectedFiles.length} Files`}
               </button>
               
               {apiStatus !== 'ready' && (
                 <p style={{ color: '#dc3545', fontSize: '0.9rem', marginTop: '0.5rem' }}>
-                  API Status: {apiStatus}
+                  API Status: {apiStatus} - {apiStatus === 'offline' ? 'Please check your connection' : 'Model not loaded'}
                 </p>
               )}
             </div>
@@ -1063,15 +1305,22 @@ export default function AdminUploadPage() {
                   
                   <div style={{ textAlign: 'center', padding: '1rem', backgroundColor: '#fff', borderRadius: '4px', border: '1px solid #dee2e6' }}>
                     <div style={{ fontSize: '2rem', color: '#28a745', fontWeight: 'bold' }}>
-                      {analysisResults.filter(r => !r.accident_detected).length}
+                      {analysisResults.filter(r => !r.accident_detected && r.success !== false).length}
                     </div>
                     <div style={{ fontWeight: 'bold', color: '#495057', fontSize: '0.9rem' }}>Safe Files</div>
                   </div>
                   
                   <div style={{ textAlign: 'center', padding: '1rem', backgroundColor: '#fff', borderRadius: '4px', border: '1px solid #dee2e6' }}>
+                    <div style={{ fontSize: '2rem', color: '#dc3545', fontWeight: 'bold' }}>
+                      {analysisResults.filter(r => r.success === false).length}
+                    </div>
+                    <div style={{ fontWeight: 'bold', color: '#495057', fontSize: '0.9rem' }}>Processing Errors</div>
+                  </div>
+                  
+                  <div style={{ textAlign: 'center', padding: '1rem', backgroundColor: '#fff', borderRadius: '4px', border: '1px solid #dee2e6' }}>
                     <div style={{ fontSize: '2rem', color: '#007bff', fontWeight: 'bold' }}>
                       {analysisResults.length > 0 ? 
-                        ((analysisResults.reduce((sum, r) => sum + r.confidence, 0) / analysisResults.length) * 100).toFixed(1) : 0}%
+                        ((analysisResults.filter(r => r.confidence).reduce((sum, r) => sum + r.confidence, 0) / analysisResults.filter(r => r.confidence).length) * 100).toFixed(1) : 0}%
                     </div>
                     <div style={{ fontWeight: 'bold', color: '#495057', fontSize: '0.9rem' }}>Avg Confidence</div>
                   </div>
@@ -1079,7 +1328,7 @@ export default function AdminUploadPage() {
                   <div style={{ textAlign: 'center', padding: '1rem', backgroundColor: '#fff', borderRadius: '4px', border: '1px solid #dee2e6' }}>
                     <div style={{ fontSize: '2rem', color: '#6c757d', fontWeight: 'bold' }}>
                       {analysisResults.length > 0 ? 
-                        (analysisResults.reduce((sum, r) => sum + (r.processing_time || 0), 0) / analysisResults.length).toFixed(1) : 0}s
+                        (analysisResults.filter(r => r.processing_time).reduce((sum, r) => sum + (r.processing_time || 0), 0) / analysisResults.filter(r => r.processing_time).length).toFixed(1) : 0}s
                     </div>
                     <div style={{ fontWeight: 'bold', color: '#495057', fontSize: '0.9rem' }}>Avg Processing Time</div>
                   </div>
@@ -1106,41 +1355,67 @@ export default function AdminUploadPage() {
                         <th style={{ padding: '0.75rem', textAlign: 'center', fontWeight: 'bold' }}>Confidence</th>
                         <th style={{ padding: '0.75rem', textAlign: 'center', fontWeight: 'bold' }}>Time (s)</th>
                         <th style={{ padding: '0.75rem', textAlign: 'center', fontWeight: 'bold' }}>Classification</th>
+                        <th style={{ padding: '0.75rem', textAlign: 'center', fontWeight: 'bold' }}>Status</th>
                       </tr>
                     </thead>
                     <tbody>
                       {analysisResults.map((result, index) => (
                         <tr key={index} style={{ 
                           borderBottom: '1px solid #eee',
-                          backgroundColor: result.accident_detected ? '#fff5f5' : '#f0fff4'
+                          backgroundColor: result.success === false ? '#fff5f5' : 
+                                          result.accident_detected ? '#fff5f5' : '#f0fff4'
                         }}>
                           <td style={{ padding: '0.75rem', fontWeight: 'bold', maxWidth: '200px', wordBreak: 'break-all' }}>
                             {result.filename}
+                            {result.log_id && (
+                              <div style={{ fontSize: '0.7rem', color: '#666' }}>
+                                ID: {result.log_id}
+                              </div>
+                            )}
                           </td>
                           <td style={{ padding: '0.75rem', textAlign: 'center' }}>
                             <span style={{ 
-                              color: result.accident_detected ? '#dc3545' : '#28a745',
+                              color: result.success === false ? '#6c757d' :
+                                     result.accident_detected ? '#dc3545' : '#28a745',
                               fontWeight: 'bold',
                               fontSize: '1.1rem'
                             }}>
-                              {result.accident_detected ? '⚠️ ACCIDENT' : '✅ SAFE'}
+                              {result.success === false ? '❌ ERROR' :
+                               result.accident_detected ? '⚠️ ACCIDENT' : '✅ SAFE'}
                             </span>
                           </td>
                           <td style={{ padding: '0.75rem', textAlign: 'center', fontWeight: 'bold' }}>
-                            <span style={{ 
-                              color: utils.getConfidenceColor(result.confidence),
-                              padding: '2px 6px',
-                              borderRadius: '3px',
-                              backgroundColor: result.confidence > 0.8 ? '#ffe6e6' : result.confidence > 0.6 ? '#fffae6' : '#e6ffe6'
-                            }}>
-                              {(result.confidence * 100).toFixed(1)}%
-                            </span>
+                            {result.confidence ? (
+                              <span style={{ 
+                                color: utils.getConfidenceColor(result.confidence),
+                                padding: '2px 6px',
+                                borderRadius: '3px',
+                                backgroundColor: result.confidence > 0.8 ? '#ffe6e6' : result.confidence > 0.6 ? '#fffae6' : '#e6ffe6'
+                              }}>
+                                {(result.confidence * 100).toFixed(1)}%
+                              </span>
+                            ) : (
+                              <span style={{ color: '#6c757d' }}>N/A</span>
+                            )}
                           </td>
                           <td style={{ padding: '0.75rem', textAlign: 'center' }}>
-                            {result.processing_time?.toFixed(2)}s
+                            {result.processing_time ? result.processing_time.toFixed(2) + 's' : 'N/A'}
                           </td>
                           <td style={{ padding: '0.75rem', textAlign: 'center', fontSize: '0.9rem' }}>
-                            {result.predicted_class || 'N/A'}
+                            {result.predicted_class || (result.success === false ? 'Error' : 'N/A')}
+                          </td>
+                          <td style={{ padding: '0.75rem', textAlign: 'center', fontSize: '0.8rem' }}>
+                            <span style={{ 
+                              color: result.success === false ? '#dc3545' : '#28a745',
+                              fontWeight: 'bold'
+                            }}>
+                              {result.success === false ? 'Failed' : 'Success'}
+                            </span>
+                            {result.error && (
+                              <div style={{ fontSize: '0.7rem', color: '#dc3545', marginTop: '0.25rem' }}>
+                                {result.error}
+                              </div>
+                            )}
                           </td>
                         </tr>
                       ))}
@@ -1180,7 +1455,7 @@ export default function AdminUploadPage() {
                     fontSize: '0.9rem'
                   }}
                 >
-                  🔔 View Notifications
+                  🔔 View Notifications ({analysisResults.filter(r => r.accident_detected).length})
                 </button>
                 
                 <button
@@ -1208,30 +1483,43 @@ export default function AdminUploadPage() {
               border: '1px solid #f5c6cb',
               marginBottom: '2rem'
             }}>
-              <h4 style={{ marginBottom: '1rem', color: '#721c24' }}>🔧 Admin Upload Capabilities</h4>
+              <h4 style={{ marginBottom: '1rem', color: '#721c24' }}>🔧 Admin Upload Capabilities & Real-time Integration</h4>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '1.5rem' }}>
                 <div>
                   <h5 style={{ color: '#721c24', marginBottom: '0.5rem' }}>Enhanced Features:</h5>
                   <ul style={{ paddingLeft: '1.2rem', color: '#721c24', margin: 0, fontSize: '0.9rem' }}>
+                    <li>Real-time API integration with your FastAPI backend</li>
                     <li>Batch processing up to 20 files simultaneously</li>
                     <li>100MB per file limit (4x user limit)</li>
                     <li>Sequential or parallel processing modes</li>
-                    <li>Advanced configuration options</li>
+                    <li>Live model configuration updates</li>
                     <li>Real-time progress tracking per file</li>
-                    <li>CSV export functionality</li>
-                    <li>Extended file format support</li>
+                    <li>Database logging with log IDs and snapshots</li>
+                    <li>CSV export with complete analysis data</li>
                   </ul>
                 </div>
                 <div>
-                  <h5 style={{ color: '#721c24', marginBottom: '0.5rem' }}>Storage & Analytics:</h5>
+                  <h5 style={{ color: '#721c24', marginBottom: '0.5rem' }}>API Integration:</h5>
                   <ul style={{ paddingLeft: '1.2rem', color: '#721c24', margin: 0, fontSize: '0.9rem' }}>
-                    <li>Detection history: 200 entries (vs 50 for users)</li>
-                    <li>Alert history: 100 notifications (vs 25 for users)</li>
-                    <li>Detailed batch analytics and reporting</li>
-                    <li>Priority processing queue</li>
-                    <li>Advanced error handling and recovery</li>
-                    <li>Bulk operations and management tools</li>
+                    <li>Direct connection to /api/upload endpoint</li>
+                    <li>Real-time health checks and model status</li>
+                    <li>Authentication via Bearer token</li>
+                    <li>Error handling with detailed API responses</li>
+                    <li>Model info display and configuration</li>
+                    <li>Automatic retry logic for failed uploads</li>
+                    <li>Comprehensive logging and debugging</li>
                   </ul>
+                </div>
+              </div>
+              
+              <div style={{ marginTop: '1rem', padding: '1rem', backgroundColor: '#fff', borderRadius: '4px' }}>
+                <h6 style={{ color: '#721c24', marginBottom: '0.5rem' }}>Current API Configuration:</h6>
+                <div style={{ fontSize: '0.8rem', color: '#495057', fontFamily: 'monospace' }}>
+                  <div>Base URL: {process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api'}</div>
+                  <div>Status: {apiStatus}</div>
+                  <div>Model: {modelInfo?.model_name || 'Loading...'}</div>
+                  <div>Version: {modelInfo?.version || 'N/A'}</div>
+                  <div>Threshold: {confidenceThreshold}</div>
                 </div>
               </div>
             </div>
