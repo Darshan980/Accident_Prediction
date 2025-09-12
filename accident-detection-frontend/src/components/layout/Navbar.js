@@ -26,12 +26,31 @@ const Navigation = ({ user, isAuthenticated, logout, isLoading }) => {
     setShowUserMenu(false);
   };
 
-  const navItems = [
-    { href: '/', icon: Home, label: 'Dashboard' },
-    { href: '/upload', icon: Upload, label: 'Upload' },
-    { href: '/live', icon: Video, label: 'Live Feed' },
-    { href: '/results', icon: BarChart3, label: 'Results' }
-  ];
+  // Dynamic navigation items based on user role
+  const getNavItems = () => {
+    const baseItems = [
+      { 
+        href: user?.role === 'admin' ? '/admin/dashboard' : '/dashboard', 
+        icon: Home, 
+        label: 'Dashboard' 
+      },
+      { href: '/upload', icon: Upload, label: 'Upload' },
+      { href: '/live', icon: Video, label: 'Live Feed' },
+      { href: '/results', icon: BarChart3, label: 'Results' }
+    ];
+
+    // Add admin-only items if user is admin
+    if (user?.role === 'admin') {
+      baseItems.push(
+        { href: '/admin/users', icon: User, label: 'User Management' },
+        { href: '/admin/settings', icon: Settings, label: 'System Settings' }
+      );
+    }
+
+    return baseItems;
+  };
+
+  const navItems = getNavItems();
 
   if (isLoading) {
     return (
@@ -53,7 +72,10 @@ const Navigation = ({ user, isAuthenticated, logout, isLoading }) => {
         <div className="nav-container">
           {/* Logo */}
           <div className="nav-logo">
-            <Link href="/" className="logo-link">
+            <Link 
+              href={isAuthenticated ? (user?.role === 'admin' ? '/dashboard' : '/userdashboard') : '/'} 
+              className="logo-link"
+            >
               <span className="logo-icon">🚨</span>
               <span className="logo-text">Accident Detection</span>
             </Link>
