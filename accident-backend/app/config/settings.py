@@ -1,4 +1,4 @@
-# config/settings.py - FIXED CORS with your specific Vercel URL
+# config/settings.py - FIXED with PostgreSQL for Vercel
 import os
 import re
 from pathlib import Path
@@ -7,11 +7,20 @@ from typing import List
 # Base directory
 BASE_DIR = Path(__file__).parent.parent
 
-# Database configuration
-SQLALCHEMY_DATABASE_URL = "sqlite:///./accident_detection.db"
+# Database configuration - FIXED for production persistence
+DATABASE_URL = os.getenv("DATABASE_URL")
+if DATABASE_URL:
+    # Production database (PostgreSQL)
+    SQLALCHEMY_DATABASE_URL = DATABASE_URL
+    # Fix for SQLAlchemy if using postgresql://
+    if DATABASE_URL.startswith("postgres://"):
+        SQLALCHEMY_DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+else:
+    # Development fallback
+    SQLALCHEMY_DATABASE_URL = "sqlite:///./accident_detection.db"
 
 # JWT Configuration
-SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key-change-this-in-production")
+SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key-change-this-in-production-please-use-strong-key")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
@@ -26,7 +35,7 @@ FRAME_PROCESSING_INTERVAL = 2.0
 SNAPSHOTS_DIR = BASE_DIR / "snapshots"
 
 def get_cors_origins() -> List[str]:
-    """Get CORS origins - FIXED to include your specific Vercel preview URL"""
+    """Get CORS origins - FIXED to include your specific Vercel URL"""
     
     # Get from environment variable first
     env_origins = os.getenv("CORS_ORIGINS", "")
@@ -99,11 +108,6 @@ def is_allowed_origin(origin: str) -> bool:
             return True
     
     return False
-
-# Alternative: If you need wildcard behavior, disable credentials
-def get_cors_origins_no_credentials() -> List[str]:
-    """Alternative CORS config without credentials for wildcard support"""
-    return ["*"]
 
 # File validation
 ALLOWED_FILE_TYPES = {
