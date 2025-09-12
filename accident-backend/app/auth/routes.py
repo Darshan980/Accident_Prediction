@@ -1,4 +1,4 @@
-# auth/routes.py - FIXED to handle both field name formats
+# auth/routes.py - FIXED bcrypt compatibility issue
 from datetime import timedelta
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from fastapi.responses import JSONResponse
@@ -41,22 +41,78 @@ class ProfileUpdateRequest(BaseModel):
     class Config:
         extra = "ignore"
 
-# Import password functions
+# FIXED: Better bcrypt compatibility handling
+def setup_password_context():
+    """Setup password context with better error handling"""
+    try:
+        from passlib.context import CryptContext
+        # Use more compatible bcrypt configuration
+        return CryptContext(
+            schemes=["bcrypt"], 
+            deprecated="auto",
+            bcrypt__rounds=12,  # Explicit rounds
+            bcrypt__ident="2b"  # Explicit bcrypt variant
+        )
+    except Exception as e:
+        logger.warning(f"Passlib bcrypt setup failed: {e}")
+        try:
+            # Fallback to basic bcrypt
+            import bcrypt
+            class BasicBcryptContext:
+                @staticmethod
+                def verify(plain_password: str, hashed_password: str) -> bool:
+                    try:
+                        return bcrypt.checkpw(
+                            plain_password.encode('utf-8'), 
+                            hashed_password.encode('utf-8')
+                        )
+                    except Exception as verify_error:
+                        logger.error(f"Password verification failed: {verify_error}")
+                        return False
+                
+                @staticmethod
+                def hash(password: str) -> str:
+                    try:
+                        salt = bcrypt.gensalt()
+                        return bcrypt.hashpw(password.encode('utf-8'), salt).decode('utf-8')
+                    except Exception as hash_error:
+                        logger.error(f"Password hashing failed: {hash_error}")
+                        raise
+            
+            return BasicBcryptContext()
+        except Exception as fallback_error:
+            logger.error(f"All password context setups failed: {fallback_error}")
+            raise
+
+# Initialize password context
 try:
-    from passlib.context import CryptContext
-    pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+    pwd_context = setup_password_context()
     
     def verify_password(plain_password: str, hashed_password: str) -> bool:
-        return pwd_context.verify(plain_password, hashed_password)
+        """Verify password with better error handling"""
+        try:
+            return pwd_context.verify(plain_password, hashed_password)
+        except Exception as e:
+            logger.error(f"Password verification error: {e}")
+            return False
     
     def get_password_hash(password: str) -> str:
-        return pwd_context.hash(password)
-        
-except ImportError:
+        """Hash password with better error handling"""
+        try:
+            return pwd_context.hash(password)
+        except Exception as e:
+            logger.error(f"Password hashing error: {e}")
+            raise HTTPException(status_code=500, detail="Password hashing failed")
+            
+except Exception as setup_error:
+    logger.error(f"Password context setup failed: {setup_error}")
+    # Final fallback - import from handlers
     try:
         from auth.handlers import verify_password, get_password_hash
+        logger.info("Using password functions from auth.handlers")
     except ImportError:
-        logger.error("Cannot import password functions")
+        logger.error("Cannot import password functions from anywhere")
+        raise ImportError("Password handling system unavailable")
 
 # User Authentication Routes
 @router.post("/register", response_model=UserResponse)
@@ -64,6 +120,7 @@ async def register_user(user: UserCreate, db: Session = Depends(get_db)):
     """Register a new user"""
     try:
         db_user = create_user(db, user)
+        logger.info(f"User registered successfully: {db_user.username}")
         return UserResponse(
             id=db_user.id,
             username=db_user.username,
@@ -80,26 +137,35 @@ async def register_user(user: UserCreate, db: Session = Depends(get_db)):
 
 @router.post("/login", response_model=Token)
 async def login_user(user_credentials: UserLogin, db: Session = Depends(get_db)):
-    """User login"""
-    user = authenticate_user(db, user_credentials.username, user_credentials.password)
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect username or password",
-            headers={"WWW-Authenticate": "Bearer"},
+    """User login with enhanced error logging"""
+    try:
+        logger.info(f"Login attempt for user: {user_credentials.username}")
+        user = authenticate_user(db, user_credentials.username, user_credentials.password)
+        if not user:
+            logger.warning(f"Login failed for user: {user_credentials.username}")
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Incorrect username or password",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        
+        logger.info(f"Login successful for user: {user.username}")
+        access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+        access_token = create_access_token(
+            data={"sub": user.username, "user_id": user.id},
+            expires_delta=access_token_expires
         )
-    
-    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    access_token = create_access_token(
-        data={"sub": user.username, "user_id": user.id},
-        expires_delta=access_token_expires
-    )
-    
-    return Token(
-        access_token=access_token,
-        token_type="bearer",
-        expires_in=ACCESS_TOKEN_EXPIRE_MINUTES * 60
-    )
+        
+        return Token(
+            access_token=access_token,
+            token_type="bearer",
+            expires_in=ACCESS_TOKEN_EXPIRE_MINUTES * 60
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Login error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Login failed")
 
 @router.get("/me", response_model=UserResponse)
 async def get_current_user_info(current_user: User = Depends(get_current_active_user)):
@@ -150,6 +216,7 @@ async def update_user_profile(
         if updated:
             db.commit()
             db.refresh(current_user)
+            logger.info(f"Profile updated for user: {current_user.username}")
         
         return UserResponse(
             id=current_user.id,
@@ -168,18 +235,16 @@ async def update_user_profile(
 
 @router.put("/change-password")
 async def change_password(
-    password_data: PasswordChangeRequest,  # Now properly handles both field formats
+    password_data: PasswordChangeRequest,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
-    """Change user password - FIXED to handle snake_case fields"""
+    """Change user password - FIXED with better error handling"""
     try:
         logger.info(f"Processing password change for user: {current_user.username}")
         
         current_password = password_data.currentPassword
         new_password = password_data.newPassword
-        
-        logger.info("Password fields extracted successfully")
         
         # Validate required fields
         if not current_password:
@@ -188,9 +253,14 @@ async def change_password(
         if not new_password:
             raise HTTPException(status_code=400, detail="New password is required")
         
-        # Verify current password
-        if not verify_password(current_password, current_user.hashed_password):
-            raise HTTPException(status_code=400, detail="Current password is incorrect")
+        # Verify current password with better error handling
+        try:
+            password_valid = verify_password(current_password, current_user.hashed_password)
+            if not password_valid:
+                raise HTTPException(status_code=400, detail="Current password is incorrect")
+        except Exception as verify_error:
+            logger.error(f"Password verification failed: {verify_error}")
+            raise HTTPException(status_code=500, detail="Password verification failed")
         
         # Validate new password strength
         if len(new_password) < 6:
@@ -200,17 +270,27 @@ async def change_password(
             )
         
         # Check if new password is different
-        if verify_password(new_password, current_user.hashed_password):
-            raise HTTPException(
-                status_code=400, 
-                detail="New password must be different from current password"
-            )
+        try:
+            if verify_password(new_password, current_user.hashed_password):
+                raise HTTPException(
+                    status_code=400, 
+                    detail="New password must be different from current password"
+                )
+        except Exception as same_check_error:
+            logger.warning(f"Could not check if passwords are same: {same_check_error}")
+            # Continue anyway since this is not critical
         
         # Update password
-        current_user.hashed_password = get_password_hash(new_password)
-        db.commit()
+        try:
+            new_hash = get_password_hash(new_password)
+            current_user.hashed_password = new_hash
+            db.commit()
+            logger.info(f"Password updated successfully for user: {current_user.username}")
+        except Exception as hash_error:
+            db.rollback()
+            logger.error(f"Password hashing/storage failed: {hash_error}")
+            raise HTTPException(status_code=500, detail="Failed to update password")
         
-        logger.info("Password updated successfully")
         return {"message": "Password updated successfully", "success": True}
         
     except HTTPException:
@@ -220,7 +300,7 @@ async def change_password(
         logger.error(f"Password change failed: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Password change failed: {str(e)}")
 
-# Admin routes (unchanged)
+# Admin routes (enhanced error handling)
 @router.post("/admin/register", response_model=AdminResponse)
 async def register_admin(
     admin: AdminCreate, 
@@ -236,6 +316,7 @@ async def register_admin(
     
     try:
         db_admin = create_admin(db, admin)
+        logger.info(f"Admin registered successfully: {db_admin.username}")
         return AdminResponse(
             id=db_admin.id,
             username=db_admin.username,
@@ -249,35 +330,45 @@ async def register_admin(
     except HTTPException:
         raise
     except Exception as e:
+        logger.error(f"Admin registration failed: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Admin registration failed: {str(e)}")
 
 @router.post("/admin/login", response_model=AdminToken)
 async def login_admin(admin_credentials: AdminLogin, db: Session = Depends(get_db)):
-    """Admin login"""
-    admin = authenticate_admin(db, admin_credentials.username, admin_credentials.password)
-    if not admin:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect admin credentials",
-            headers={"WWW-Authenticate": "Bearer"},
+    """Admin login with enhanced error handling"""
+    try:
+        logger.info(f"Admin login attempt for: {admin_credentials.username}")
+        admin = authenticate_admin(db, admin_credentials.username, admin_credentials.password)
+        if not admin:
+            logger.warning(f"Admin login failed for: {admin_credentials.username}")
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Incorrect admin credentials",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        
+        logger.info(f"Admin login successful: {admin.username}")
+        access_token_expires = timedelta(minutes=60)
+        access_token_data = {
+            "sub": admin.username,
+            "user_id": admin.id,
+            "is_admin": True,
+            "is_super_admin": admin.is_super_admin,
+            "permissions": admin.permissions.split(",") if admin.permissions else []
+        }
+        access_token = create_access_token(data=access_token_data, expires_delta=access_token_expires)
+        
+        return AdminToken(
+            access_token=access_token,
+            token_type="bearer",
+            expires_in=60 * 60,
+            admin_level="super_admin" if admin.is_super_admin else "admin"
         )
-    
-    access_token_expires = timedelta(minutes=60)
-    access_token_data = {
-        "sub": admin.username,
-        "user_id": admin.id,
-        "is_admin": True,
-        "is_super_admin": admin.is_super_admin,
-        "permissions": admin.permissions.split(",") if admin.permissions else []
-    }
-    access_token = create_access_token(data=access_token_data, expires_delta=access_token_expires)
-    
-    return AdminToken(
-        access_token=access_token,
-        token_type="bearer",
-        expires_in=60 * 60,
-        admin_level="super_admin" if admin.is_super_admin else "admin"
-    )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Admin login error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Admin login failed")
 
 @router.get("/admin/me", response_model=AdminResponse)
 async def get_current_admin_info(current_admin: Admin = Depends(get_current_admin)):
