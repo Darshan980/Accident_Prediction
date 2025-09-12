@@ -1,4 +1,4 @@
-// app/dashboard/page.tsx
+// app/dashboard/page.tsx - FIXED FOR RENDER BACKEND
 'use client';
 import React, { useState, useEffect } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
@@ -16,8 +16,12 @@ const AccidentDashboard = () => {
 
   const logsPerPage = 10;
 
+  // FIXED: Use your actual Render backend URL
+  const API_BASE_URL = 'https://accident-prediction-1-mpm0.onrender.com';
+
   useEffect(() => {
     console.log('Dashboard mounted, checking authentication...');
+    console.log('Using API URL:', API_BASE_URL);
     checkAuthAndLoadData();
   }, []);
 
@@ -39,7 +43,7 @@ const AccidentDashboard = () => {
       console.log('Auth check:', {
         hasToken: !!token,
         hasUser: !!userStr,
-        tokenPreview: token ? `${token.substring(0, 20)}...` : 'none'
+        apiUrl: API_BASE_URL
       });
 
       if (!token || !userStr) {
@@ -70,39 +74,58 @@ const AccidentDashboard = () => {
   };
 
   const loadDashboardData = async () => {
-    console.log('Loading dashboard data...');
+    console.log('Loading dashboard data from Render backend...');
     
     try {
       const token = localStorage.getItem('token');
       
       if (token) {
-        console.log('Attempting to fetch real data from API...');
+        console.log('Attempting to fetch real data from Render API...');
         
-        const response = await fetch('http://localhost:8000/api/logs?limit=100', {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          }
-        });
+        // FIXED: Use correct Render URL and add proper error handling
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout
+        
+        try {
+          const response = await fetch(`${API_BASE_URL}/api/logs?limit=100`, {
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json',
+              'Accept': 'application/json'
+            },
+            signal: controller.signal,
+            mode: 'cors'
+          });
 
-        if (response.ok) {
-          const realData = await response.json();
-          console.log('✅ Real data fetched successfully:', realData.length, 'logs');
-          
-          // Apply any locally stored status updates
-          const updatedData = applyLocalStatusUpdates(realData);
-          setLogs(updatedData);
-          setDataSource('api');
-          setError(null);
-          return;
-        } else {
-          console.log('❌ API returned error:', response.status, response.statusText);
-          throw new Error(`API returned ${response.status}`);
+          clearTimeout(timeoutId);
+
+          if (response.ok) {
+            const realData = await response.json();
+            console.log('✅ Real data fetched successfully from Render:', realData.length || 0, 'logs');
+            
+            // Apply any locally stored status updates
+            const updatedData = applyLocalStatusUpdates(realData);
+            setLogs(updatedData);
+            setDataSource('render_api');
+            setError(null);
+            return;
+          } else {
+            console.log('❌ Render API returned error:', response.status, response.statusText);
+            const errorText = await response.text();
+            console.log('Error response:', errorText);
+            throw new Error(`API returned ${response.status}: ${response.statusText}`);
+          }
+        } catch (fetchError) {
+          clearTimeout(timeoutId);
+          if (fetchError.name === 'AbortError') {
+            throw new Error('Request timeout - Render backend may be slow to respond');
+          }
+          throw fetchError;
         }
       }
     } catch (err) {
-      console.log('❌ API fetch failed:', err.message);
-      setError(`API connection failed: ${err.message}. Using demo data.`);
+      console.log('❌ Render API fetch failed:', err.message);
+      setError(`Render API connection failed: ${err.message}. Using demo data.`);
     }
 
     // Fallback to sample data
@@ -110,7 +133,7 @@ const AccidentDashboard = () => {
     const sampleData = generateSampleData();
     const updatedSampleData = applyLocalStatusUpdates(sampleData);
     setLogs(updatedSampleData);
-    setDataSource('sample');
+    setDataSource('demo');
   };
 
   // Apply locally stored status updates to fresh data
@@ -240,10 +263,10 @@ const AccidentDashboard = () => {
     try {
       const token = localStorage.getItem('token');
       
-      // Try to update via API first
-      if (token && dataSource === 'api') {
+      // Try to update via Render API first
+      if (token && dataSource === 'render_api') {
         try {
-          const response = await fetch(`http://localhost:8000/api/logs/${logId}/status`, {
+          const response = await fetch(`${API_BASE_URL}/api/logs/${logId}/status`, {
             method: 'PUT',
             headers: {
               'Authorization': `Bearer ${token}`,
@@ -253,12 +276,12 @@ const AccidentDashboard = () => {
           });
           
           if (response.ok) {
-            console.log('✅ Status updated via API');
+            console.log('✅ Status updated via Render API');
           } else {
-            throw new Error('API update failed');
+            throw new Error('Render API update failed');
           }
         } catch (apiError) {
-          console.log('❌ API update failed, storing locally:', apiError.message);
+          console.log('❌ Render API update failed, storing locally:', apiError.message);
         }
       }
       
@@ -283,16 +306,40 @@ const AccidentDashboard = () => {
   };
 
   const refreshData = async () => {
-    console.log('Refreshing dashboard data...');
+    console.log('Refreshing dashboard data from Render...');
     setLoading(true);
     await loadDashboardData();
     setLoading(false);
   };
 
   const clearLocalUpdates = () => {
-    if (confirm('Are you sure you want to clear all local status updates? This will revert all changes made since the last API sync.')) {
+    if (confirm('Are you sure you want to clear all local status updates? This will revert all changes made since the last Render API sync.')) {
       localStorage.removeItem('logStatusUpdates');
       refreshData();
+    }
+  };
+
+  const testRenderConnection = async () => {
+    try {
+      console.log('Testing Render backend connection...');
+      const response = await fetch(`${API_BASE_URL}/api/health`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (response.ok) {
+        const healthData = await response.json();
+        console.log('✅ Render backend is healthy:', healthData);
+        alert(`Render backend is healthy!\nStatus: ${healthData.status}\nTimestamp: ${healthData.timestamp}`);
+      } else {
+        console.log('❌ Render backend health check failed:', response.status);
+        alert(`Render backend health check failed: ${response.status}`);
+      }
+    } catch (error) {
+      console.error('❌ Render connection test failed:', error);
+      alert(`Render connection test failed: ${error.message}`);
     }
   };
 
@@ -369,7 +416,10 @@ const AccidentDashboard = () => {
           borderRadius: '50%',
           animation: 'spin 1s linear infinite'
         }}></div>
-        <p>Loading admin dashboard...</p>
+        <p>Loading admin dashboard from Render...</p>
+        <p style={{ fontSize: '0.9rem', color: '#666' }}>
+          Connecting to: {API_BASE_URL}
+        </p>
         <style jsx>{`
           @keyframes spin {
             0% { transform: rotate(0deg); }
@@ -431,7 +481,8 @@ const AccidentDashboard = () => {
             color: '#0c5aa6'
           }}>
             <strong>Welcome, {user?.username || 'Admin'}</strong><br />
-            <small>Role: {user?.role || 'admin'} | Data: {dataSource === 'api' ? '🟢 Live' : '🟡 Demo'}</small>
+            <small>Role: {user?.role || 'admin'} | Data: {dataSource === 'render_api' ? '🟢 Render Live' : dataSource === 'demo' ? '🟡 Demo' : '🔴 Unknown'}</small><br />
+            <small>API: {API_BASE_URL}</small>
           </div>
         </div>
       </div>
@@ -452,20 +503,36 @@ const AccidentDashboard = () => {
           <div>
             <strong>Notice:</strong> {error}
           </div>
-          <button
-            onClick={refreshData}
-            style={{
-              backgroundColor: '#ffc107',
-              color: '#212529',
-              border: 'none',
-              padding: '0.5rem 1rem',
-              borderRadius: '4px',
-              cursor: 'pointer',
-              fontWeight: 'bold'
-            }}
-          >
-            Retry API
-          </button>
+          <div style={{ display: 'flex', gap: '0.5rem' }}>
+            <button
+              onClick={testRenderConnection}
+              style={{
+                backgroundColor: '#17a2b8',
+                color: 'white',
+                border: 'none',
+                padding: '0.5rem 1rem',
+                borderRadius: '4px',
+                cursor: 'pointer',
+                fontWeight: 'bold'
+              }}
+            >
+              Test Connection
+            </button>
+            <button
+              onClick={refreshData}
+              style={{
+                backgroundColor: '#ffc107',
+                color: '#212529',
+                border: 'none',
+                padding: '0.5rem 1rem',
+                borderRadius: '4px',
+                cursor: 'pointer',
+                fontWeight: 'bold'
+              }}
+            >
+              Retry Render API
+            </button>
+          </div>
         </div>
       )}
 
@@ -542,7 +609,7 @@ const AccidentDashboard = () => {
             <p style={{ margin: 0, color: '#666' }}>Last 24h</p>
           </div>
 
-          {/* NEW: Accuracy Rate Card */}
+          {/* Accuracy Rate Card */}
           <div style={{
             backgroundColor: stats.accuracy_rate === 'N/A' ? '#f8f9fa' : 
                            parseFloat(stats.accuracy_rate) >= 80 ? '#f0fff4' : 
@@ -591,7 +658,7 @@ const AccidentDashboard = () => {
             <h3 style={{ marginBottom: '1rem', color: '#333' }}>
               Detection Overview 
               <span style={{ fontSize: '0.8rem', color: '#666', fontWeight: 'normal' }}>
-                ({dataSource === 'api' ? 'Live Data' : 'Demo Data'})
+                ({dataSource === 'render_api' ? 'Render Live' : dataSource === 'demo' ? 'Demo Data' : 'Unknown'})
               </span>
             </h3>
             <ResponsiveContainer width="100%" height={200}>
@@ -709,7 +776,22 @@ const AccidentDashboard = () => {
             opacity: loading ? 0.6 : 1
           }}
         >
-          {loading ? 'Refreshing...' : 'Refresh Data'}
+          {loading ? 'Refreshing...' : 'Refresh from Render'}
+        </button>
+
+        <button
+          onClick={testRenderConnection}
+          style={{
+            backgroundColor: '#17a2b8',
+            color: 'white',
+            border: 'none',
+            padding: '0.5rem 1rem',
+            borderRadius: '4px',
+            cursor: 'pointer',
+            fontSize: '0.9rem'
+          }}
+        >
+          Test Render API
         </button>
 
         <button
@@ -964,21 +1046,23 @@ const AccidentDashboard = () => {
           color: '#666'
         }}>
           <strong>System Status:</strong> {stats?.model_status === 'loaded' ? '✅ Online' : '❌ Offline'} | 
-          <strong> Data Source:</strong> {dataSource === 'api' ? '🟢 Live API' : '🟡 Demo Data'} | 
+          <strong> Data Source:</strong> {dataSource === 'render_api' ? '🟢 Render Live' : dataSource === 'demo' ? '🟡 Demo Data' : '🔴 Unknown'} | 
           <strong> Total Records:</strong> {logs.length} | 
           <strong> Accuracy Rate:</strong> {stats?.accuracy_rate || 'N/A'} |
           <strong> Last Updated:</strong> {new Date().toLocaleTimeString()} |
           <strong> Admin:</strong> {user?.username || 'Unknown'}
         </div>
-        {stats && stats.reviewed_logs > 0 && (
-          <div style={{ 
-            fontSize: '0.8rem', 
-            color: '#666', 
-            marginTop: '0.5rem' 
-          }}>
-            <strong>Review Status:</strong> {stats.reviewed_logs} reviewed • {stats.pending_review} pending review
-          </div>
-        )}
+        <div style={{ 
+          fontSize: '0.8rem', 
+          color: '#666', 
+          marginTop: '0.5rem' 
+        }}>
+          <strong>Backend:</strong> {API_BASE_URL} | 
+          <strong>Connection:</strong> {error ? '❌ Issues' : '✅ OK'}
+          {stats && stats.reviewed_logs > 0 && (
+            <span> | <strong>Review Status:</strong> {stats.reviewed_logs} reviewed • {stats.pending_review} pending review</span>
+          )}
+        </div>
       </div>
     </div>
   );
