@@ -26,8 +26,9 @@ const Navigation = ({ user, isAuthenticated, logout, isLoading }) => {
     setShowUserMenu(false);
   };
 
+  // FIXED: Dashboard link now points to /userdashboard instead of /
   const navItems = [
-    { href: '/', icon: Home, label: 'Dashboard' },
+    { href: '/userdashboard', icon: Home, label: 'Dashboard' },
     { href: '/upload', icon: Upload, label: 'Upload' },
     { href: '/live', icon: Video, label: 'Live Feed' },
     { href: '/results', icon: BarChart3, label: 'Results' }
@@ -51,9 +52,9 @@ const Navigation = ({ user, isAuthenticated, logout, isLoading }) => {
     <>
       <nav className="navigation">
         <div className="nav-container">
-          {/* Logo */}
+          {/* Logo - FIXED: Now redirects properly based on authentication */}
           <div className="nav-logo">
-            <Link href="/" className="logo-link">
+            <Link href={isAuthenticated ? "/userdashboard" : "/auth"} className="logo-link">
               <span className="logo-icon">🚨</span>
               <span className="logo-text">Accident Detection</span>
             </Link>
