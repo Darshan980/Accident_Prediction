@@ -30,13 +30,25 @@ const Navigation = ({ user, isAuthenticated, logout, isLoading }) => {
   const getNavItems = () => {
     const baseItems = [
       { 
-        href: user?.role === 'admin' ? '/admin/dashboard' : '/dashboard', 
+        href: user?.role === 'admin' ? '/dashboard' : '/userdashboard', // Fixed: Changed from '/admin/dashboard' to '/dashboard' for admin
         icon: Home, 
         label: 'Dashboard' 
       },
-      { href: '/upload', icon: Upload, label: 'Upload' },
-      { href: '/live', icon: Video, label: 'Live Feed' },
-      { href: '/results', icon: BarChart3, label: 'Results' }
+      { 
+        href: user?.role === 'admin' ? '/admin/upload' : '/upload',
+        icon: Upload, 
+        label: 'Upload' 
+      },
+      { 
+        href: '/live', 
+        icon: Video, 
+        label: 'Live Feed' 
+      },
+      { 
+        href: user?.role === 'admin' ? '/admin/results' : '/results',
+        icon: BarChart3, 
+        label: 'Results' 
+      }
     ];
 
     // Add admin-only items if user is admin
@@ -73,7 +85,7 @@ const Navigation = ({ user, isAuthenticated, logout, isLoading }) => {
           {/* Logo */}
           <div className="nav-logo">
             <Link 
-              href={isAuthenticated ? (user?.role === 'admin' ? '/dashboard' : '/userdashboard') : '/'} 
+              href={isAuthenticated ? (user?.role === 'admin' ? '/dashboard' : '/userdashboard') : '/'}
               className="logo-link"
             >
               <span className="logo-icon">🚨</span>
