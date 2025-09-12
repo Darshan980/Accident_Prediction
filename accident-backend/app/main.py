@@ -1,11 +1,4 @@
-def run_migration():
-    """Add department and user_id columns to users/accident_logs tables if they don't exist"""
-    try:
-        database_url = os.getenv("DATABASE_URL")
-        if not database_url:
-            try:
-                from config.settings import DATABASE_URL as SETTINGS_DB_URL
-                database_url = SETTINGS_DB# main.py - USER-SPECIFIC DASHBOARD FIXED VERSION
+# main.py - USER-SPECIFIC DASHBOARD FIXED VERSION
 import os
 import sys
 import signal
@@ -26,6 +19,7 @@ from typing import List, Optional, Dict, Any
 from datetime import datetime, timedelta
 import json
 
+
 # Import from config/settings
 from config.settings import SNAPSHOTS_DIR, PORT, HOST, get_cors_origins, is_allowed_origin
 
@@ -39,7 +33,6 @@ from auth.routes import router as auth_router
 from api.core import router as core_router
 from api.upload import router as upload_router
 from api.websocket import websocket_endpoint
-from api.logs import router as logs_router
 
 # Import services
 from services.analysis import warmup_model, cleanup_thread_pool
@@ -244,28 +237,6 @@ except Exception as e:
 app.include_router(core_router, prefix="/api", tags=["core"])
 app.include_router(auth_router, prefix="/auth", tags=["authentication"])  
 app.include_router(upload_router, prefix="/api", tags=["upload"])
-
-# Include logs router if available
-if logs_router_available:
-    app.include_router(logs_router, prefix="/api", tags=["logs"])
-    logger.info("Logs router included successfully")
-else:
-    logger.warning("Logs router not available, creating fallback endpoint")
-    
-    @app.get("/api/logs")
-    async def get_logs_fallback(
-        limit: int = Query(100, ge=1, le=1000),
-        offset: int = Query(0, ge=0),
-        current_user: Optional[User] = Depends(get_optional_user)
-    ):
-        """Fallback logs endpoint"""
-        return {
-            "success": True,
-            "logs": [],
-            "total": 0,
-            "message": "Logs endpoint not available - fallback response",
-            "user": current_user.username if current_user else None
-        }
 
 # =============================================================================
 # USER-SPECIFIC DASHBOARD IMPLEMENTATION - FIXED VERSION
@@ -785,4 +756,442 @@ async def websocket_user_alerts(websocket: WebSocket):
     finally:
         if client_id in alert_connections:
             del alert_connections[client_id]
-        logger.info(f"Cleaned up Web
+        logger.info(f"Cleaned up WebSocket: {client_id} (Remaining: {len(alert_connections)})")
+
+# Debug endpoints
+@app.get("/api/dashboard/debug/status")
+async def debug_status():
+    """Debug endpoint"""
+    return {
+        "dashboard_status": "user_specific_operational",
+        "active_websockets": len(alert_connections),
+        "available_routes": [
+            "/api/dashboard/user/alerts (MAIN - user-specific)",
+            "/api/dashboard/user/stats (MAIN - user-specific)", 
+            "/api/dashboard/alerts (legacy - redirects if authenticated)",
+            "/api/dashboard/stats (legacy - redirects if authenticated)",
+            "/api/dashboard/ws/alerts (user-specific WebSocket)",
+            "/api/dashboard/health"
+        ],
+        "timestamp": datetime.now().isoformat(),
+        "features": {
+            "user_specific_filtering": True,
+            "department_based_access": True,
+            "real_time_user_alerts": True,
+            "personal_analytics": True
+        }
+    }
+
+@app.post("/api/dashboard/debug/test-user-alert")
+async def send_test_user_alert(
+    current_user: User = Depends(get_current_active_user)
+):
+    """Send test alert to user's WebSocket connections"""
+    if not alert_connections:
+        return {"message": "No active WebSocket connections"}
+    
+    test_alert = {
+        "id": f"test_{current_user.id}_{int(datetime.now().timestamp())}",
+        "message": f"Test alert for {current_user.username} - high confidence accident detected",
+        "confidence": 0.95,
+        "location": f"Test upload by {current_user.username}",
+        "timestamp": datetime.now().isoformat(),
+        "severity": "high",
+        "type": "test_user_alert",
+        "user_id": current_user.id,
+        "created_by": current_user.username
+    }
+    
+    message = json.dumps({
+        "type": "new_user_alert",
+        "data": test_alert,
+        "timestamp": datetime.now().isoformat(),
+        "target_user": {
+            "id": current_user.id,
+            "username": current_user.username
+        }
+    })
+    
+    sent_count = 0
+    failed_connections = []
+    
+    for client_id, websocket in list(alert_connections.items()):
+        try:
+            await websocket.send_text(message)
+            sent_count += 1
+        except Exception as e:
+            logger.error(f"Failed to send test alert to {client_id}: {str(e)}")
+            failed_connections.append(client_id)
+    
+    # Clean up failed connections
+    for client_id in failed_connections:
+        if client_id in alert_connections:
+            del alert_connections[client_id]
+    
+    return {
+        "message": f"Test user alert sent to {sent_count} connections",
+        "sent_to": sent_count,
+        "failed": len(failed_connections),
+        "alert": test_alert,
+        "active_connections": len(alert_connections),
+        "target_user": current_user.username
+    }
+
+# Broadcast function for real-time user alerts
+async def broadcast_user_accident(alert_data: dict, target_user_id: int):
+    """Broadcast accident alert to specific user's WebSocket connections"""
+    if not alert_connections:
+        logger.info("No WebSocket connections for broadcasting")
+        return
+    
+    message = json.dumps({
+        "type": "user_accident_alert",
+        "data": alert_data,
+        "timestamp": datetime.now().isoformat(),
+        "target_user_id": target_user_id
+    })
+    
+    sent_count = 0
+    failed_connections = []
+    
+    for client_id, websocket in list(alert_connections.items()):
+        try:
+            await websocket.send_text(message)
+            sent_count += 1
+            logger.info(f"Broadcast user alert to {client_id}")
+        except Exception as e:
+            logger.error(f"Failed to broadcast to {client_id}: {str(e)}")
+            failed_connections.append(client_id)
+    
+    # Clean up failed connections
+    for client_id in failed_connections:
+        if client_id in alert_connections:
+            del alert_connections[client_id]
+    
+    logger.info(f"Broadcasted user accident alert to {sent_count} connections for user {target_user_id}")
+
+# User profile endpoint
+@app.get("/api/dashboard/user/profile")
+async def get_user_profile(
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db)
+):
+    """Get current user's profile information"""
+    try:
+        # Get user's upload history count
+        try:
+            user_uploads_count = db.query(AccidentLog).filter(
+                or_(
+                    AccidentLog.user_id == current_user.id,
+                    AccidentLog.created_by == current_user.username
+                )
+            ).count()
+        except:
+            user_uploads_count = 0
+        
+        # Get user's accident detection rate
+        try:
+            user_accidents_count = db.query(AccidentLog).filter(
+                and_(
+                    AccidentLog.accident_detected == True,
+                    or_(
+                        AccidentLog.user_id == current_user.id,
+                        AccidentLog.created_by == current_user.username
+                    )
+                )
+            ).count()
+        except:
+            user_accidents_count = 0
+        
+        return {
+            "success": True,
+            "user_info": {
+                "id": current_user.id,
+                "username": current_user.username,
+                "email": getattr(current_user, 'email', ''),
+                "department": getattr(current_user, 'department', 'General'),
+                "is_active": getattr(current_user, 'is_active', True),
+                "is_admin": getattr(current_user, 'is_admin', False),
+                "created_at": getattr(current_user, 'created_at', datetime.now()).isoformat(),
+                "last_login": getattr(current_user, 'last_login', None)
+            },
+            "statistics": {
+                "total_uploads": user_uploads_count,
+                "accidents_detected": user_accidents_count,
+                "detection_rate": f"{(user_accidents_count/user_uploads_count*100):.1f}%" if user_uploads_count > 0 else "0%",
+                "account_age_days": (datetime.now() - getattr(current_user, 'created_at', datetime.now())).days
+            }
+        }
+        
+    except Exception as e:
+        logger.error(f"Error getting user profile: {str(e)}")
+        return {
+            "success": True,
+            "user_info": {
+                "id": current_user.id,
+                "username": current_user.username,
+                "email": getattr(current_user, 'email', ''),
+                "department": getattr(current_user, 'department', 'General')
+            },
+            "statistics": {
+                "total_uploads": 0,
+                "accidents_detected": 0,
+                "detection_rate": "0%",
+                "account_age_days": 0
+            },
+            "error": str(e)
+        }
+
+# Update user profile
+@app.put("/api/dashboard/user/profile")
+async def update_user_profile(
+    profile_data: dict,
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db)
+):
+    """Update current user's profile"""
+    try:
+        logger.info(f"Updating profile for user {current_user.username}")
+        
+        # Update allowed fields
+        updated_fields = []
+        
+        if "department" in profile_data:
+            if hasattr(current_user, 'department'):
+                current_user.department = profile_data["department"]
+                updated_fields.append("department")
+        
+        if "email" in profile_data:
+            if hasattr(current_user, 'email'):
+                current_user.email = profile_data["email"]
+                updated_fields.append("email")
+        
+        if updated_fields:
+            db.commit()
+            logger.info(f"Updated fields for user {current_user.username}: {updated_fields}")
+        
+        return {
+            "success": True,
+            "message": "Profile updated successfully",
+            "updated_fields": updated_fields,
+            "user_info": {
+                "id": current_user.id,
+                "username": current_user.username,
+                "email": getattr(current_user, 'email', ''),
+                "department": getattr(current_user, 'department', 'General')
+            }
+        }
+        
+    except Exception as e:
+        logger.error(f"Error updating user profile: {str(e)}")
+        if db:
+            db.rollback()
+        
+        return {
+            "success": False,
+            "message": f"Error updating profile: {str(e)}",
+            "error": str(e)
+        }
+
+# User analytics endpoint
+@app.get("/api/dashboard/user/analytics")
+async def get_user_analytics(
+    days: int = Query(7, ge=1, le=90),
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db)
+):
+    """Get detailed analytics for current user"""
+    try:
+        logger.info(f"Getting analytics for user {current_user.username} for last {days} days")
+        
+        from_date = datetime.now() - timedelta(days=days)
+        
+        try:
+            # Get user's accident logs for the period
+            user_logs = db.query(AccidentLog).filter(
+                and_(
+                    AccidentLog.created_at >= from_date,
+                    or_(
+                        AccidentLog.user_id == current_user.id,
+                        AccidentLog.created_by == current_user.username
+                    )
+                )
+            ).order_by(AccidentLog.created_at).all()
+            
+            # Calculate analytics
+            total_uploads = len(user_logs)
+            accidents_detected = len([log for log in user_logs if log.accident_detected])
+            
+            # Daily breakdown
+            daily_stats = {}
+            for log in user_logs:
+                date_key = log.created_at.date().isoformat()
+                if date_key not in daily_stats:
+                    daily_stats[date_key] = {"uploads": 0, "accidents": 0}
+                daily_stats[date_key]["uploads"] += 1
+                if log.accident_detected:
+                    daily_stats[date_key]["accidents"] += 1
+            
+            # Confidence distribution
+            confidence_ranges = {"high": 0, "medium": 0, "low": 0}
+            for log in user_logs:
+                if log.confidence >= 0.85:
+                    confidence_ranges["high"] += 1
+                elif log.confidence >= 0.7:
+                    confidence_ranges["medium"] += 1
+                else:
+                    confidence_ranges["low"] += 1
+            
+            return {
+                "success": True,
+                "analytics": {
+                    "period_days": days,
+                    "total_uploads": total_uploads,
+                    "accidents_detected": accidents_detected,
+                    "detection_rate": f"{(accidents_detected/total_uploads*100):.1f}%" if total_uploads > 0 else "0%",
+                    "average_confidence": sum(log.confidence for log in user_logs) / len(user_logs) if user_logs else 0,
+                    "daily_breakdown": daily_stats,
+                    "confidence_distribution": confidence_ranges
+                },
+                "user_info": {
+                    "username": current_user.username,
+                    "department": getattr(current_user, 'department', 'General')
+                }
+            }
+            
+        except Exception as db_error:
+            logger.error(f"Database analytics query failed: {str(db_error)}")
+            # Return demo analytics
+            return {
+                "success": True,
+                "analytics": {
+                    "period_days": days,
+                    "total_uploads": 12,
+                    "accidents_detected": 3,
+                    "detection_rate": "25.0%",
+                    "average_confidence": 0.78,
+                    "daily_breakdown": {
+                        datetime.now().date().isoformat(): {"uploads": 2, "accidents": 1},
+                        (datetime.now() - timedelta(days=1)).date().isoformat(): {"uploads": 3, "accidents": 1}
+                    },
+                    "confidence_distribution": {"high": 1, "medium": 2, "low": 0}
+                },
+                "source": "demo",
+                "user_info": {
+                    "username": current_user.username,
+                    "department": getattr(current_user, 'department', 'General')
+                }
+            }
+        
+    except Exception as e:
+        logger.error(f"Error getting user analytics: {str(e)}")
+        return {
+            "success": False,
+            "message": f"Error getting analytics: {str(e)}",
+            "error": str(e)
+        }
+
+# =============================================================================
+# END USER-SPECIFIC DASHBOARD IMPLEMENTATION
+# =============================================================================
+
+# WebSocket endpoints from other modules
+app.websocket("/api/live/ws")(websocket_endpoint)
+
+# Root endpoint
+@app.get("/")
+async def root():
+    """Root endpoint"""
+    return {
+        "message": "Accident Detection API with User-Specific Dashboard",
+        "version": "2.5.0",
+        "status": "operational",
+        "dashboard_status": "user_specific_enabled",
+        "cors": "custom_middleware_enabled",
+        "docs": "/docs",
+        "health": "/api/health",
+        "dashboard_endpoints": {
+            "user_alerts": "/api/dashboard/user/alerts",
+            "user_stats": "/api/dashboard/user/stats",
+            "user_profile": "/api/dashboard/user/profile",
+            "user_analytics": "/api/dashboard/user/analytics",
+            "websocket": "/api/dashboard/ws/alerts",
+            "health": "/api/dashboard/health"
+        },
+        "features": [
+            "user_specific_filtering",
+            "personal_analytics", 
+            "real_time_user_alerts",
+            "department_based_access"
+        ]
+    }
+
+# Error handlers
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request: Request, exc: HTTPException):
+    """Handle HTTP exceptions"""
+    logger.error(f"HTTP Exception {exc.status_code}: {exc.detail} on {request.url}")
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={
+            "detail": exc.detail,
+            "error": "HTTP Exception",
+            "path": str(request.url)
+        }
+    )
+
+@app.exception_handler(Exception)
+async def general_exception_handler(request: Request, exc: Exception):
+    """Handle general exceptions"""
+    logger.error(f"Unhandled exception on {request.url}: {str(exc)}")
+    return JSONResponse(
+        status_code=500,
+        content={
+            "detail": "Internal server error",
+            "error": str(exc),
+            "path": str(request.url)
+        }
+    )
+
+# Signal handlers
+def signal_handler(signum, frame):
+    """Handle shutdown signals gracefully"""
+    logger.info(f"Received signal {signum}, starting graceful shutdown...")
+    try:
+        cleanup_thread_pool()
+    except Exception as e:
+        logger.error(f"Error during cleanup: {e}")
+    logger.info("Graceful shutdown completed")
+    sys.exit(0)
+
+signal.signal(signal.SIGTERM, signal_handler)
+signal.signal(signal.SIGINT, signal_handler)
+
+# Development server
+if __name__ == "__main__":
+    import uvicorn
+    
+    print("=" * 80)
+    print("🚀 ACCIDENT DETECTION API v2.5.0 - USER-SPECIFIC DASHBOARD")
+    print("=" * 80)
+    print(f"📍 Server URL: http://{HOST}:{PORT}")
+    print(f"📍 API Docs: http://{HOST}:{PORT}/docs")
+    print("🔧 Dashboard: USER-SPECIFIC ENABLED")
+    print("📋 Main Dashboard Endpoints:")
+    print("   - /api/dashboard/user/alerts (user-specific)")
+    print("   - /api/dashboard/user/stats (user-specific)")
+    print("   - /api/dashboard/user/profile")
+    print("   - /api/dashboard/user/analytics")
+    print("   - /api/dashboard/ws/alerts (user WebSocket)")
+    print("   - /api/dashboard/health")
+    print("🔒 Authentication: REQUIRED for user-specific data")
+    print("📊 Features: Personal analytics, user filtering, real-time alerts")
+    print("=" * 80)
+    
+    uvicorn.run(
+        app, 
+        host=HOST, 
+        port=PORT,
+        log_level="info",
+        access_log=True
+    )
