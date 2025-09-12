@@ -1,15 +1,22 @@
-# models/database.py - FIXED with PostgreSQL support
+# models/database.py - UPDATED for psycopg3 compatibility
 import os
 from sqlalchemy import Column, Integer, String, Float, DateTime, Boolean, Text, create_engine
 from sqlalchemy.orm import declarative_base, sessionmaker
 from sqlalchemy.sql import func
 from config.settings import SQLALCHEMY_DATABASE_URL
 
-# Database setup - FIXED for both SQLite and PostgreSQL
+# Database setup - UPDATED for psycopg3 support
 if "postgresql" in SQLALCHEMY_DATABASE_URL or "postgres" in SQLALCHEMY_DATABASE_URL:
-    # PostgreSQL configuration for production
+    # PostgreSQL configuration for production with psycopg3
+    # Convert postgresql:// to postgresql+psycopg://
+    database_url = SQLALCHEMY_DATABASE_URL
+    if database_url.startswith("postgresql://"):
+        database_url = database_url.replace("postgresql://", "postgresql+psycopg://", 1)
+    elif database_url.startswith("postgres://"):
+        database_url = database_url.replace("postgres://", "postgresql+psycopg://", 1)
+    
     engine = create_engine(
-        SQLALCHEMY_DATABASE_URL,
+        database_url,
         pool_pre_ping=True,
         pool_recycle=300,
         pool_size=5,
