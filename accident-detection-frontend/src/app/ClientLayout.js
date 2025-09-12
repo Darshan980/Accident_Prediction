@@ -37,7 +37,7 @@ const Navigation = () => {
     
     return [
       { 
-        href: isAdmin ? '/dashboard' : '/', 
+        href: isAdmin ? '/dashboard' : '/userdashboard', // Fixed: Changed from '/' to '/userdashboard'
         icon: Home, 
         label: 'Dashboard' 
       },
@@ -139,7 +139,7 @@ const Navigation = () => {
           {/* Logo */}
           <div style={{ display: 'flex', alignItems: 'center' }}>
             <Link 
-              href="/" 
+              href={isAuthenticated ? (user?.role === 'admin' ? '/dashboard' : '/userdashboard') : '/'}
               style={{
                 display: 'flex',
                 alignItems: 'center',
@@ -634,7 +634,7 @@ const RouteHandler = ({ children }) => {
           if (user?.role === 'admin') {
             router.push('/dashboard');
           } else {
-            router.push('/'); // or wherever regular users should go
+            router.push('/userdashboard'); // Fixed: Changed from '/' to '/userdashboard'
           }
           return;
         }
@@ -645,18 +645,15 @@ const RouteHandler = ({ children }) => {
           if (user?.role === 'admin') {
             router.push('/dashboard');
           } else {
-            // Keep regular users on homepage or redirect to user dashboard
-            // For now, let's keep them on homepage
-            console.log('Regular user staying on homepage');
-            return;
+            router.push('/userdashboard'); // Fixed: Changed to redirect to user dashboard
           }
           return;
         }
         
         // Optional: Add role-based access control for specific routes
         if (pathname === '/dashboard' && user?.role !== 'admin') {
-          console.log('Non-admin user trying to access dashboard, redirecting to home');
-          router.push('/');
+          console.log('Non-admin user trying to access dashboard, redirecting to user dashboard');
+          router.push('/userdashboard'); // Fixed: Changed from '/' to '/userdashboard'
           return;
         }
       }
@@ -686,6 +683,11 @@ const RouteHandler = ({ children }) => {
   
   if (isAuthenticated && pathname === '/' && user?.role === 'admin') {
     console.log('About to redirect admin from homepage, showing spinner');
+    return <LoadingSpinner />;
+  }
+
+  if (isAuthenticated && pathname === '/' && user?.role !== 'admin') {
+    console.log('About to redirect regular user from homepage to user dashboard');
     return <LoadingSpinner />;
   }
 
