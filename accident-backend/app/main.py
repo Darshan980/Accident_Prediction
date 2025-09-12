@@ -32,6 +32,7 @@ from auth.dependencies import get_current_active_user, get_optional_user
 from auth.routes import router as auth_router
 from api.core import router as core_router
 from api.upload import router as upload_router
+from api.logs import router as logs_router
 from api.websocket import websocket_endpoint
 
 # Import services
@@ -237,6 +238,7 @@ except Exception as e:
 app.include_router(core_router, prefix="/api", tags=["core"])
 app.include_router(auth_router, prefix="/auth", tags=["authentication"])  
 app.include_router(upload_router, prefix="/api", tags=["upload"])
+app.include_router(logs_router, prefix="/api", tags=["logs"])
 
 # =============================================================================
 # USER-SPECIFIC DASHBOARD IMPLEMENTATION - FIXED VERSION
@@ -771,14 +773,16 @@ async def debug_status():
             "/api/dashboard/alerts (legacy - redirects if authenticated)",
             "/api/dashboard/stats (legacy - redirects if authenticated)",
             "/api/dashboard/ws/alerts (user-specific WebSocket)",
-            "/api/dashboard/health"
+            "/api/dashboard/health",
+            "/api/logs (logs management)"
         ],
         "timestamp": datetime.now().isoformat(),
         "features": {
             "user_specific_filtering": True,
             "department_based_access": True,
             "real_time_user_alerts": True,
-            "personal_analytics": True
+            "personal_analytics": True,
+            "logs_management": True
         }
     }
 
@@ -1118,11 +1122,19 @@ async def root():
             "websocket": "/api/dashboard/ws/alerts",
             "health": "/api/dashboard/health"
         },
+        "api_endpoints": {
+            "logs": "/api/logs",
+            "logs_stats": "/api/logs/stats",
+            "upload": "/api/upload",
+            "core": "/api/*"
+        },
         "features": [
             "user_specific_filtering",
             "personal_analytics", 
             "real_time_user_alerts",
-            "department_based_access"
+            "department_based_access",
+            "logs_management",
+            "file_upload_analysis"
         ]
     }
 
@@ -1184,8 +1196,12 @@ if __name__ == "__main__":
     print("   - /api/dashboard/user/analytics")
     print("   - /api/dashboard/ws/alerts (user WebSocket)")
     print("   - /api/dashboard/health")
+    print("📊 API Endpoints:")
+    print("   - /api/logs (logs management)")
+    print("   - /api/upload (file upload & analysis)")
+    print("   - /api/core (core API functions)")
     print("🔒 Authentication: REQUIRED for user-specific data")
-    print("📊 Features: Personal analytics, user filtering, real-time alerts")
+    print("📊 Features: Personal analytics, user filtering, real-time alerts, logs management")
     print("=" * 80)
     
     uvicorn.run(
