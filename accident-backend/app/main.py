@@ -18,8 +18,7 @@ from starlette.responses import Response
 from typing import List, Optional, Dict, Any
 from datetime import datetime, timedelta
 import json
-from api.logs import router as logs_router
-app.include_router(logs_router, prefix="/api", tags=["logs"])
+
 
 # Import from config/settings
 from config.settings import SNAPSHOTS_DIR, PORT, HOST, get_cors_origins, is_allowed_origin
