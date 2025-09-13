@@ -1,318 +1,18 @@
 'use client';
-import React, { useState, useEffect, useContext, useCallback, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Bell, AlertTriangle, MapPin, Clock, Eye, CheckCircle, RefreshCw, User, Shield, Activity, TrendingUp } from 'lucide-react';
-
-const AuthContext = React.createContext();
-
-const useAuth = () => {
-  const context = useContext(AuthContext);
-  if (!context) {
-    const storedToken = localStorage.getItem('token');
-    const storedUser = localStorage.getItem('user');
-    
-    if (storedToken && storedUser && storedUser !== 'null') {
-      try {
-        const userData = JSON.parse(storedUser);
-        userData.token = storedToken;
-        
-        return {
-          user: userData,
-          token: storedToken,
-          isAuthenticated: true
-        };
-      } catch (error) {
-        console.error('Error parsing stored auth data:', error);
-      }
-    }
-    
-    return {
-      user: null,
-      token: null,
-      isAuthenticated: false
-    };
-  }
-  return context;
-};
-
-const LoginPrompt = ({ onLoginSuccess }) => {
-  const [credentials, setCredentials] = useState({ username: '', password: '' });
-  const [loginError, setLoginError] = useState('');
-  const [isLogging, setIsLogging] = useState(false);
-
-  const API_BASE_URL = process.env.REACT_APP_API_URL || 'https://accident-prediction-1-mpm0.onrender.com';
-
-  const handleLogin = async (e) => {
-    e.preventDefault();
-    setLoginError('');
-    setIsLogging(true);
-
-    try {
-      const response = await fetch(`${API_BASE_URL}/auth/login`, {
-        method: 'POST',
-        mode: 'cors',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json'
-        },
-        body: JSON.stringify({
-          username: credentials.username,
-          password: credentials.password
-        })
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        
-        const userData = {
-          id: data.user_id || Date.now(),
-          username: credentials.username,
-          role: 'user',
-          email: data.email || `${credentials.username}@example.com`,
-          department: data.department || 'General',
-          token: data.access_token,
-          loginTime: new Date().toISOString()
-        };
-        
-        localStorage.setItem('token', data.access_token);
-        localStorage.setItem('user', JSON.stringify(userData));
-        
-        onLoginSuccess(userData);
-      } else {
-        const errorData = await response.json().catch(() => ({ detail: 'Login failed' }));
-        throw new Error(errorData.detail || 'Invalid credentials');
-      }
-    } catch (error) {
-      // Demo fallback
-      if (credentials.username === 'demo' && credentials.password === 'password') {
-        const userData = {
-          id: 1,
-          username: 'demo',
-          role: 'user',
-          email: 'demo@example.com',
-          department: 'Demo',
-          token: 'demo-token-' + Date.now(),
-          loginTime: new Date().toISOString(),
-          isDemo: true
-        };
-        
-        localStorage.setItem('token', userData.token);
-        localStorage.setItem('user', JSON.stringify(userData));
-        onLoginSuccess(userData);
-        return;
-      }
-      
-      setLoginError(error.message || 'Login failed. Try demo/password for demo access.');
-    } finally {
-      setIsLogging(false);
-    }
-  };
-
-  return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-      <div className="max-w-md w-full bg-white rounded-lg shadow-md p-6">
-        <div className="text-center mb-6">
-          <h2 className="text-2xl font-bold text-gray-900">Dashboard Login</h2>
-          <p className="text-gray-600 mt-2">Sign in to access your dashboard</p>
-        </div>
-
-        {loginError && (
-          <div className="bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded-lg mb-4">
-            {loginError}
-          </div>
-        )}
-
-        <form onSubmit={handleLogin} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700">Username</label>
-            <input
-              type="text"
-              value={credentials.username}
-              onChange={(e) => setCredentials({...credentials, username: e.target.value})}
-              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              required
-            />
-          </div>
-          
-          <div>
-            <label className="block text-sm font-medium text-gray-700">Password</label>
-            <input
-              type="password"
-              value={credentials.password}
-              onChange={(e) => setCredentials({...credentials, password: e.target.value})}
-              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              required
-            />
-          </div>
-
-          <button
-            type="submit"
-            disabled={isLogging}
-            className="w-full bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {isLogging ? 'Signing in...' : 'Sign In'}
-          </button>
-        </form>
-
-        <div className="mt-6 text-center">
-          <div className="text-sm text-gray-600">
-            Demo credentials:
-            <br />
-            Username: <code className="bg-gray-100 px-1">demo</code>
-            <br />
-            Password: <code className="bg-gray-100 px-1">password</code>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-};
+import './dashboard.css';
 
 const UserDashboard = () => {
-  const authData = useAuth();
-  const { user, token, isAuthenticated } = authData;
-
   const [alerts, setAlerts] = useState([]);
   const [stats, setStats] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [connectionStatus, setConnectionStatus] = useState('disconnected');
-  const [unreadCount, setUnreadCount] = useState(0);
   const [selectedAlert, setSelectedAlert] = useState(null);
   const [filter, setFilter] = useState('all');
-  const [refreshing, setRefreshing] = useState(false);
-  const [lastUpdateTime, setLastUpdateTime] = useState(new Date());
-  const [authUser, setAuthUser] = useState(user);
   const [readAlerts, setReadAlerts] = useState(new Set());
-  const [isUsingRealAPI, setIsUsingRealAPI] = useState(false);
-  
-  // Connection management refs
-  const wsRef = useRef(null);
-  const retryTimeoutRef = useRef(null);
-  const autoRefreshRef = useRef(null);
-  const isComponentMountedRef = useRef(true);
-  const lastSuccessfulFetchRef = useRef(null);
-  
-  const API_BASE_URL = process.env.REACT_APP_API_URL || 'https://accident-prediction-1-mpm0.onrender.com';
-  const WS_URL = API_BASE_URL.replace('http', 'ws') + '/api/dashboard/ws/alerts';
+  const [lastUpdateTime, setLastUpdateTime] = useState(new Date());
 
-  const handleLoginSuccess = (userData) => {
-    setAuthUser(userData);
-    setError(null);
-  };
-
-  const handleLogout = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
-    setAuthUser(null);
-    cleanup();
-  };
-
-  // Cleanup function
-  const cleanup = useCallback(() => {
-    if (autoRefreshRef.current) {
-      clearInterval(autoRefreshRef.current);
-      autoRefreshRef.current = null;
-    }
-    
-    if (retryTimeoutRef.current) {
-      clearTimeout(retryTimeoutRef.current);
-      retryTimeoutRef.current = null;
-    }
-    
-    if (wsRef.current) {
-      wsRef.current.close(1000, 'Component cleanup');
-      wsRef.current = null;
-    }
-    
-    isComponentMountedRef.current = false;
-  }, []);
-
-  // Connection status updates
-  const updateConnectionStatus = useCallback((newStatus, reason = '') => {
-    if (!isComponentMountedRef.current) return;
-    
-    setConnectionStatus(prevStatus => {
-      if (prevStatus !== newStatus) {
-        console.log(`Connection: ${prevStatus} → ${newStatus}${reason ? ` (${reason})` : ''}`);
-      }
-      return newStatus;
-    });
-  }, []);
-
-  const getCurrentUser = () => authUser || user;
-  const getCurrentToken = () => {
-    const currentUser = getCurrentUser();
-    return currentUser?.token || token || localStorage.getItem('token');
-  };
-
-  // Load real API data
-  const loadAPIData = async (currentToken, currentUser) => {
-    const headers = {
-      'Content-Type': 'application/json',
-      'Accept': 'application/json',
-      'Authorization': `Bearer ${currentToken}`
-    };
-
-    // Fetch alerts
-    const alertsResponse = await fetch(`${API_BASE_URL}/api/dashboard/alerts`, {
-      method: 'GET',
-      mode: 'cors',
-      headers: headers
-    });
-
-    if (!alertsResponse.ok) {
-      throw new Error(`Alerts API error: ${alertsResponse.status}`);
-    }
-
-    const alertsData = await alertsResponse.json();
-    
-    // Fetch stats
-    const statsResponse = await fetch(`${API_BASE_URL}/api/dashboard/stats`, {
-      method: 'GET',
-      mode: 'cors',
-      headers: headers
-    });
-
-    if (!statsResponse.ok) {
-      throw new Error(`Stats API error: ${statsResponse.status}`);
-    }
-
-    const statsData = await statsResponse.json();
-
-    // Process and set the data
-    const processedAlerts = (alertsData.alerts || alertsData || []).map(alert => ({
-      id: alert.id || alert.alert_id || Math.random(),
-      message: alert.message || alert.description || 'New alert',
-      timestamp: alert.timestamp || alert.created_at || new Date().toISOString(),
-      severity: alert.severity || alert.priority || 'medium',
-      read: alert.read || false,
-      type: alert.type || alert.alert_type || 'general',
-      confidence: alert.confidence || alert.ai_confidence || null,
-      location: alert.location || alert.address || 'Unknown Location',
-      snapshot_url: alert.snapshot_url || alert.image_url || null,
-      accident_log_id: alert.accident_log_id || alert.log_id || null
-    }));
-
-    const processedStats = {
-      total_alerts: statsData.total_alerts || processedAlerts.length,
-      unread_alerts: statsData.unread_alerts || processedAlerts.filter(a => !a.read).length,
-      last_24h_detections: statsData.last_24h_detections || statsData.detections_24h || 0,
-      user_uploads: statsData.user_uploads || statsData.uploads || 0,
-      user_accuracy: statsData.user_accuracy || statsData.accuracy || 'N/A',
-      department: currentUser?.department || statsData.department || 'General',
-      last_activity: statsData.last_activity || new Date().toISOString(),
-      user_since: statsData.user_since || currentUser?.loginTime || new Date().toISOString()
-    };
-
-    setAlerts(processedAlerts);
-    setStats(processedStats);
-    setIsUsingRealAPI(true);
-    
-    return { alerts: processedAlerts, stats: processedStats };
-  };
-
-  // Load demo data fallback
-  const loadDemoData = () => {
+  // Initialize with demo data
+  useEffect(() => {
     const now = new Date();
     const demoAlerts = [
       {
@@ -324,8 +24,7 @@ const UserDashboard = () => {
         type: 'accident_detection',
         confidence: 0.92,
         location: 'Main Street & 5th Avenue',
-        snapshot_url: '/api/snapshots/accident_001.jpg',
-        accident_log_id: 1
+        snapshot_url: '/api/snapshots/accident_001.jpg'
       },
       {
         id: 2,
@@ -336,8 +35,7 @@ const UserDashboard = () => {
         type: 'accident_detection',
         confidence: 0.75,
         location: 'Highway 101, Mile 45',
-        snapshot_url: '/api/snapshots/accident_002.jpg',
-        accident_log_id: 2
+        snapshot_url: '/api/snapshots/accident_002.jpg'
       },
       {
         id: 3,
@@ -348,360 +46,55 @@ const UserDashboard = () => {
         type: 'accident_detection',
         confidence: 0.58,
         location: 'Oak Street & 3rd Avenue',
-        snapshot_url: '/api/snapshots/accident_003.jpg',
-        accident_log_id: 3
+        snapshot_url: '/api/snapshots/accident_003.jpg'
+      },
+      {
+        id: 4,
+        message: "Traffic anomaly detected near City Center",
+        timestamp: new Date(now.getTime() - 2 * 60 * 60 * 1000).toISOString(),
+        severity: 'medium',
+        read: false,
+        type: 'traffic_anomaly',
+        confidence: 0.68,
+        location: 'City Center Plaza'
+      },
+      {
+        id: 5,
+        message: "Emergency vehicle route optimization alert",
+        timestamp: new Date(now.getTime() - 3 * 60 * 60 * 1000).toISOString(),
+        severity: 'high',
+        read: false,
+        type: 'emergency_route',
+        confidence: 0.89,
+        location: 'Downtown District'
       }
     ];
 
-    const currentUser = getCurrentUser();
     const demoStats = {
       total_alerts: demoAlerts.length,
       unread_alerts: demoAlerts.filter(a => !a.read).length,
-      last_24h_detections: 8,
-      user_uploads: 12,
-      user_accuracy: "94.5%",
-      department: currentUser?.department || 'Demo',
-      last_activity: now.toISOString(),
-      user_since: new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString()
+      last_24h_detections: 12,
+      user_accuracy: "94.5%"
     };
 
     setAlerts(demoAlerts);
     setStats(demoStats);
-    setIsUsingRealAPI(false);
-  };
+  }, []);
 
-  // Main data loading function
-  const loadDashboardData = async (silent = false) => {
-    const currentUser = getCurrentUser();
-    const currentToken = getCurrentToken();
-    
-    if (!currentUser || !currentToken || currentToken === 'null') {
-      loadDemoData();
-      setLoading(false);
-      return;
-    }
-
-    // Skip API calls for demo user
-    if (currentUser.isDemo) {
-      loadDemoData();
-      setLoading(false);
-      return;
-    }
-
-    if (!silent) setRefreshing(true);
-    
-    try {
-      console.log('Attempting to fetch real API data...');
-      
-      // Try to load real API data
-      const apiData = await loadAPIData(currentToken, currentUser);
-      
-      setLastUpdateTime(new Date());
-      lastSuccessfulFetchRef.current = new Date();
-      setError(null);
-      
-      console.log('Successfully loaded real API data:', {
-        alertsCount: apiData.alerts.length,
-        statsLoaded: !!apiData.stats
-      });
-      
-    } catch (err) {
-      console.error('API fetch error, falling back to demo data:', err);
-      loadDemoData();
-      setError(`API connection failed: ${err.message}. Using demo data.`);
-    } finally {
-      if (!silent) setRefreshing(false);
-      setLoading(false);
-    }
-  };
-
-  // WebSocket initialization
-  const initializeWebSocket = useCallback(() => {
-    const currentUser = getCurrentUser();
-    const currentToken = getCurrentToken();
-    
-    if (!currentUser || currentUser.isDemo || !currentToken || !isComponentMountedRef.current) {
-      console.log('Skipping WebSocket for demo user or invalid auth');
-      return;
-    }
-
-    // Clean up existing connection
-    if (wsRef.current) {
-      wsRef.current.close();
-      wsRef.current = null;
-    }
-
-    try {
-      const wsUrlWithAuth = `${WS_URL}?token=${encodeURIComponent(currentToken)}`;
-      console.log('Connecting to WebSocket:', wsUrlWithAuth);
-      
-      wsRef.current = new WebSocket(wsUrlWithAuth);
-      
-      wsRef.current.onopen = () => {
-        if (!isComponentMountedRef.current) return;
-        console.log('WebSocket connected successfully');
-        updateConnectionStatus('connected', 'WebSocket opened');
-        
-        // Send subscription message
-        if (wsRef.current?.readyState === WebSocket.OPEN) {
-          wsRef.current.send(JSON.stringify({
-            type: 'subscribe',
-            user_id: currentUser.id,
-            timestamp: new Date().toISOString()
-          }));
-        }
-      };
-
-      wsRef.current.onmessage = (event) => {
-        if (!isComponentMountedRef.current) return;
-        
-        try {
-          const message = JSON.parse(event.data);
-          handleWebSocketMessage(message);
-        } catch (err) {
-          console.error('WebSocket message parse error:', err);
-        }
-      };
-
-      wsRef.current.onclose = (event) => {
-        if (!isComponentMountedRef.current) return;
-        
-        console.log('WebSocket closed:', event.code, event.reason);
-        wsRef.current = null;
-        updateConnectionStatus('disconnected', `Code: ${event.code}`);
-        
-        // Only retry on abnormal closure for real users
-        if (event.code !== 1000 && event.code !== 1001 && !currentUser.isDemo) {
-          retryTimeoutRef.current = setTimeout(() => {
-            if (isComponentMountedRef.current) {
-              console.log('Retrying WebSocket connection...');
-              initializeWebSocket();
-            }
-          }, 5000);
-        }
-      };
-
-      wsRef.current.onerror = (error) => {
-        if (!isComponentMountedRef.current) return;
-        console.error('WebSocket error:', error);
-        updateConnectionStatus('error', 'Connection error');
-      };
-
-    } catch (err) {
-      console.error('WebSocket init error:', err);
-      updateConnectionStatus('error', 'Init failed');
-    }
-  }, [updateConnectionStatus]);
-
-  // Handle WebSocket messages
-  const handleWebSocketMessage = (message) => {
-    console.log('WebSocket message received:', message);
-    
-    switch (message.type) {
-      case 'connection':
-        updateConnectionStatus('connected', 'Confirmed');
-        break;
-        
-      case 'heartbeat':
-        setLastUpdateTime(new Date());
-        break;
-        
-      case 'new_alert':
-      case 'accident_alert':
-        if (message.data) {
-          const newAlert = {
-            id: message.data.id || Date.now(),
-            message: message.data.message || 'New real-time alert',
-            timestamp: message.data.timestamp || new Date().toISOString(),
-            severity: message.data.severity || 'medium',
-            read: false,
-            type: message.data.type || 'real_time',
-            confidence: message.data.confidence || null,
-            location: message.data.location || 'Unknown Location',
-            snapshot_url: message.data.snapshot_url || null,
-            accident_log_id: message.data.accident_log_id || null
-          };
-          
-          // Add new alert to the top of the list
-          setAlerts(prev => [newAlert, ...prev]);
-          
-          // Update stats
-          setStats(prev => prev ? {
-            ...prev,
-            total_alerts: prev.total_alerts + 1,
-            unread_alerts: prev.unread_alerts + 1
-          } : null);
-          
-          // Show browser notification if permitted
-          if (Notification.permission === 'granted') {
-            new Notification(`New Alert: ${message.data.severity?.toUpperCase() || 'MEDIUM'}`, {
-              body: newAlert.message,
-              icon: '/favicon.ico',
-              badge: '/favicon.ico'
-            });
-          }
-          
-          console.log('New alert added from WebSocket:', newAlert);
-        }
-        break;
-        
-      case 'alert_update':
-        if (message.data && message.data.id) {
-          setAlerts(prev => prev.map(alert => 
-            alert.id === message.data.id 
-              ? { ...alert, ...message.data }
-              : alert
-          ));
-          console.log('Alert updated from WebSocket:', message.data);
-        }
-        break;
-        
-      default:
-        console.log('Unknown WebSocket message type:', message.type);
-    }
-  };
-
-  // Initialize dashboard
-  useEffect(() => {
-    if (!isAuthenticated && !authUser) {
-      setLoading(false);
-      return;
-    }
-
-    console.log('Initializing dashboard for user:', getCurrentUser());
-    
-    // Load initial data
-    loadDashboardData();
-    
-    // Start WebSocket after initial data load
-    const wsTimer = setTimeout(() => {
-      initializeWebSocket();
-    }, 2000);
-    
-    // Set up auto-refresh for real users
-    const currentUser = getCurrentUser();
-    if (!currentUser?.isDemo) {
-      autoRefreshRef.current = setInterval(() => {
-        if (isComponentMountedRef.current) {
-          console.log('Auto-refreshing data...');
-          loadDashboardData(true);
-        }
-      }, 60000); // 60 seconds
-    }
-
-    return () => {
-      clearTimeout(wsTimer);
-      cleanup();
-    };
-  }, [isAuthenticated, authUser, initializeWebSocket]);
-
-  // Calculate unread count
-  useEffect(() => {
-    const unread = alerts.filter(alert => !alert.read && !readAlerts.has(alert.id)).length;
-    setUnreadCount(unread);
-  }, [alerts, readAlerts]);
-
-  // Cleanup on unmount
-  useEffect(() => {
-    return cleanup;
-  }, [cleanup]);
-
-  const markAlertAsRead = async (alertId) => {
-    const currentUser = getCurrentUser();
-    const currentToken = getCurrentToken();
-    
-    // Update local state immediately
+  const markAlertAsRead = (alertId) => {
     const newReadAlerts = new Set(readAlerts);
     newReadAlerts.add(alertId);
     setReadAlerts(newReadAlerts);
     
     setAlerts(prev => prev.map(alert => 
       alert.id === alertId 
-        ? { ...alert, read: true, read_at: new Date().toISOString() }
+        ? { ...alert, read: true }
         : alert
     ));
-
-    // Try to update on server if not demo user
-    if (currentUser && !currentUser.isDemo && currentToken && isUsingRealAPI) {
-      try {
-        await fetch(`${API_BASE_URL}/api/dashboard/alerts/${alertId}/read`, {
-          method: 'POST',
-          mode: 'cors',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${currentToken}`
-          }
-        });
-        console.log('Alert marked as read on server:', alertId);
-      } catch (err) {
-        console.error('Failed to mark alert as read on server:', err);
-        // Don't revert local state - keep it marked as read locally
-      }
-    }
   };
 
-  const requestNotificationPermission = async () => {
-    if (!('Notification' in window)) {
-      alert('This browser does not support desktop notifications');
-      return;
-    }
-
-    if (Notification.permission === 'default') {
-      const permission = await Notification.requestPermission();
-      if (permission === 'granted') {
-        new Notification('Notifications Enabled', {
-          body: 'You will now receive real-time accident alerts',
-          icon: '/favicon.ico'
-        });
-      }
-    }
-  };
-
-  const manualReconnect = () => {
-    console.log('Manual reconnect triggered');
-    setError(null);
-    cleanup();
-    setTimeout(() => {
-      if (isComponentMountedRef.current) {
-        loadDashboardData();
-        initializeWebSocket();
-      }
-    }, 1000);
-  };
-
-  if (!isAuthenticated && !authUser) {
-    return <LoginPrompt onLoginSuccess={handleLoginSuccess} />;
-  }
-
-  const currentUser = getCurrentUser();
-
-  if (loading && alerts.length === 0) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-          <span className="mt-4 text-gray-600 block">Loading your dashboard...</span>
-        </div>
-      </div>
-    );
-  }
-
-  const getConnectionStatusColor = () => {
-    switch (connectionStatus) {
-      case 'connected': return 'bg-green-500';
-      case 'disconnected': return 'bg-red-500';
-      case 'error': return 'bg-orange-500';
-      default: return 'bg-gray-500';
-    }
-  };
-
-  const getConnectionStatusText = () => {
-    switch (connectionStatus) {
-      case 'connected': return 'Live';
-      case 'disconnected': return 'Offline';
-      case 'error': return 'Error';
-      default: return 'Unknown';
-    }
+  const handleRefresh = () => {
+    setLastUpdateTime(new Date());
   };
 
   const filteredAlerts = alerts.filter(alert => {
@@ -727,107 +120,52 @@ const UserDashboard = () => {
     return alert.read || readAlerts.has(alert.id);
   };
 
+  const unreadCount = alerts.filter(alert => !alert.read && !readAlerts.has(alert.id)).length;
+
   return (
-    <div className="min-h-screen bg-gray-50 p-4">
-      <div className="max-w-7xl mx-auto space-y-6">
-        {/* Error/Status Banner */}
-        {error && (
-          <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 rounded-lg">
-            <div className="flex items-center justify-between">
-              <span className="text-yellow-800 text-sm">{error}</span>
-              <button
-                onClick={() => setError(null)}
-                className="text-yellow-800 hover:text-yellow-900 font-bold text-lg leading-none"
-              >
-                ×
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* API Status Banner */}
-        <div className={`border-l-4 p-4 rounded-lg ${
-          isUsingRealAPI 
-            ? 'bg-green-50 border-green-400' 
-            : 'bg-blue-50 border-blue-400'
-        }`}>
-          <div className="flex items-center justify-between">
-            <span className={`text-sm font-medium ${
-              isUsingRealAPI ? 'text-green-800' : 'text-blue-800'
-            }`}>
-              {isUsingRealAPI 
-                ? '🟢 Connected to Live API - Real-time data active' 
-                : '🔵 Demo Mode - Sample data displayed'}
-            </span>
-            {!isUsingRealAPI && !currentUser?.isDemo && (
-              <button
-                onClick={manualReconnect}
-                className="text-blue-800 hover:text-blue-900 text-sm underline"
-              >
-                Try Reconnect
-              </button>
-            )}
-          </div>
-        </div>
-
+    <div className="dashboard-container">
+      <div className="dashboard-content">
         {/* Header */}
-        <div className="bg-white rounded-lg shadow-sm p-6">
-          <div className="flex flex-col md:flex-row md:items-center md:justify-between">
+        <div className="header-card">
+          <div className="header-main">
             <div>
-              <h1 className="text-3xl font-bold text-gray-900">Real-time Dashboard</h1>
-              <p className="text-gray-600 mt-1">
-                Welcome back, {currentUser?.username} | {currentUser?.department}
+              <h1 className="header-title">Safety Dashboard</h1>
+              <p className="header-subtitle">
+                Real-time monitoring and alert management system
               </p>
             </div>
-            <div className="flex items-center space-x-4 mt-4 md:mt-0">
-              {/* Connection Status */}
-              <div className="flex items-center space-x-2 text-sm">
-                <div className={`w-3 h-3 rounded-full ${getConnectionStatusColor()}`}></div>
-                <span className="text-gray-600">{getConnectionStatusText()}</span>
-                {connectionStatus === 'disconnected' && !currentUser?.isDemo && (
-                  <button
-                    onClick={manualReconnect}
-                    className="text-xs text-blue-600 hover:text-blue-800 underline ml-2"
-                  >
-                    Reconnect
-                  </button>
-                )}
-              </div>
-              
+            <div className="header-actions">
               {/* Last Update */}
-              <span className="text-xs text-gray-500">
+              <span className="last-update">
                 Updated: {lastUpdateTime.toLocaleTimeString()}
               </span>
               
               {/* Refresh Button */}
               <button
-                onClick={() => loadDashboardData(false)}
-                disabled={refreshing}
-                className="p-2 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-colors"
+                onClick={handleRefresh}
+                className="icon-button"
                 title="Refresh data"
               >
-                <RefreshCw className={refreshing ? 'animate-spin' : ''} size={20} />
+                <RefreshCw size={20} />
               </button>
               
               {/* Notification Bell */}
               <button
-                onClick={requestNotificationPermission}
-                className="relative p-2 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-colors"
-                title="Enable notifications"
+                className="icon-button notification-button"
+                title="Notifications"
               >
                 <Bell size={20} />
                 {unreadCount > 0 && (
-                  <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
+                  <span className="notification-badge">
                     {unreadCount > 9 ? '9+' : unreadCount}
                   </span>
                 )}
               </button>
 
-              {/* Logout Button */}
+              {/* User Menu */}
               <button
-                onClick={handleLogout}
-                className="p-2 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-colors"
-                title="Logout"
+                className="icon-button"
+                title="User menu"
               >
                 <User size={20} />
               </button>
@@ -836,65 +174,53 @@ const UserDashboard = () => {
 
           {/* Quick Stats */}
           {stats && (
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6">
-              <div className="bg-blue-50 rounded-lg p-4">
-                <h3 className="text-2xl font-bold text-blue-600">
-                  {stats.total_alerts || 0}
+            <div className="stats-grid">
+              <div className="stat-card blue">
+                <h3 className="stat-number">
+                  {stats.total_alerts}
                 </h3>
-                <p className="text-blue-700 text-sm font-medium">Total Alerts</p>
+                <p className="stat-label">Total Alerts</p>
               </div>
-              <div className="bg-red-50 rounded-lg p-4">
-                <h3 className="text-2xl font-bold text-red-600">
+              <div className="stat-card red">
+                <h3 className="stat-number">
                   {unreadCount}
                 </h3>
-                <p className="text-red-700 text-sm font-medium">Unread</p>
+                <p className="stat-label">Unread</p>
               </div>
-              <div className="bg-yellow-50 rounded-lg p-4">
-                <h3 className="text-2xl font-bold text-yellow-600">
-                  {stats.last_24h_detections || 0}
+              <div className="stat-card yellow">
+                <h3 className="stat-number">
+                  {stats.last_24h_detections}
                 </h3>
-                <p className="text-yellow-700 text-sm font-medium">Last 24h</p>
+                <p className="stat-label">Last 24h</p>
               </div>
-              <div className="bg-green-50 rounded-lg p-4">
-                <h3 className="text-2xl font-bold text-green-600">
-                  {stats.user_accuracy || 'N/A'}
+              <div className="stat-card green">
+                <h3 className="stat-number">
+                  {stats.user_accuracy}
                 </h3>
-                <p className="text-green-700 text-sm font-medium">Accuracy</p>
+                <p className="stat-label">Accuracy</p>
               </div>
             </div>
           )}
         </div>
 
         {/* Alert Filters */}
-        <div className="bg-white rounded-lg shadow-sm p-4">
-          <div className="flex flex-wrap gap-2">
+        <div className="filters-card">
+          <div className="filters-container">
             <button
               onClick={() => setFilter('all')}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                filter === 'all' 
-                  ? 'bg-blue-100 text-blue-800 border-2 border-blue-200' 
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-              }`}
+              className={`filter-button ${filter === 'all' ? 'active' : ''}`}
             >
               All Alerts ({alerts.length})
             </button>
             <button
               onClick={() => setFilter('unread')}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                filter === 'unread' 
-                  ? 'bg-red-100 text-red-800 border-2 border-red-200' 
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-              }`}
+              className={`filter-button ${filter === 'unread' ? 'active unread' : ''}`}
             >
               Unread ({unreadCount})
             </button>
             <button
               onClick={() => setFilter('high_priority')}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                filter === 'high_priority' 
-                  ? 'bg-yellow-100 text-yellow-800 border-2 border-yellow-200' 
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-              }`}
+              className={`filter-button ${filter === 'high_priority' ? 'active priority' : ''}`}
             >
               High Priority ({alerts.filter(a => a.severity === 'high').length})
             </button>
@@ -902,112 +228,82 @@ const UserDashboard = () => {
         </div>
 
         {/* Alerts List */}
-        <div className="space-y-4">
+        <div className="alerts-section">
           {filteredAlerts.length === 0 ? (
-            <div className="bg-white rounded-lg shadow-sm p-8 text-center">
-              <Bell className="mx-auto h-12 w-12 text-gray-400" />
-              <h3 className="mt-2 text-lg font-medium text-gray-900">No Alerts</h3>
-              <p className="mt-1 text-sm text-gray-500">
+            <div className="empty-state">
+              <Bell className="empty-icon" />
+              <h3 className="empty-title">No Alerts</h3>
+              <p className="empty-subtitle">
                 {filter === 'unread' ? 'No unread alerts' : 
                  filter === 'high_priority' ? 'No high priority alerts' : 
                  'No alerts to display'}
               </p>
-              {connectionStatus === 'connected' && (
-                <p className="mt-2 text-xs text-green-600">
-                  <Activity className="inline w-4 h-4 mr-1" />
-                  Real-time monitoring active
-                </p>
-              )}
-              {isUsingRealAPI && (
-                <p className="mt-1 text-xs text-blue-600">
-                  Connected to live API - New alerts will appear here
-                </p>
-              )}
+              <p className="live-monitoring">
+                <Activity className="activity-icon" />
+                System monitoring active
+              </p>
             </div>
           ) : (
             filteredAlerts.map((alert) => (
               <div
                 key={alert.id}
-                className={`bg-white rounded-lg shadow-sm border-l-4 p-6 transition-all hover:shadow-md ${
-                  alert.severity === 'high' 
-                    ? 'border-red-500' 
-                    : alert.severity === 'medium' 
-                    ? 'border-yellow-500' 
-                    : alert.severity === 'low'
-                    ? 'border-green-500'
-                    : 'border-blue-500'
-                } ${!isAlertRead(alert) ? 'ring-2 ring-blue-200 bg-blue-50' : ''}`}
+                className={`alert-card ${alert.severity} ${!isAlertRead(alert) ? 'unread' : ''}`}
               >
-                <div className="flex items-start justify-between">
-                  <div className="flex-1">
-                    <div className="flex items-center space-x-3">
+                <div className="alert-content">
+                  <div className="alert-main">
+                    <div className="alert-header">
                       {alert.severity === 'high' ? (
-                        <AlertTriangle className="text-red-500" size={20} />
+                        <AlertTriangle className="alert-icon high" size={20} />
                       ) : alert.severity === 'low' ? (
-                        <CheckCircle className="text-green-500" size={20} />
+                        <CheckCircle className="alert-icon low" size={20} />
                       ) : (
-                        <Bell className="text-blue-500" size={20} />
+                        <Bell className="alert-icon" size={20} />
                       )}
-                      <div>
-                        <div className="flex items-center space-x-2 flex-wrap">
-                          <h3 className="text-lg font-semibold text-gray-900">
+                      <div className="alert-info">
+                        <div className="alert-title-row">
+                          <h3 className="alert-title">
                             Alert #{alert.id}
                           </h3>
                           {!isAlertRead(alert) && (
-                            <span className="px-2 py-1 text-xs font-medium bg-blue-100 text-blue-800 rounded-full">
+                            <span className="new-badge">
                               New
                             </span>
                           )}
                           {alert.severity && (
-                            <span className={`px-2 py-1 text-xs font-medium rounded-full uppercase ${
-                              alert.severity === 'high' 
-                                ? 'bg-red-100 text-red-800'
-                                : alert.severity === 'medium'
-                                ? 'bg-yellow-100 text-yellow-800'
-                                : alert.severity === 'low'
-                                ? 'bg-green-100 text-green-800'
-                                : 'bg-blue-100 text-blue-800'
-                            }`}>
-                              {alert.severity} SEVERITY
-                            </span>
-                          )}
-                          {alert.type === 'real_time' && (
-                            <span className="px-2 py-1 text-xs font-medium bg-purple-100 text-purple-800 rounded-full">
-                              LIVE
+                            <span className={`severity-badge ${alert.severity}`}>
+                              {alert.severity.toUpperCase()}
                             </span>
                           )}
                         </div>
-                        <p className="text-gray-700 mt-1">{alert.message}</p>
-                        <div className="flex items-center space-x-4 mt-2 text-sm text-gray-500 flex-wrap">
-                          <div className="flex items-center space-x-1">
+                        <p className="alert-message">{alert.message}</p>
+                        <div className="alert-metadata">
+                          <div className="metadata-item">
                             <MapPin size={14} />
-                            <span>{alert.location || 'Unknown Location'}</span>
+                            <span>{alert.location}</span>
                           </div>
-                          <div className="flex items-center space-x-1">
+                          <div className="metadata-item">
                             <Clock size={14} />
                             <span>{formatTimestamp(alert.timestamp)}</span>
                           </div>
                           {alert.confidence && (
-                            <div className="flex items-center space-x-1">
+                            <div className="metadata-item">
                               <TrendingUp size={14} />
                               <span>Confidence: {(alert.confidence * 100).toFixed(1)}%</span>
                             </div>
                           )}
-                          {alert.type && (
-                            <div className="flex items-center space-x-1">
-                              <Shield size={14} />
-                              <span>Type: {alert.type.replace('_', ' ')}</span>
-                            </div>
-                          )}
+                          <div className="metadata-item">
+                            <Shield size={14} />
+                            <span>Type: {alert.type.replace('_', ' ')}</span>
+                          </div>
                         </div>
                       </div>
                     </div>
                   </div>
-                  <div className="flex items-center space-x-2 ml-4">
+                  <div className="alert-actions">
                     {alert.snapshot_url && (
                       <button
                         onClick={() => setSelectedAlert(alert)}
-                        className="px-3 py-2 text-sm bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors flex items-center space-x-1"
+                        className="action-button view"
                       >
                         <Eye size={16} />
                         <span>View</span>
@@ -1016,7 +312,7 @@ const UserDashboard = () => {
                     {!isAlertRead(alert) && (
                       <button
                         onClick={() => markAlertAsRead(alert.id)}
-                        className="px-3 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center space-x-1"
+                        className="action-button primary"
                       >
                         <CheckCircle size={16} />
                         <span>Mark Read</span>
@@ -1031,141 +327,85 @@ const UserDashboard = () => {
 
         {/* Alert Detail Modal */}
         {selectedAlert && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-            <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-              <div className="p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-xl font-bold text-gray-900">
-                    Alert Details - #{selectedAlert.id}
-                  </h3>
-                  <button
-                    onClick={() => setSelectedAlert(null)}
-                    className="text-gray-400 hover:text-gray-600 text-2xl leading-none"
-                  >
-                    ×
-                  </button>
+          <div className="modal-overlay">
+            <div className="modal-content">
+              <div className="modal-header">
+                <h3 className="modal-title">
+                  Alert Details - #{selectedAlert.id}
+                </h3>
+                <button
+                  onClick={() => setSelectedAlert(null)}
+                  className="modal-close"
+                >
+                  ×
+                </button>
+              </div>
+              
+              <div className="modal-body">
+                <div className="detail-section">
+                  <h4 className="detail-title">Alert Information</h4>
+                  <div className="detail-content">
+                    <p><strong>Message:</strong> {selectedAlert.message}</p>
+                    <p><strong>Type:</strong> {selectedAlert.type?.replace('_', ' ')}</p>
+                    <p><strong>Severity:</strong> <span className={`severity-text ${selectedAlert.severity}`}>
+                      {selectedAlert.severity?.toUpperCase()}</span></p>
+                    <p><strong>Timestamp:</strong> {new Date(selectedAlert.timestamp).toLocaleString()}</p>
+                    <p><strong>Status:</strong> {isAlertRead(selectedAlert) ? 'Read' : 'Unread'}</p>
+                    {selectedAlert.confidence && (
+                      <p><strong>AI Confidence:</strong> {(selectedAlert.confidence * 100).toFixed(1)}%</p>
+                    )}
+                  </div>
                 </div>
                 
-                <div className="space-y-4">
-                  <div>
-                    <h4 className="font-semibold text-gray-900 mb-2">Alert Information</h4>
-                    <div className="bg-gray-50 rounded-lg p-4 space-y-2 text-sm">
-                      <p><strong>Message:</strong> {selectedAlert.message}</p>
-                      <p><strong>Type:</strong> {selectedAlert.type?.replace('_', ' ') || 'N/A'}</p>
-                      <p><strong>Severity:</strong> <span className={`font-medium ${
-                        selectedAlert.severity === 'high' ? 'text-red-600' :
-                        selectedAlert.severity === 'medium' ? 'text-yellow-600' :
-                        selectedAlert.severity === 'low' ? 'text-green-600' : 'text-blue-600'
-                      }`}>{selectedAlert.severity?.toUpperCase() || 'N/A'}</span></p>
-                      <p><strong>Timestamp:</strong> {new Date(selectedAlert.timestamp).toLocaleString()}</p>
-                      <p><strong>Status:</strong> {isAlertRead(selectedAlert) ? 'Read' : 'Unread'}</p>
-                      {selectedAlert.confidence && (
-                        <p><strong>AI Confidence:</strong> {(selectedAlert.confidence * 100).toFixed(1)}%</p>
-                      )}
-                      {selectedAlert.accident_log_id && (
-                        <p><strong>Log ID:</strong> {selectedAlert.accident_log_id}</p>
-                      )}
-                      {isUsingRealAPI && (
-                        <p><strong>Data Source:</strong> <span className="text-green-600 font-medium">Live API</span></p>
-                      )}
-                    </div>
+                <div className="detail-section">
+                  <h4 className="detail-title">Location Details</h4>
+                  <div className="detail-content">
+                    <p><strong>Location:</strong> {selectedAlert.location}</p>
                   </div>
-                  
-                  {selectedAlert.location && (
-                    <div>
-                      <h4 className="font-semibold text-gray-900 mb-2">Location Details</h4>
-                      <div className="bg-gray-50 rounded-lg p-4 text-sm">
-                        <p><strong>Location:</strong> {selectedAlert.location}</p>
+                </div>
+                
+                <div className="detail-section">
+                  <h4 className="detail-title">Snapshot</h4>
+                  <div className="snapshot-container">
+                    {selectedAlert.snapshot_url ? (
+                      <div className="snapshot-placeholder">
+                        <span>
+                          Snapshot Available
+                          <br />
+                          <span className="snapshot-note">Image preview would be displayed here</span>
+                        </span>
                       </div>
-                    </div>
-                  )}
-                  
-                  <div>
-                    <h4 className="font-semibold text-gray-900 mb-2">Snapshot</h4>
-                    <div className="bg-gray-100 rounded-lg p-8 text-center">
-                      {selectedAlert.snapshot_url ? (
-                        <div className="bg-white rounded border-2 border-dashed border-gray-300 p-8">
-                          <span className="text-gray-500">
-                            Image: {selectedAlert.snapshot_url}
-                            <br />
-                            <span className="text-xs">(Image would be displayed here in production)</span>
-                          </span>
-                        </div>
-                      ) : (
-                        <div className="bg-white rounded border-2 border-dashed border-gray-300 p-8">
-                          <span className="text-gray-500">No snapshot available for this alert</span>
-                        </div>
-                      )}
-                    </div>
+                    ) : (
+                      <div className="snapshot-placeholder">
+                        <span>No snapshot available for this alert</span>
+                      </div>
+                    )}
                   </div>
                 </div>
-                
-                <div className="flex justify-end space-x-3 mt-6">
-                  {!isAlertRead(selectedAlert) && (
-                    <button
-                      onClick={() => {
-                        markAlertAsRead(selectedAlert.id);
-                        setSelectedAlert(null);
-                      }}
-                      className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-                    >
-                      Mark as Read & Close
-                    </button>
-                  )}
+              </div>
+              
+              <div className="modal-footer">
+                {!isAlertRead(selectedAlert) && (
                   <button
-                    onClick={() => setSelectedAlert(null)}
-                    className="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400 transition-colors"
+                    onClick={() => {
+                      markAlertAsRead(selectedAlert.id);
+                      setSelectedAlert(null);
+                    }}
+                    className="modal-button primary"
                   >
-                    Close
+                    Mark as Read & Close
                   </button>
-                </div>
+                )}
+                <button
+                  onClick={() => setSelectedAlert(null)}
+                  className="modal-button secondary"
+                >
+                  Close
+                </button>
               </div>
             </div>
           </div>
         )}
-
-        {/* System Status Footer */}
-        <div className="bg-white rounded-lg shadow-sm p-4">
-          <div className="flex flex-col md:flex-row md:items-center md:justify-between text-sm">
-            <div className="flex flex-col md:flex-row md:items-center md:space-x-6 space-y-2 md:space-y-0">
-              <span className="flex items-center space-x-2">
-                <strong>Connection Status:</strong> 
-                <span className={`font-medium ${
-                  connectionStatus === 'connected' ? 'text-green-600' : 
-                  connectionStatus === 'error' ? 'text-red-600' : 'text-gray-600'
-                }`}>
-                  {getConnectionStatusText()}
-                </span>
-              </span>
-              <span className="flex items-center space-x-2">
-                <strong>Data Source:</strong> 
-                <span className={`font-medium ${
-                  isUsingRealAPI ? 'text-green-600' : 'text-blue-600'
-                }`}>
-                  {isUsingRealAPI ? 'Live API' : 'Demo Mode'}
-                </span>
-              </span>
-              {currentUser && (
-                <span className="flex items-center space-x-2">
-                  <strong>User:</strong> 
-                  <span className="text-blue-600 font-medium">
-                    {currentUser.username}
-                    {currentUser.isDemo && <span className="text-orange-600 ml-1">(Demo)</span>}
-                  </span>
-                </span>
-              )}
-              {wsRef.current?.readyState === WebSocket.OPEN && (
-                <span className="flex items-center space-x-2">
-                  <Activity className="w-4 h-4 text-green-500" />
-                  <span className="text-green-600 font-medium">Live Monitoring</span>
-                </span>
-              )}
-            </div>
-            <div className="mt-2 md:mt-0 text-gray-500">
-              Last updated: {lastUpdateTime.toLocaleString()}
-            </div>
-          </div>
-        </div>
       </div>
     </div>
   );
