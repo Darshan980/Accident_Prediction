@@ -1,4 +1,4 @@
-# api/upload.py - FIXED with proper admin authentication
+# api/upload.py - FIXED with proper admin authentication and file type handling
 import time
 import logging
 from fastapi import APIRouter, UploadFile, File, HTTPException, Depends, Request
@@ -90,13 +90,14 @@ async def upload_file(
                 status_code=400
             )
         
-        # Validate file type - Admin gets more types
-        allowed_types = ALLOWED_FILE_TYPES.copy()
+        # FIXED: Validate file type - Admin gets more types
+        allowed_types = list(ALLOWED_FILE_TYPES)  # Convert to list to avoid serialization issues
         if is_admin_upload:
             # Admin gets additional file types
             allowed_types.extend([
                 'video/webm', 'image/tiff', 'image/bmp', 'video/mkv',
-                'application/octet-stream'  # Allow binary uploads for admin
+                'application/octet-stream',  # Allow binary uploads for admin
+                'text/plain', 'text/csv', 'application/json'  # Allow text files for admin
             ])
         
         if file.content_type not in allowed_types:
@@ -105,7 +106,7 @@ async def upload_file(
                 {
                     "detail": f"Invalid file type for {user_info['user_type']}: {file.content_type}",
                     "error": "Invalid file type",
-                    "allowed_types": allowed_types,
+                    "allowed_types": allowed_types,  # This is now JSON serializable
                     "success": False
                 },
                 status_code=400
@@ -309,11 +310,12 @@ async def analyze_url(
             # Check content type
             content_type = response.headers.get('content-type', '')
             
-            # Admin gets more file types
-            allowed_types = ALLOWED_FILE_TYPES.copy()
+            # FIXED: Admin gets more file types
+            allowed_types = list(ALLOWED_FILE_TYPES)  # Convert to list
             if is_admin_upload:
                 allowed_types.extend([
-                    'video/webm', 'image/tiff', 'image/bmp', 'video/mkv'
+                    'video/webm', 'image/tiff', 'image/bmp', 'video/mkv',
+                    'text/plain', 'text/csv', 'application/json'
                 ])
             
             if not any(allowed_type in content_type for allowed_type in allowed_types):
@@ -322,7 +324,7 @@ async def analyze_url(
                         "detail": f"Invalid content type for {user_info['user_type']}: {content_type}",
                         "error": "Invalid content type",
                         "content_type": content_type,
-                        "allowed_types": allowed_types,
+                        "allowed_types": allowed_types,  # Now JSON serializable
                         "success": False
                     },
                     status_code=400
