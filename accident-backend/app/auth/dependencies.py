@@ -1,4 +1,4 @@
-# auth/dependencies.py - FIXED VERSION
+# auth/dependencies.py - FULLY UPDATED WITH ADMIN SUPPORT
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
@@ -6,7 +6,7 @@ from jose import JWTError, jwt
 from config.settings import SECRET_KEY, ALGORITHM
 from models.database import get_db, User, Admin
 from auth.handlers import verify_token, get_user_by_username, get_admin_by_username
-from typing import Union
+from typing import Union, Optional
 import logging
 
 logger = logging.getLogger(__name__)
@@ -79,7 +79,7 @@ def get_current_user_or_admin(
     )
     
     try:
-        # First try to decode the token
+        # First try to decode the token to check if it's an admin token
         payload = jwt.decode(credentials.credentials, SECRET_KEY, algorithms=[ALGORITHM])
         username: str = payload.get("sub")
         is_admin: bool = payload.get("is_admin", False)
@@ -89,22 +89,28 @@ def get_current_user_or_admin(
             
         logger.info(f"Token validation - Username: {username}, Is Admin: {is_admin}")
         
-        # If it's an admin token, get admin user
+        # If it's marked as admin token, try admin authentication first
         if is_admin:
-            admin = get_admin_by_username(db, username)
-            if admin and admin.is_active:
-                logger.info(f"Admin authenticated: {username}")
-                return admin
-            else:
-                logger.warning(f"Admin not found or inactive: {username}")
+            try:
+                admin = get_admin_by_username(db, username)
+                if admin and admin.is_active:
+                    logger.info(f"Admin authenticated successfully: {username}")
+                    return admin
+                else:
+                    logger.warning(f"Admin not found or inactive: {username}")
+            except Exception as e:
+                logger.warning(f"Admin auth failed for {username}: {str(e)}")
         
-        # Try as regular user (either non-admin token or admin fallback)
-        token_data = verify_token(credentials.credentials)
-        if token_data:
-            user = get_user_by_username(db, token_data["username"])
-            if user and user.is_active:
-                logger.info(f"User authenticated: {username}")
-                return user
+        # Fallback to regular user authentication
+        try:
+            token_data = verify_token(credentials.credentials)
+            if token_data:
+                user = get_user_by_username(db, token_data["username"])
+                if user and user.is_active:
+                    logger.info(f"User authenticated successfully: {username}")
+                    return user
+        except Exception as e:
+            logger.warning(f"User auth failed for {username}: {str(e)}")
         
         logger.error(f"No valid user or admin found for: {username}")
         raise credentials_exception
@@ -117,7 +123,7 @@ def get_current_user_or_admin(
 def get_optional_user(
     credentials: HTTPAuthorizationCredentials = Depends(security),
     db: Session = Depends(get_db)
-) -> User:
+) -> Optional[User]:
     """Optional dependency to get current user (returns None if not authenticated)"""
     try:
         token_data = verify_token(credentials.credentials)
