@@ -9,10 +9,30 @@ import {
   FileText, Clock, Target, Activity, Shield, Database, Settings,
   TrendingUp, Zap, Eye, BarChart3, FileUp, AlertTriangle
 } from 'lucide-react'
+import './UserUploadPage.css'
 
+/**
+ * UserUploadPage Component
+ * 
+ * A professional enterprise-grade accident detection system interface
+ * that provides file upload functionality with AI-powered analysis capabilities.
+ * 
+ * Features:
+ * - Secure user authentication
+ * - File validation and processing
+ * - Real-time analysis progress tracking
+ * - Comprehensive result display
+ * - Historical data management
+ * - System navigation integration
+ * 
+ * @component
+ * @returns {JSX.Element} The rendered UserUploadPage component
+ */
 const UserUploadPage = () => {
+  // Authentication and user state
   const { user, isAuthenticated, isLoading: authLoading } = useAuth()
   
+  // File upload and processing state
   const [selectedFile, setSelectedFile] = useState(null)
   const [filePreview, setFilePreview] = useState(null)
   const [isDragging, setIsDragging] = useState(false)
@@ -20,132 +40,13 @@ const UserUploadPage = () => {
   const [uploadProgress, setUploadProgress] = useState(0)
   const [analysisResult, setAnalysisResult] = useState(null)
   const [error, setError] = useState(null)
+  
+  // System status and history state
   const [apiStatus, setApiStatus] = useState('checking')
   const [uploadHistory, setUploadHistory] = useState([])
 
-  // Local utility function to format file sizes
-  const formatFileSize = (bytes) => {
-    if (bytes === 0) return '0 Bytes'
-    
-    const k = 1024
-    const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB']
-    const i = Math.floor(Math.log(bytes) / Math.log(k))
-    
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
-  }
-
-  useEffect(() => {
-    checkApiHealth()
-    loadUploadHistory()
-  }, [])
-
-  useEffect(() => {
-    console.log('User Upload Auth Check:', { user, isAuthenticated, authLoading })
-    
-    if (!authLoading && !isAuthenticated) {
-      setError('You must be logged in to upload files for analysis.')
-    } else if (!authLoading && isAuthenticated) {
-      setError(null)
-    }
-  }, [isAuthenticated, authLoading, user])
-
-  const checkApiHealth = async () => {
-    try {
-      const health = await apiClient.healthCheck()
-      if (health.fallback) {
-        setApiStatus('offline')
-        setError('Backend server is not running. Please start the Python backend server on http://localhost:8000')
-      } else {
-        setApiStatus(health.model_loaded ? 'ready' : 'model_not_loaded')
-        if (!health.model_loaded) {
-          setError('AI model is not loaded on the backend. Please check the server logs.')
-        }
-      }
-    } catch (error) {
-      console.error('API health check failed:', error)
-      setApiStatus('offline')
-      setError('Cannot connect to backend server. Please ensure the Python backend is running on http://localhost:8000')
-    }
-  }
-
-  const loadUploadHistory = () => {
-    try {
-      const history = JSON.parse(localStorage.getItem('userUploadHistory') || '[]')
-      setUploadHistory(history.slice(0, 10)) // Show last 10 uploads
-    } catch (error) {
-      console.error('Error loading upload history:', error)
-    }
-  }
-
-  const saveToHistory = (result) => {
-    try {
-      const historyItem = {
-        id: Date.now() + Math.random().toString(36).substr(2, 9),
-        timestamp: new Date().toISOString(),
-        filename: result.filename || selectedFile?.name || 'unknown',
-        file_size: result.file_size || selectedFile?.size || 0,
-        content_type: result.content_type || selectedFile?.type || 'unknown',
-        accident_detected: result.accident_detected,
-        confidence: result.confidence,
-        processing_time: result.processing_time,
-        predicted_class: result.predicted_class,
-        details: result.details,
-        user: user?.username || 'user',
-        analysis_type: 'user_upload'
-      }
-
-      const existingHistory = JSON.parse(localStorage.getItem('userUploadHistory') || '[]')
-      const updatedHistory = [historyItem, ...existingHistory].slice(0, 50) // Keep last 50
-      
-      localStorage.setItem('userUploadHistory', JSON.stringify(updatedHistory))
-      setUploadHistory(updatedHistory.slice(0, 10))
-      
-      // Also trigger notification if accident detected
-      if (result.accident_detected) {
-        triggerNotificationAlert(result)
-      }
-      
-      return true
-    } catch (error) {
-      console.error('Error saving to history:', error)
-      return false
-    }
-  }
-
-  const triggerNotificationAlert = (result) => {
-    try {
-      const alertItem = {
-        id: `user-alert-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-        timestamp: new Date().toISOString(),
-        type: 'accident',
-        confidence: result.confidence,
-        location: 'User Upload',
-        source: 'User File Upload',
-        acknowledged: false,
-        severity: result.confidence > 0.8 ? 'high' : 'medium',
-        accident_detected: result.accident_detected,
-        predicted_class: result.predicted_class,
-        filename: result.filename,
-        processing_time: result.processing_time,
-        analysis_type: 'User Upload Analysis',
-        user: user?.username || 'user',
-        user_type: 'user'
-      }
-
-      const existingAlerts = JSON.parse(localStorage.getItem('userAlertHistory') || '[]')
-      existingAlerts.unshift(alertItem)
-      const trimmedAlerts = existingAlerts.slice(0, 25) // Keep last 25 alerts for users
-      
-      localStorage.setItem('userAlertHistory', JSON.stringify(trimmedAlerts))
-      
-      return true
-    } catch (error) {
-      console.error('Failed to trigger notification alert:', error)
-      return false
-    }
-  }
-
-  const acceptedTypes = {
+  // Configuration constants
+  const ACCEPTED_FILE_TYPES = {
     'image/jpeg': '.jpg',
     'image/png': '.png', 
     'image/gif': '.gif',
@@ -154,74 +55,220 @@ const UserUploadPage = () => {
     'video/mov': '.mov',
     'video/quicktime': '.mov'
   }
+  
+  const MAX_FILE_SIZE = 25 * 1024 * 1024 // 25MB limit for user uploads
+  const MAX_HISTORY_ITEMS = 50
+  const DISPLAY_HISTORY_LIMIT = 10
 
+  /**
+   * Formats file size in bytes to human-readable format
+   * @param {number} bytes - File size in bytes
+   * @returns {string} Formatted file size string
+   */
+  const formatFileSize = (bytes) => {
+    if (bytes === 0) return '0 Bytes'
+    
+    const units = ['Bytes', 'KB', 'MB', 'GB', 'TB']
+    const base = 1024
+    const unitIndex = Math.floor(Math.log(bytes) / Math.log(base))
+    const size = parseFloat((bytes / Math.pow(base, unitIndex)).toFixed(2))
+    
+    return `${size} ${units[unitIndex]}`
+  }
+
+  /**
+   * Validates if the selected file type is supported
+   * @param {File} file - The file to validate
+   * @returns {boolean} True if file type is supported
+   */
   const isValidFileType = (file) => {
-    return Object.keys(acceptedTypes).includes(file.type)
+    return Object.keys(ACCEPTED_FILE_TYPES).includes(file.type)
   }
 
-  const handleFileSelect = (e) => {
-    const file = e.target.files[0]
-    processSelectedFile(file)
+  /**
+   * Checks API health status and model availability
+   */
+  const checkApiHealth = async () => {
+    try {
+      const healthStatus = await apiClient.healthCheck()
+      
+      if (healthStatus.fallback) {
+        setApiStatus('offline')
+        setError('Backend server is currently unavailable. Please contact system administrator.')
+      } else {
+        setApiStatus(healthStatus.model_loaded ? 'ready' : 'model_not_loaded')
+        if (!healthStatus.model_loaded) {
+          setError('Analysis engine is initializing. Please wait and try again.')
+        }
+      }
+    } catch (error) {
+      console.error('API Health Check Failed:', error)
+      setApiStatus('offline')
+      setError('Unable to establish connection with analysis server. Please contact technical support.')
+    }
   }
 
+  /**
+   * Loads user upload history from storage
+   */
+  const loadUploadHistory = () => {
+    try {
+      const historyData = JSON.parse(localStorage.getItem('userUploadHistory') || '[]')
+      setUploadHistory(historyData.slice(0, DISPLAY_HISTORY_LIMIT))
+    } catch (error) {
+      console.error('Error loading upload history:', error)
+    }
+  }
+
+  /**
+   * Saves analysis result to user history
+   * @param {Object} result - Analysis result object
+   * @returns {boolean} Success status
+   */
+  const saveToHistory = (result) => {
+    try {
+      const historyEntry = {
+        id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        timestamp: new Date().toISOString(),
+        filename: result.filename || selectedFile?.name || 'Unknown File',
+        file_size: result.file_size || selectedFile?.size || 0,
+        content_type: result.content_type || selectedFile?.type || 'Unknown Type',
+        accident_detected: result.accident_detected,
+        confidence: result.confidence,
+        processing_time: result.processing_time,
+        predicted_class: result.predicted_class,
+        details: result.details,
+        user: user?.username || 'System User',
+        analysis_type: 'User Upload Analysis'
+      }
+
+      const existingHistory = JSON.parse(localStorage.getItem('userUploadHistory') || '[]')
+      const updatedHistory = [historyEntry, ...existingHistory].slice(0, MAX_HISTORY_ITEMS)
+      
+      localStorage.setItem('userUploadHistory', JSON.stringify(updatedHistory))
+      setUploadHistory(updatedHistory.slice(0, DISPLAY_HISTORY_LIMIT))
+      
+      if (result.accident_detected) {
+        triggerNotificationAlert(result)
+      }
+      
+      return true
+    } catch (error) {
+      console.error('Error saving analysis to history:', error)
+      return false
+    }
+  }
+
+  /**
+   * Creates notification alert for accident detection
+   * @param {Object} result - Analysis result object
+   * @returns {boolean} Success status
+   */
+  const triggerNotificationAlert = (result) => {
+    try {
+      const alertData = {
+        id: `alert-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        timestamp: new Date().toISOString(),
+        type: 'accident_detection',
+        confidence: result.confidence,
+        location: 'User File Upload',
+        source: 'File Analysis System',
+        acknowledged: false,
+        severity: result.confidence > 0.8 ? 'high' : 'medium',
+        accident_detected: result.accident_detected,
+        predicted_class: result.predicted_class,
+        filename: result.filename,
+        processing_time: result.processing_time,
+        analysis_type: 'User Upload Analysis',
+        user: user?.username || 'System User',
+        user_type: 'authenticated_user'
+      }
+
+      const existingAlerts = JSON.parse(localStorage.getItem('userAlertHistory') || '[]')
+      const updatedAlerts = [alertData, ...existingAlerts].slice(0, 25)
+      
+      localStorage.setItem('userAlertHistory', JSON.stringify(updatedAlerts))
+      
+      return true
+    } catch (error) {
+      console.error('Failed to create notification alert:', error)
+      return false
+    }
+  }
+
+  /**
+   * Processes selected file for validation and preview
+   * @param {File} file - Selected file object
+   */
   const processSelectedFile = (file) => {
     if (!file) return
 
     if (!isValidFileType(file)) {
-      setError(`Invalid file type. Please upload: ${Object.values(acceptedTypes).join(', ')}`)
+      setError(`Unsupported file format. Accepted formats: ${Object.values(ACCEPTED_FILE_TYPES).join(', ')}`)
       return
     }
     
-    // User file size limit: 25MB
-    if (file.size > 25 * 1024 * 1024) {
-      setError('File too large. Maximum size is 25MB for user uploads.')
+    if (file.size > MAX_FILE_SIZE) {
+      setError(`File size exceeds maximum limit. Maximum allowed size: ${formatFileSize(MAX_FILE_SIZE)}`)
       return
     }
     
-    console.log('Processing file:', file);
-    console.log('File is instance of File:', file instanceof File);
-    
-    // Store the file object directly - DO NOT SPREAD IT
     setSelectedFile(file)
     setAnalysisResult(null)
     setError(null)
     setUploadProgress(0)
     
-    // Create preview for image files using a separate state
+    // Generate preview for image files
     if (file.type.startsWith('image/')) {
-      const reader = new FileReader()
-      reader.onload = (e) => {
-        // Store preview separately to avoid corrupting the File object
-        setFilePreview(e.target.result)
+      const fileReader = new FileReader()
+      fileReader.onload = (event) => {
+        setFilePreview(event.target.result)
       }
-      reader.readAsDataURL(file)
+      fileReader.readAsDataURL(file)
     } else {
       setFilePreview(null)
     }
   }
 
-  const handleDragOver = (e) => {
-    e.preventDefault()
-    setIsDragging(true)
-  }
-
-  const handleDragLeave = (e) => {
-    e.preventDefault()
-    setIsDragging(false)
-  }
-
-  const handleDrop = (e) => {
-    e.preventDefault()
-    setIsDragging(false)
-    const file = e.dataTransfer.files[0]
+  /**
+   * Handles file selection from input
+   * @param {Event} event - File input change event
+   */
+  const handleFileSelect = (event) => {
+    const file = event.target.files[0]
     processSelectedFile(file)
   }
 
+  /**
+   * Handles drag and drop functionality
+   */
+  const handleDragOver = (event) => {
+    event.preventDefault()
+    setIsDragging(true)
+  }
+
+  const handleDragLeave = (event) => {
+    event.preventDefault()
+    setIsDragging(false)
+  }
+
+  const handleDrop = (event) => {
+    event.preventDefault()
+    setIsDragging(false)
+    const file = event.dataTransfer.files[0]
+    processSelectedFile(file)
+  }
+
+  /**
+   * Initiates file upload and analysis process
+   */
   const handleUpload = async () => {
-    if (!selectedFile || !isAuthenticated) return
+    if (!selectedFile || !isAuthenticated) {
+      return
+    }
 
     if (apiStatus !== 'ready') {
-      setError('API is not ready. Please check your connection and try again.')
+      setError('Analysis system is not ready. Please verify system status and retry.')
       return
     }
 
@@ -231,48 +278,56 @@ const UserUploadPage = () => {
     setUploadProgress(0)
     
     try {
-      console.log('Starting upload for user:', user?.username)
+      console.log(`Initiating analysis for user: ${user?.username}`)
       
-      const result = await apiClient.uploadFile(selectedFile, (progress) => {
+      const analysisResult = await apiClient.uploadFile(selectedFile, (progress) => {
         setUploadProgress(progress)
       })
       
-      console.log('Upload successful:', result)
+      console.log('Analysis completed successfully:', analysisResult)
       
-      setAnalysisResult(result)
-      saveToHistory(result)
+      setAnalysisResult(analysisResult)
+      saveToHistory(analysisResult)
       
-      // Create notification ONLY for accidents
-      const notification = notificationService.notifyUploadResult(result)
+      const notification = notificationService.notifyUploadResult(analysisResult)
       
-      // Play sound based on result
-      if (result.accident_detected) {
+      if (analysisResult.accident_detected) {
         notificationService.playAlertSound('accident')
-        console.log('🚨 [UPLOAD] Accident detected - notification created:', notification)
+        console.log('ALERT: Accident detected - Notification system activated')
       } else {
         notificationService.playAlertSound('completion')
-        console.log('✅ [UPLOAD] Safe result - no notification created')
+        console.log('INFO: Analysis completed - No incidents detected')
       }
       
     } catch (error) {
-      console.error('Upload failed:', error)
-      setError(error.message || 'Upload failed. Please try again.')
+      console.error('Analysis failed:', error)
+      setError(error.message || 'Analysis process failed. Please retry or contact support.')
     } finally {
       setIsUploading(false)
       setUploadProgress(0)
     }
   }
 
+  /**
+   * Clears selected file and resets form state
+   */
   const clearFile = () => {
     setSelectedFile(null)
     setFilePreview(null)
     setAnalysisResult(null)
     setError(null)
     setUploadProgress(0)
+    
     const fileInput = document.querySelector('input[type="file"]')
-    if (fileInput) fileInput.value = ''
+    if (fileInput) {
+      fileInput.value = ''
+    }
   }
 
+  /**
+   * Status Card Component
+   * Displays system status information in a structured card format
+   */
   const StatusCard = ({ title, value, icon: Icon, status, isDanger, isWarning }) => (
     <div className={`status-card ${isDanger ? 'danger' : isWarning ? 'warning' : 'normal'}`}>
       <div className="status-card-content">
@@ -292,6 +347,23 @@ const UserUploadPage = () => {
     </div>
   )
 
+  // Component lifecycle effects
+  useEffect(() => {
+    checkApiHealth()
+    loadUploadHistory()
+  }, [])
+
+  useEffect(() => {
+    console.log('Authentication Status Check:', { user, isAuthenticated, authLoading })
+    
+    if (!authLoading && !isAuthenticated) {
+      setError('Authentication required. Please sign in to access the analysis system.')
+    } else if (!authLoading && isAuthenticated) {
+      setError(null)
+    }
+  }, [isAuthenticated, authLoading, user])
+
+  // Loading state display
   if (authLoading) {
     return (
       <div className="loading-container">
@@ -302,71 +374,17 @@ const UserUploadPage = () => {
             <div className="spinner-dot"></div>
           </div>
           <h3 className="loading-title">System Initialization</h3>
-          <p className="loading-text">Authenticating session...</p>
+          <p className="loading-text">Authenticating user session...</p>
         </div>
-        <style jsx>{`
-          .loading-container {
-            min-height: 100vh;
-            background: #f8f9fa;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 2rem;
-          }
-          
-          .loading-card {
-            background: white;
-            border-radius: 8px;
-            padding: 3rem;
-            text-align: center;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-            border: 1px solid #e9ecef;
-            max-width: 400px;
-          }
-          
-          .loading-spinner {
-            display: flex;
-            justify-content: center;
-            gap: 0.5rem;
-            margin: 0 auto 2rem;
-          }
-          
-          .spinner-dot {
-            width: 12px;
-            height: 12px;
-            background: #6c757d;
-            border-radius: 50%;
-            animation: bounce 1.4s ease-in-out infinite both;
-          }
-          
-          .spinner-dot:nth-child(1) { animation-delay: -0.32s; }
-          .spinner-dot:nth-child(2) { animation-delay: -0.16s; }
-          
-          .loading-title {
-            font-size: 1.25rem;
-            font-weight: 600;
-            color: #212529;
-            margin-bottom: 0.5rem;
-          }
-          
-          .loading-text {
-            color: #6c757d;
-            margin: 0;
-          }
-          
-          @keyframes bounce {
-            0%, 80%, 100% { transform: scale(0); }
-            40% { transform: scale(1); }
-          }
-        `}</style>
       </div>
     )
   }
 
+  // Main component render
   return (
     <div className="admin-container">
       <div className="admin-wrapper">
-        {/* Header */}
+        {/* Application Header */}
         <div className="admin-header">
           <div className="header-content">
             <div className="header-title">
@@ -374,8 +392,8 @@ const UserUploadPage = () => {
                 <Upload />
               </div>
               <div className="header-text">
-                <h1>Accident Detection System</h1>
-                <p>Enterprise AI-Powered Traffic Safety Analysis</p>
+                <h1>Enterprise Accident Detection System</h1>
+                <p>AI-Powered Traffic Safety Analysis Platform</p>
               </div>
             </div>
             {isAuthenticated && user && (
@@ -392,7 +410,7 @@ const UserUploadPage = () => {
           </div>
         </div>
 
-        {/* Authentication Error */}
+        {/* Authentication Required Notice */}
         {!isAuthenticated && (
           <div className="auth-error">
             <div className="auth-error-content">
@@ -401,42 +419,42 @@ const UserUploadPage = () => {
               </div>
               <h2 className="auth-error-title">Authentication Required</h2>
               <p className="auth-error-text">
-                Access to the accident detection system requires valid user credentials. 
-                Please authenticate to proceed with file analysis.
+                Access to the accident detection analysis system requires authenticated user credentials. 
+                Please complete the authentication process to proceed with file analysis operations.
               </p>
               <div className="auth-error-buttons">
                 <button
                   onClick={() => window.location.href = '/auth'}
                   className="btn btn-primary"
                 >
-                  Sign In / Register
+                  Authenticate Account
                 </button>
                 <button
                   onClick={() => window.location.href = '/'}
                   className="btn btn-secondary"
                 >
-                  Return Home
+                  Return to Home
                 </button>
               </div>
             </div>
           </div>
         )}
 
-        {/* Only show upload interface if authenticated */}
+        {/* Authenticated User Interface */}
         {isAuthenticated && (
           <>
-            {/* Status Cards */}
+            {/* System Status Overview */}
             <div className="status-grid">
               <StatusCard
                 title="User Authentication"
-                value={`Authenticated: ${user?.username || 'User'}`}
+                value={`Authenticated: ${user?.username || 'System User'}`}
                 icon={Shield}
                 status="success"
               />
 
               <StatusCard
                 title="Analysis Engine"
-                value={apiStatus === 'ready' ? 'Service Ready' : 'Initializing'}
+                value={apiStatus === 'ready' ? 'Service Operational' : 'System Initializing'}
                 icon={Zap}
                 status={apiStatus === 'ready' ? 'success' : 'warning'}
                 isWarning={apiStatus !== 'ready'}
@@ -444,20 +462,20 @@ const UserUploadPage = () => {
 
               <StatusCard
                 title="System Status"
-                value="Operational"
+                value="Fully Operational"
                 icon={Activity}
                 status="success"
               />
 
               <StatusCard
                 title="Data Processing"
-                value="Real-time Available"
+                value="Real-time Processing Available"
                 icon={Database}
                 status="success"
               />
             </div>
 
-            {/* Error Display */}
+            {/* Error Notification Display */}
             {error && (
               <div className="error-alert">
                 <div className="error-content">
@@ -467,16 +485,16 @@ const UserUploadPage = () => {
               </div>
             )}
 
-            {/* Upload Section */}
+            {/* File Upload Interface */}
             <div className="upload-section">
               <div className="section-header">
                 <div className="section-icon">
                   <FileUp size={20} />
                 </div>
                 <div>
-                  <h3 className="section-title">File Analysis Upload</h3>
+                  <h3 className="section-title">File Analysis Upload Interface</h3>
                   <p className="section-description">
-                    Upload image or video files for AI-powered accident detection analysis
+                    Upload media files for comprehensive AI-powered accident detection analysis
                   </p>
                 </div>
               </div>
@@ -497,19 +515,19 @@ const UserUploadPage = () => {
                 
                 <h3 className="upload-title">
                   {selectedFile ? selectedFile.name : 
-                   (isDragging ? 'Drop file to upload' : 'File Upload Area')}
+                   (isDragging ? 'Release to Select File' : 'File Upload Interface')}
                 </h3>
                 
                 <p className="upload-subtitle">
-                  {selectedFile ? 'Ready for analysis' :
-                   (isDragging ? 'Release to select file' : 'Select or drag files for processing')}
+                  {selectedFile ? 'File ready for analysis processing' :
+                   (isDragging ? 'Release file to begin selection process' : 'Select files for comprehensive analysis processing')}
                 </p>
                 
                 {!selectedFile && (
                   <>
                     <input 
                       type="file" 
-                      accept={Object.keys(acceptedTypes).join(',')}
+                      accept={Object.keys(ACCEPTED_FILE_TYPES).join(',')}
                       onChange={handleFileSelect}
                       className="file-input"
                       id="file-upload"
@@ -517,11 +535,11 @@ const UserUploadPage = () => {
                     
                     <label htmlFor="file-upload" className="file-input-label">
                       <Upload size={18} />
-                      Select File
+                      Select File for Analysis
                     </label>
                     
                     <p className="upload-hint">
-                      Accepted formats: {Object.values(acceptedTypes).join(', ')} | Maximum size: 25MB
+                      Supported formats: {Object.values(ACCEPTED_FILE_TYPES).join(', ')} | Maximum file size: {formatFileSize(MAX_FILE_SIZE)}
                     </p>
                   </>
                 )}
@@ -531,22 +549,22 @@ const UserUploadPage = () => {
                     {filePreview && (
                       <img 
                         src={filePreview} 
-                        alt="File Preview" 
+                        alt="Selected File Preview" 
                         className="file-preview"
                       />
                     )}
                     
                     <div className="file-details">
                       <div className="file-detail-row">
-                        <span className="detail-label">Filename:</span>
+                        <span className="detail-label">File Name:</span>
                         <span className="detail-value">{selectedFile.name}</span>
                       </div>
                       <div className="file-detail-row">
-                        <span className="detail-label">Size:</span>
+                        <span className="detail-label">File Size:</span>
                         <span className="detail-value">{formatFileSize(selectedFile.size)}</span>
                       </div>
                       <div className="file-detail-row">
-                        <span className="detail-label">Type:</span>
+                        <span className="detail-label">Content Type:</span>
                         <span className="detail-value">{selectedFile.type}</span>
                       </div>
                     </div>
@@ -562,12 +580,12 @@ const UserUploadPage = () => {
                         {isUploading ? (
                           <>
                             <div className="btn-spinner"></div>
-                            Processing {uploadProgress}%
+                            Processing Analysis {uploadProgress}%
                           </>
                         ) : (
                           <>
                             <Zap size={18} />
-                            Start Analysis
+                            Initiate Analysis
                           </>
                         )}
                       </button>
@@ -585,12 +603,12 @@ const UserUploadPage = () => {
               </div>
             </div>
 
-            {/* Upload Progress */}
+            {/* Analysis Progress Indicator */}
             {isUploading && (
               <div className="progress-section">
                 <div className="progress-header">
                   <div className="progress-spinner"></div>
-                  <span className="progress-text">Analysis in Progress</span>
+                  <span className="progress-text">Analysis Processing in Progress</span>
                 </div>
                 <div className="progress-bar">
                   <div 
@@ -599,12 +617,12 @@ const UserUploadPage = () => {
                   ></div>
                 </div>
                 <p className="progress-label">
-                  {uploadProgress}% • Processing with neural network analysis
+                  {uploadProgress}% Complete • Advanced neural network analysis in progress
                 </p>
               </div>
             )}
 
-            {/* Analysis Results */}
+            {/* Analysis Results Display */}
             {analysisResult && (
               <div className="results-section">
                 <div className="section-header">
@@ -634,7 +652,7 @@ const UserUploadPage = () => {
                       <p className={`result-confidence ${
                         analysisResult.accident_detected ? 'accident' : 'safe'
                       }`}>
-                        Confidence Level: {(analysisResult.confidence * 100).toFixed(1)}%
+                        Analysis Confidence Level: {(analysisResult.confidence * 100).toFixed(1)}%
                       </p>
                     </div>
                   </div>
@@ -650,7 +668,7 @@ const UserUploadPage = () => {
                     </div>
                     <div className="result-card-content">
                       <div className="result-detail">
-                        <span className="detail-label">Filename:</span>
+                        <span className="detail-label">File Name:</span>
                         <span className="detail-value">{analysisResult.filename}</span>
                       </div>
                       <div className="result-detail">
@@ -662,7 +680,7 @@ const UserUploadPage = () => {
                         <span className="detail-value">{analysisResult.content_type}</span>
                       </div>
                       <div className="result-detail">
-                        <span className="detail-label">Classification:</span>
+                        <span className="detail-label">Classification Result:</span>
                         <span className="detail-value">{analysisResult.predicted_class}</span>
                       </div>
                     </div>
@@ -677,7 +695,7 @@ const UserUploadPage = () => {
                     </div>
                     <div className="result-card-content">
                       <div className="result-detail">
-                        <span className="detail-label">Analysis Time:</span>
+                        <span className="detail-label">Processing Time:</span>
                         <span className="detail-value">{analysisResult.processing_time?.toFixed(3)}s</span>
                       </div>
                       <div className="result-detail">
@@ -686,11 +704,11 @@ const UserUploadPage = () => {
                       </div>
                       <div className="result-detail">
                         <span className="detail-label">Model Version:</span>
-                        <span className="detail-value">v2.1.0</span>
+                        <span className="detail-value">Enterprise v2.1.0</span>
                       </div>
                       <div className="result-detail">
                         <span className="detail-label">Processing Type:</span>
-                        <span className="detail-value">Real-time</span>
+                        <span className="detail-value">Real-time Analysis</span>
                       </div>
                     </div>
                   </div>
@@ -705,7 +723,7 @@ const UserUploadPage = () => {
               </div>
             )}
 
-            {/* Upload History */}
+            {/* Upload History Section */}
             {uploadHistory.length > 0 && (
               <div className="history-section">
                 <div className="section-header">
@@ -734,10 +752,10 @@ const UserUploadPage = () => {
                         <span className={`history-badge ${
                           item.accident_detected ? 'accident' : 'safe'
                         }`}>
-                          {item.accident_detected ? 'ACCIDENT' : 'SAFE'}
+                          {item.accident_detected ? 'ACCIDENT DETECTED' : 'NO INCIDENT'}
                         </span>
                         <p className="history-confidence">
-                          {(item.confidence * 100).toFixed(1)}% confidence
+                          Confidence: {(item.confidence * 100).toFixed(1)}%
                         </p>
                       </div>
                     </div>
@@ -748,14 +766,14 @@ const UserUploadPage = () => {
                   <div className="view-all-section">
                     <a href="/dashboard" className="view-all-link">
                       <Eye size={16} />
-                      View Complete History
+                      View Complete Analysis History
                     </a>
                   </div>
                 )}
               </div>
             )}
 
-            {/* Navigation Section */}
+            {/* System Navigation */}
             <div className="navigation-section">
               <div className="section-header">
                 <div className="section-icon">
@@ -763,7 +781,7 @@ const UserUploadPage = () => {
                 </div>
                 <div>
                   <h3 className="section-title">System Navigation</h3>
-                  <p className="section-description">Access other system modules and features</p>
+                  <p className="section-description">Access additional system modules and administrative features</p>
                 </div>
               </div>
               <div className="navigation-grid">
@@ -773,7 +791,7 @@ const UserUploadPage = () => {
                   </div>
                   <div className="nav-text">
                     <div className="nav-link-title">Analytics Dashboard</div>
-                    <div className="nav-link-desc">System metrics and reports</div>
+                    <div className="nav-link-desc">System performance metrics and comprehensive reports</div>
                   </div>
                 </a>
                 
@@ -782,8 +800,8 @@ const UserUploadPage = () => {
                     <Eye size={20} />
                   </div>
                   <div className="nav-text">
-                    <div className="nav-link-title">Live Detection</div>
-                    <div className="nav-link-desc">Real-time monitoring</div>
+                    <div className="nav-link-title">Live Detection Monitor</div>
+                    <div className="nav-link-desc">Real-time incident monitoring and surveillance</div>
                   </div>
                 </a>
                 
@@ -792,8 +810,8 @@ const UserUploadPage = () => {
                     <AlertCircle size={20} />
                   </div>
                   <div className="nav-text">
-                    <div className="nav-link-title">Notifications</div>
-                    <div className="nav-link-desc">Alert management</div>
+                    <div className="nav-link-title">Notification Center</div>
+                    <div className="nav-link-desc">Alert management and notification settings</div>
                   </div>
                 </a>
                 
@@ -802,8 +820,8 @@ const UserUploadPage = () => {
                     <Settings size={20} />
                   </div>
                   <div className="nav-text">
-                    <div className="nav-link-title">System Settings</div>
-                    <div className="nav-link-desc">Configuration options</div>
+                    <div className="nav-link-title">System Configuration</div>
+                    <div className="nav-link-desc">Advanced system settings and preferences</div>
                   </div>
                 </a>
               </div>
@@ -811,871 +829,6 @@ const UserUploadPage = () => {
           </>
         )}
       </div>
-
-      <style jsx>{`
-        .admin-container {
-          min-height: 100vh;
-          background: #f8f9fa;
-          padding: 1.5rem;
-        }
-        
-        .admin-wrapper {
-          max-width: 1200px;
-          margin: 0 auto;
-        }
-        
-        .admin-header {
-          background: white;
-          border-radius: 8px;
-          padding: 2rem;
-          margin-bottom: 2rem;
-          box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-          border: 1px solid #dee2e6;
-        }
-        
-        .header-content {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          flex-wrap: wrap;
-          gap: 1rem;
-        }
-        
-        .header-title {
-          display: flex;
-          align-items: center;
-          gap: 1rem;
-        }
-        
-        .header-icon {
-          width: 48px;
-          height: 48px;
-          background: #495057;
-          border-radius: 8px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          color: white;
-        }
-        
-        .header-text h1 {
-          font-size: 1.75rem;
-          font-weight: 600;
-          color: #212529;
-          margin: 0;
-        }
-        
-        .header-text p {
-          color: #6c757d;
-          margin: 0.25rem 0 0 0;
-          font-size: 0.875rem;
-        }
-        
-        .user-badge {
-          display: flex;
-          align-items: center;
-          gap: 0.5rem;
-          background: #f8f9fa;
-          border: 1px solid #dee2e6;
-          color: #495057;
-          padding: 0.5rem 1rem;
-          border-radius: 6px;
-          font-size: 0.875rem;
-        }
-        
-        .user-name {
-          font-weight: 600;
-          color: #212529;
-        }
-        
-        .user-role {
-          color: #6c757d;
-        }
-        
-        .auth-error {
-          background: white;
-          border-radius: 8px;
-          padding: 2.5rem;
-          margin-bottom: 2rem;
-          box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-          border: 1px solid #f8d7da;
-          text-align: center;
-        }
-        
-        .auth-error-content {
-          max-width: 500px;
-          margin: 0 auto;
-        }
-        
-        .auth-error-icon {
-          width: 64px;
-          height: 64px;
-          background: #dc3545;
-          border-radius: 8px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          color: white;
-          margin: 0 auto 1.5rem;
-        }
-        
-        .auth-error-title {
-          font-size: 1.5rem;
-          font-weight: 600;
-          color: #212529;
-          margin-bottom: 1rem;
-        }
-        
-        .auth-error-text {
-          color: #6c757d;
-          margin-bottom: 2rem;
-          line-height: 1.5;
-        }
-        
-        .auth-error-buttons {
-          display: flex;
-          gap: 1rem;
-          justify-content: center;
-          flex-wrap: wrap;
-        }
-        
-        .btn {
-          padding: 0.75rem 1.5rem;
-          border-radius: 6px;
-          font-weight: 500;
-          text-decoration: none;
-          cursor: pointer;
-          border: none;
-          transition: all 0.2s ease;
-          display: inline-flex;
-          align-items: center;
-          gap: 0.5rem;
-          font-size: 0.875rem;
-        }
-        
-        .btn-primary {
-          background: #007bff;
-          color: white;
-          border: 1px solid #007bff;
-        }
-        
-        .btn-primary:hover:not(.disabled) {
-          background: #0056b3;
-          border-color: #0056b3;
-        }
-        
-        .btn-secondary {
-          background: #6c757d;
-          color: white;
-          border: 1px solid #6c757d;
-        }
-        
-        .btn-secondary:hover {
-          background: #545b62;
-          border-color: #545b62;
-        }
-        
-        .btn.disabled,
-        .btn:disabled {
-          background: #e9ecef;
-          color: #6c757d;
-          cursor: not-allowed;
-          border-color: #dee2e6;
-        }
-        
-        .btn-spinner {
-          width: 16px;
-          height: 16px;
-          border: 2px solid transparent;
-          border-top-color: currentColor;
-          border-radius: 50%;
-          animation: spin 1s linear infinite;
-        }
-        
-        .status-grid {
-          display: grid;
-          grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-          gap: 1.5rem;
-          margin-bottom: 2rem;
-        }
-        
-        .status-card {
-          background: white;
-          border-radius: 8px;
-          padding: 1.5rem;
-          box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-          border: 1px solid #dee2e6;
-        }
-        
-        .status-card.danger {
-          border-left: 4px solid #dc3545;
-        }
-        
-        .status-card.warning {
-          border-left: 4px solid #ffc107;
-        }
-        
-        .status-card.normal {
-          border-left: 4px solid #28a745;
-        }
-        
-        .status-card-content {
-          display: flex;
-          align-items: center;
-          gap: 1rem;
-        }
-        
-        .status-icon-container {
-          width: 40px;
-          height: 40px;
-          background: #f8f9fa;
-          border-radius: 6px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-        }
-        
-        .status-card-icon {
-          width: 20px;
-          height: 20px;
-          color: #495057;
-        }
-        
-        .status-text {
-          flex: 1;
-        }
-        
-        .status-value {
-          font-size: 1rem;
-          font-weight: 600;
-          color: #212529;
-          margin: 0 0 0.25rem 0;
-        }
-        
-        .status-title {
-          color: #6c757d;
-          font-size: 0.875rem;
-          margin: 0;
-        }
-        
-        .status-indicator {
-          margin-left: auto;
-        }
-        
-        .indicator-success {
-          width: 20px;
-          height: 20px;
-          color: #28a745;
-        }
-        
-        .indicator-error {
-          width: 20px;
-          height: 20px;
-          color: #dc3545;
-        }
-        
-        .indicator-warning {
-          width: 20px;
-          height: 20px;
-          color: #ffc107;
-        }
-        
-        .error-alert {
-          background: #f8d7da;
-          border: 1px solid #f5c6cb;
-          border-radius: 6px;
-          padding: 1rem;
-          margin-bottom: 2rem;
-        }
-        
-        .error-content {
-          display: flex;
-          align-items: center;
-          gap: 0.75rem;
-        }
-        
-        .error-text {
-          color: #721c24;
-          font-weight: 500;
-        }
-        
-        .upload-section,
-        .results-section,
-        .history-section,
-        .navigation-section,
-        .progress-section {
-          background: white;
-          border-radius: 8px;
-          padding: 2rem;
-          margin-bottom: 2rem;
-          box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-          border: 1px solid #dee2e6;
-        }
-        
-        .progress-section {
-          border-left: 4px solid #007bff;
-        }
-        
-        .section-header {
-          margin-bottom: 1.5rem;
-          padding-bottom: 1rem;
-          border-bottom: 1px solid #dee2e6;
-          display: flex;
-          align-items: flex-start;
-          gap: 1rem;
-        }
-        
-        .section-icon {
-          width: 32px;
-          height: 32px;
-          background: #f8f9fa;
-          border-radius: 6px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          color: #495057;
-          flex-shrink: 0;
-        }
-        
-        .section-title {
-          font-size: 1.25rem;
-          font-weight: 600;
-          color: #212529;
-          margin: 0;
-        }
-        
-        .section-description {
-          color: #6c757d;
-          margin: 0.5rem 0 0 0;
-          font-size: 0.875rem;
-        }
-        
-        .upload-area {
-          border: 2px dashed #dee2e6;
-          border-radius: 8px;
-          padding: 3rem 2rem;
-          text-align: center;
-          transition: all 0.2s ease;
-          background: #f8f9fa;
-        }
-        
-        .upload-area.dragging {
-          border-color: #007bff;
-          background: #e3f2fd;
-        }
-        
-        .upload-area.has-file {
-          border-color: #28a745;
-          background: #f8fff9;
-        }
-        
-        .upload-icon {
-          width: 64px;
-          height: 64px;
-          background: #495057;
-          border-radius: 8px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          color: white;
-          margin: 0 auto 1.5rem;
-        }
-        
-        .upload-title {
-          font-size: 1.25rem;
-          font-weight: 600;
-          color: #212529;
-          margin-bottom: 0.5rem;
-        }
-        
-        .upload-subtitle {
-          color: #6c757d;
-          margin-bottom: 2rem;
-        }
-        
-        .file-input {
-          display: none;
-        }
-        
-        .file-input-label {
-          display: inline-flex;
-          align-items: center;
-          gap: 0.5rem;
-          background: #007bff;
-          color: white;
-          padding: 0.75rem 1.5rem;
-          border-radius: 6px;
-          cursor: pointer;
-          font-weight: 500;
-          transition: background-color 0.2s ease;
-          border: 1px solid #007bff;
-        }
-        
-        .file-input-label:hover {
-          background: #0056b3;
-          border-color: #0056b3;
-        }
-        
-        .upload-hint {
-          color: #6c757d;
-          font-size: 0.875rem;
-          margin-top: 1rem;
-        }
-        
-        .file-preview {
-          max-width: 300px;
-          max-height: 200px;
-          border-radius: 6px;
-          margin: 0 auto 1.5rem;
-          border: 1px solid #dee2e6;
-        }
-        
-        .file-details {
-          background: #f8f9fa;
-          border: 1px solid #dee2e6;
-          border-radius: 6px;
-          padding: 1rem;
-          margin-bottom: 1.5rem;
-          text-align: left;
-          max-width: 400px;
-          margin-left: auto;
-          margin-right: auto;
-        }
-        
-        .file-detail-row {
-          display: flex;
-          justify-content: space-between;
-          margin-bottom: 0.5rem;
-        }
-        
-        .file-detail-row:last-child {
-          margin-bottom: 0;
-        }
-        
-        .detail-label {
-          font-weight: 500;
-          color: #495057;
-        }
-        
-        .detail-value {
-          color: #212529;
-        }
-        
-        .file-actions {
-          display: flex;
-          gap: 1rem;
-          justify-content: center;
-          flex-wrap: wrap;
-        }
-        
-        .progress-header {
-          display: flex;
-          align-items: center;
-          gap: 1rem;
-          margin-bottom: 1.5rem;
-        }
-        
-        .progress-spinner {
-          width: 32px;
-          height: 32px;
-          border: 3px solid #e9ecef;
-          border-top-color: #007bff;
-          border-radius: 50%;
-          animation: spin 1s linear infinite;
-        }
-        
-        .progress-text {
-          font-size: 1.125rem;
-          font-weight: 600;
-          color: #212529;
-        }
-        
-        .progress-bar {
-          width: 100%;
-          height: 8px;
-          background: #e9ecef;
-          border-radius: 4px;
-          overflow: hidden;
-        }
-        
-        .progress-fill {
-          height: 100%;
-          background: #007bff;
-          transition: width 0.3s ease;
-          border-radius: 4px;
-        }
-        
-        .progress-label {
-          text-align: center;
-          color: #495057;
-          font-size: 0.875rem;
-          margin-top: 1rem;
-        }
-        
-        .result-alert {
-          border-radius: 6px;
-          padding: 1.5rem;
-          margin-bottom: 2rem;
-          border: 1px solid;
-        }
-        
-        .result-alert.accident {
-          background: #f8d7da;
-          border-color: #f5c6cb;
-        }
-        
-        .result-alert.safe {
-          background: #d4edda;
-          border-color: #c3e6cb;
-        }
-        
-        .result-content {
-          display: flex;
-          align-items: center;
-          gap: 1rem;
-        }
-        
-        .result-icon {
-          color: inherit;
-        }
-        
-        .result-info {
-          flex: 1;
-        }
-        
-        .result-status {
-          font-size: 1.25rem;
-          font-weight: 700;
-          margin-bottom: 0.5rem;
-        }
-        
-        .result-status.accident {
-          color: #721c24;
-        }
-        
-        .result-status.safe {
-          color: #155724;
-        }
-        
-        .result-confidence {
-          font-size: 0.875rem;
-          font-weight: 500;
-          margin: 0;
-        }
-        
-        .result-confidence.accident {
-          color: #721c24;
-        }
-        
-        .result-confidence.safe {
-          color: #155724;
-        }
-        
-        .result-grid {
-          display: grid;
-          grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-          gap: 1.5rem;
-        }
-        
-        .result-card {
-          background: #f8f9fa;
-          border: 1px solid #dee2e6;
-          border-radius: 6px;
-          padding: 1.5rem;
-        }
-        
-        .result-card-header {
-          display: flex;
-          align-items: center;
-          gap: 0.75rem;
-          margin-bottom: 1rem;
-          padding-bottom: 0.75rem;
-          border-bottom: 1px solid #dee2e6;
-        }
-        
-        .result-card-icon {
-          width: 32px;
-          height: 32px;
-          background: #495057;
-          border-radius: 6px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          color: white;
-        }
-        
-        .result-card-title {
-          font-weight: 600;
-          color: #212529;
-          font-size: 1rem;
-        }
-        
-        .result-card-content {
-          color: #495057;
-          line-height: 1.5;
-        }
-        
-        .result-detail {
-          display: flex;
-          justify-content: space-between;
-          margin-bottom: 0.5rem;
-        }
-        
-        .result-detail:last-child {
-          margin-bottom: 0;
-        }
-        
-        .result-details {
-          background: #f8f9fa;
-          border: 1px solid #dee2e6;
-          border-radius: 6px;
-          padding: 1.5rem;
-          margin-top: 1.5rem;
-        }
-        
-        .details-title {
-          font-weight: 600;
-          color: #212529;
-          margin-bottom: 0.75rem;
-          font-size: 1rem;
-        }
-        
-        .details-content {
-          color: #495057;
-          margin: 0;
-          line-height: 1.5;
-        }
-        
-        .history-list {
-          display: flex;
-          flex-direction: column;
-          gap: 1rem;
-        }
-        
-        .history-item {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          padding: 1rem;
-          background: #f8f9fa;
-          border: 1px solid #dee2e6;
-          border-radius: 6px;
-        }
-        
-        .history-info {
-          display: flex;
-          align-items: center;
-          gap: 1rem;
-        }
-        
-        .history-file-icon {
-          width: 36px;
-          height: 36px;
-          background: #495057;
-          border-radius: 6px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          color: white;
-        }
-        
-        .history-details {
-          
-        }
-        
-        .history-filename {
-          font-weight: 500;
-          color: #212529;
-          margin: 0 0 0.25rem 0;
-          font-size: 0.875rem;
-        }
-        
-        .history-timestamp {
-          font-size: 0.75rem;
-          color: #6c757d;
-          margin: 0;
-        }
-        
-        .history-result {
-          text-align: right;
-        }
-        
-        .history-badge {
-          padding: 0.25rem 0.75rem;
-          border-radius: 4px;
-          font-size: 0.75rem;
-          font-weight: 600;
-          margin-bottom: 0.25rem;
-          display: inline-block;
-        }
-        
-        .history-badge.accident {
-          background: #f8d7da;
-          color: #721c24;
-          border: 1px solid #f5c6cb;
-        }
-        
-        .history-badge.safe {
-          background: #d4edda;
-          color: #155724;
-          border: 1px solid #c3e6cb;
-        }
-        
-        .history-confidence {
-          font-size: 0.75rem;
-          color: #6c757d;
-          margin: 0;
-        }
-        
-        .view-all-section {
-          text-align: center;
-          margin-top: 1.5rem;
-          padding-top: 1.5rem;
-          border-top: 1px solid #dee2e6;
-        }
-        
-        .view-all-link {
-          display: inline-flex;
-          align-items: center;
-          gap: 0.5rem;
-          background: white;
-          color: #007bff;
-          padding: 0.5rem 1rem;
-          border: 1px solid #007bff;
-          border-radius: 6px;
-          text-decoration: none;
-          font-weight: 500;
-          transition: all 0.2s ease;
-          font-size: 0.875rem;
-        }
-        
-        .view-all-link:hover {
-          background: #007bff;
-          color: white;
-        }
-        
-        .navigation-grid {
-          display: grid;
-          grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-          gap: 1rem;
-        }
-        
-        .nav-link {
-          display: flex;
-          align-items: center;
-          gap: 1rem;
-          padding: 1.5rem;
-          background: #f8f9fa;
-          border: 1px solid #dee2e6;
-          border-radius: 6px;
-          text-decoration: none;
-          color: #212529;
-          transition: all 0.2s ease;
-        }
-        
-        .nav-link:hover {
-          background: #e9ecef;
-          text-decoration: none;
-          color: #212529;
-        }
-        
-        .nav-icon {
-          width: 40px;
-          height: 40px;
-          background: #495057;
-          border-radius: 6px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          color: white;
-          flex-shrink: 0;
-        }
-        
-        .nav-text {
-          flex: 1;
-        }
-        
-        .nav-link-title {
-          font-weight: 600;
-          margin-bottom: 0.25rem;
-        }
-        
-        .nav-link-desc {
-          font-size: 0.875rem;
-          color: #6c757d;
-        }
-        
-        @keyframes spin {
-          0% { transform: rotate(0deg); }
-          100% { transform: rotate(360deg); }
-        }
-        
-        @keyframes bounce {
-          0%, 80%, 100% { transform: scale(0); }
-          40% { transform: scale(1); }
-        }
-        
-        @media (max-width: 768px) {
-          .admin-container {
-            padding: 1rem;
-          }
-          
-          .admin-header {
-            padding: 1.5rem;
-          }
-          
-          .header-content {
-            flex-direction: column;
-            text-align: center;
-          }
-          
-          .status-grid {
-            grid-template-columns: 1fr;
-          }
-          
-          .result-grid {
-            grid-template-columns: 1fr;
-          }
-          
-          .navigation-grid {
-            grid-template-columns: 1fr;
-          }
-          
-          .history-item {
-            flex-direction: column;
-            gap: 1rem;
-            text-align: center;
-          }
-          
-          .upload-area {
-            padding: 2rem 1rem;
-          }
-          
-          .file-actions {
-            flex-direction: column;
-            align-items: center;
-          }
-          
-          .auth-error-buttons {
-            flex-direction: column;
-            align-items: center;
-          }
-          
-          .upload-section,
-          .results-section,
-          .history-section,
-          .navigation-section,
-          .progress-section {
-            padding: 1.5rem;
-          }
-          
-          .section-header {
-            flex-direction: column;
-            align-items: flex-start;
-            gap: 0.75rem;
-          }
-        }
-      `}</style>
     </div>
   )
 }
