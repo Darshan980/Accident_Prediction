@@ -1,1573 +1,591 @@
 // Real-time Admin Upload Page - src/app/admin/upload/page.js
 'use client'
 
-import { useState, useEffect, useContext, createContext } from 'react'
+import React, { useState, useEffect, useCallback } from 'react';
+import { Upload, FileText, AlertCircle, CheckCircle, XCircle, Settings, RefreshCw, Play, Pause } from 'lucide-react';
 
-// Temporary fallback auth context (replace with your actual auth import)
-const AuthContext = createContext()
+const AdminUploadComponent = () => {
+  // State management
+  const [files, setFiles] = useState([]);
+  const [uploadProgress, setUploadProgress] = useState({});
+  const [results, setResults] = useState([]);
+  const [isUploading, setIsUploading] = useState(false);
+  const [config, setConfig] = useState({
+    processingMode: 'realtime',
+    enableLogging: true,
+    threshold: 0.5,
+    batchSize: 5
+  });
+  const [systemStatus, setSystemStatus] = useState({
+    api: 'checking',
+    model: 'checking',
+    backend: 'checking'
+  });
+  const [error, setError] = useState(null);
 
-const useAuth = () => {
-  const context = useContext(AuthContext)
-  if (!context) {
-    // Try to get user data from localStorage first
-    try {
-      const storedUser = localStorage.getItem('user')
-      const storedToken = localStorage.getItem('token')
-      const userType = localStorage.getItem('user_type')
-      
-      if (storedUser && storedUser !== 'null') {
-        const userData = JSON.parse(storedUser)
-        
-        return {
-          user: {
-            username: userData.username || 'unknown_admin',
-            role: userType === 'admin' ? 'admin' : userData.role || 'user',
-            department: userData.department || 'Administration',
-            email: userData.email || 'admin@localhost',
-            admin_level: localStorage.getItem('admin_level') || 'admin'
-          },
-          isAuthenticated: true,
-          token: storedToken || 'no-token',
-          isLoading: false
-        }
+  // API configuration
+  const API_BASE_URL = 'https://accident-prediction-1-mpm0.onrender.com';
+  
+  const getAuthToken = () => {
+    const tokenSources = ['token', 'authToken', 'access_token'];
+    
+    for (const key of tokenSources) {
+      const token = localStorage.getItem(key) || sessionStorage.getItem(key);
+      if (token && token !== 'null' && token !== 'undefined' && token.length > 10) {
+        return token;
       }
-    } catch (error) {
-      console.error('Error reading user from localStorage:', error)
     }
     
-    // Final fallback
-    return {
-      user: null,
-      isAuthenticated: false,
-      token: null,
-      isLoading: false
+    try {
+      const userStr = localStorage.getItem('user');
+      if (userStr && userStr !== 'null') {
+        const userData = JSON.parse(userStr);
+        if (userData.token && userData.token.length > 10) {
+          return userData.token;
+        }
+      }
+    } catch (e) {
+      console.warn('Error parsing user data for token:', e);
     }
-  }
-  return context
-}
+    
+    return null;
+  };
 
-// Real API client implementation
-const createRealApiClient = (baseURL, token) => {
-  const apiBase = baseURL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api'
-  
-  return {
-    healthCheck: async () => {
-      try {
-        const response = await fetch(`${apiBase}/health`, {
-          method: 'GET',
-          headers: {
-            'Content-Type': 'application/json',
-            ...(token && { 'Authorization': `Bearer ${token}` })
-          }
-        })
-        
-        if (!response.ok) {
-          throw new Error(`Health check failed: ${response.status}`)
-        }
-        
-        const data = await response.json()
-        return data
-      } catch (error) {
-        console.error('Health check error:', error)
-        throw error
-      }
-    },
+  // Fixed API client with proper error handling
+  const apiCall = async (endpoint, options = {}) => {
+    const url = `${API_BASE_URL}${endpoint}`;
+    const token = getAuthToken();
+    
+    console.log(`Making API call: ${options.method || 'GET'} ${url}`);
+    console.log(`Auth token: ${token ? 'Present' : 'Missing'}`);
 
-    uploadFile: async (file, progressCallback) => {
-      try {
-        const formData = new FormData()
-        formData.append('file', file)
+    const config = {
+      method: options.method || 'GET',
+      mode: 'cors',
+      credentials: token ? 'include' : 'omit',
+      headers: {
+        'Accept': 'application/json',
+        ...(options.headers || {})
+      },
+      ...options
+    };
 
-        const response = await fetch(`${apiBase}/upload`, {
-          method: 'POST',
-          headers: {
-            ...(token && { 'Authorization': `Bearer ${token}` })
-          },
-          body: formData
-        })
-
-        if (!response.ok) {
-          const errorData = await response.json().catch(() => ({}))
-          throw new Error(errorData.detail || `Upload failed: ${response.status}`)
-        }
-
-        const result = await response.json()
-        
-        // Simulate progress completion for UI
-        if (progressCallback) {
-          progressCallback(100)
-        }
-
-        return result
-      } catch (error) {
-        console.error('Upload error:', error)
-        throw error
-      }
-    },
-
-    analyzeUrl: async (url) => {
-      try {
-        const response = await fetch(`${apiBase}/analyze-url`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            ...(token && { 'Authorization': `Bearer ${token}` })
-          },
-          body: JSON.stringify({ url })
-        })
-
-        if (!response.ok) {
-          const errorData = await response.json().catch(() => ({}))
-          throw new Error(errorData.detail || `URL analysis failed: ${response.status}`)
-        }
-
-        return await response.json()
-      } catch (error) {
-        console.error('URL analysis error:', error)
-        throw error
-      }
-    },
-
-    getModelInfo: async () => {
-      try {
-        const response = await fetch(`${apiBase}/model-info`, {
-          method: 'GET',
-          headers: {
-            'Content-Type': 'application/json',
-            ...(token && { 'Authorization': `Bearer ${token}` })
-          }
-        })
-
-        if (!response.ok) {
-          throw new Error(`Model info failed: ${response.status}`)
-        }
-
-        return await response.json()
-      } catch (error) {
-        console.error('Model info error:', error)
-        throw error
-      }
-    },
-
-    configureModel: async (config) => {
-      try {
-        const response = await fetch(`${apiBase}/configure`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            ...(token && { 'Authorization': `Bearer ${token}` })
-          },
-          body: JSON.stringify(config)
-        })
-
-        if (!response.ok) {
-          const errorData = await response.json().catch(() => ({}))
-          throw new Error(errorData.detail || `Configuration failed: ${response.status}`)
-        }
-
-        return await response.json()
-      } catch (error) {
-        console.error('Configuration error:', error)
-        throw error
-      }
-    }
-  }
-}
-
-// Real utils implementation
-const utils = {
-  formatFileSize: (bytes) => {
-    if (bytes === 0) return '0 Bytes'
-    const k = 1024
-    const sizes = ['Bytes', 'KB', 'MB', 'GB']
-    const i = Math.floor(Math.log(bytes) / Math.log(k))
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
-  },
-  
-  getConfidenceColor: (confidence) => {
-    if (confidence > 0.8) return '#dc3545' // Red for high confidence
-    if (confidence > 0.6) return '#ffc107' // Yellow for medium confidence
-    return '#28a745' // Green for low confidence
-  },
-  
-  formatDuration: (seconds) => {
-    if (seconds < 60) return `${seconds.toFixed(1)}s`
-    const minutes = Math.floor(seconds / 60)
-    const remainingSeconds = seconds % 60
-    return `${minutes}m ${remainingSeconds.toFixed(1)}s`
-  },
-  
-  validateFileType: (file, allowedTypes) => {
-    return Object.keys(allowedTypes).includes(file.type)
-  }
-}
-
-export default function AdminUploadPage() {
-  const { user, isAuthenticated, isLoading: authLoading, token } = useAuth()
-  
-  // Create API client with real token
-  const [apiClient, setApiClient] = useState(null)
-  
-  const [selectedFiles, setSelectedFiles] = useState([])
-  const [isDragging, setIsDragging] = useState(false)
-  const [isUploading, setIsUploading] = useState(false)
-  const [uploadProgress, setUploadProgress] = useState({})
-  const [analysisResults, setAnalysisResults] = useState([])
-  const [error, setError] = useState(null)
-  const [apiStatus, setApiStatus] = useState('checking')
-  const [batchSize, setBatchSize] = useState(5)
-  const [processingMode, setProcessingMode] = useState('sequential')
-  const [showAdvancedOptions, setShowAdvancedOptions] = useState(false)
-  const [confidenceThreshold, setConfidenceThreshold] = useState(0.5)
-  const [enableDetailedLogging, setEnableDetailedLogging] = useState(true)
-  const [modelInfo, setModelInfo] = useState(null)
-
-  // Initialize API client
-  useEffect(() => {
+    // Add auth header if token exists
     if (token) {
-      const client = createRealApiClient(null, token)
-      setApiClient(client)
+      config.headers['Authorization'] = `Bearer ${token}`;
     }
-  }, [token])
 
-  useEffect(() => {
-    if (apiClient) {
-      checkApiHealth()
-      getModelInfo()
+    // Handle FormData properly
+    if (options.body && !(options.body instanceof FormData)) {
+      config.headers['Content-Type'] = 'application/json';
+      if (typeof options.body === 'object') {
+        config.body = JSON.stringify(options.body);
+      }
     }
-  }, [apiClient])
 
-  useEffect(() => {
-    console.log('Admin Upload Auth Check:', { user, isAuthenticated, authLoading })
-    
-    if (!authLoading) {
-      if (!isAuthenticated) {
-        setError('You must be logged in as an administrator to access this page.')
-      } else if (user?.role !== 'admin') {
-        setError('This page is restricted to administrators only. Regular users should use the standard upload page.')
+    try {
+      const response = await fetch(url, config);
+      
+      console.log(`Response: ${response.status} ${response.statusText}`);
+      
+      if (!response.ok) {
+        let errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+        try {
+          const errorData = await response.json();
+          if (errorData.detail) {
+            errorMessage = Array.isArray(errorData.detail) 
+              ? errorData.detail.map(err => err.msg || err.message || err).join(', ')
+              : errorData.detail;
+          } else if (errorData.message) {
+            errorMessage = errorData.message;
+          }
+        } catch (parseError) {
+          console.warn('Could not parse error response');
+        }
+        throw new Error(errorMessage);
+      }
+
+      const contentType = response.headers.get('content-type');
+      if (contentType && contentType.includes('application/json')) {
+        return await response.json();
       } else {
-        setError(null)
-        console.log('Admin access granted for:', user.username)
+        const text = await response.text();
+        return { message: text || 'Success' };
       }
-    }
-  }, [isAuthenticated, authLoading, user])
-
-  const checkApiHealth = async () => {
-    if (!apiClient) return
-    
-    try {
-      setApiStatus('checking')
-      const health = await apiClient.healthCheck()
-      setApiStatus(health.model_loaded ? 'ready' : 'model_not_loaded')
       
-      if (enableDetailedLogging) {
-        console.log('API Health Check:', health)
-      }
     } catch (error) {
-      console.error('Admin API health check failed:', error)
-      setApiStatus('offline')
-      setError(`API connection failed: ${error.message}`)
+      console.error(`API call failed for ${url}:`, error);
+      
+      if (error.message.includes('fetch') || error.message.includes('NetworkError')) {
+        throw new Error(`Network error: Cannot connect to ${API_BASE_URL}. Please check if the backend is running.`);
+      }
+      
+      throw error;
     }
-  }
+  };
 
-  const getModelInfo = async () => {
-    if (!apiClient) return
+  // System health check
+  const checkSystemHealth = useCallback(async () => {
+    console.log('Checking system health...');
     
     try {
-      const info = await apiClient.getModelInfo()
-      setModelInfo(info)
+      // Check main health endpoint
+      const healthResponse = await apiCall('/health');
+      console.log('Health check response:', healthResponse);
       
-      if (enableDetailedLogging) {
-        console.log('Model Info:', info)
-      }
-    } catch (error) {
-      console.warn('Could not fetch model info:', error)
-    }
-  }
+      setSystemStatus(prev => ({
+        ...prev,
+        api: healthResponse.status === 'healthy' ? 'online' : 'offline',
+        backend: 'online'
+      }));
 
-  const acceptedTypes = {
-    'image/jpeg': '.jpg',
-    'image/png': '.png', 
-    'image/gif': '.gif',
-    'video/mp4': '.mp4',
-    'video/avi': '.avi',
-    'video/mov': '.mov',
-    'video/quicktime': '.mov',
-    'video/webm': '.webm',
-    'image/tiff': '.tiff',
-    'image/bmp': '.bmp'
-  }
-
-  const isValidFileType = (file) => {
-    return Object.keys(acceptedTypes).includes(file.type)
-  }
-
-  const handleFileSelect = (e) => {
-    const files = Array.from(e.target.files)
-    processSelectedFiles(files)
-  }
-
-  const processSelectedFiles = (files) => {
-    const validFiles = []
-    const errors = []
-    
-    files.forEach(file => {
-      if (!isValidFileType(file)) {
-        errors.push(`${file.name}: Invalid file type`)
-        return
-      }
-      
-      // Admin file size limit: 100MB per file
-      if (file.size > 100 * 1024 * 1024) {
-        errors.push(`${file.name}: File too large (max 100MB)`)
-        return
-      }
-      
-      validFiles.push({
-        file,
-        id: Date.now() + Math.random(),
-        status: 'pending',
-        preview: null
-      })
-    })
-    
-    if (errors.length > 0) {
-      setError(`File validation errors:\n${errors.join('\n')}`)
-    } else {
-      setError(null)
-    }
-    
-    setSelectedFiles(prev => [...prev, ...validFiles])
-    setAnalysisResults([])
-    
-    // Create previews for image files
-    validFiles.forEach(fileObj => {
-      if (fileObj.file.type.startsWith('image/')) {
-        const reader = new FileReader()
-        reader.onload = (e) => {
-          setSelectedFiles(prev => prev.map(f => 
-            f.id === fileObj.id ? { ...f, preview: e.target.result } : f
-          ))
-        }
-        reader.readAsDataURL(fileObj.file)
-      }
-    })
-  }
-
-  const handleDragOver = (e) => {
-    e.preventDefault()
-    setIsDragging(true)
-  }
-
-  const handleDragLeave = (e) => {
-    e.preventDefault()
-    setIsDragging(false)
-  }
-
-  const handleDrop = (e) => {
-    e.preventDefault()
-    setIsDragging(false)
-    const files = Array.from(e.dataTransfer.files)
-    processSelectedFiles(files)
-  }
-
-  const removeFile = (fileId) => {
-    setSelectedFiles(prev => prev.filter(f => f.id !== fileId))
-    setUploadProgress(prev => {
-      const newProgress = { ...prev }
-      delete newProgress[fileId]
-      return newProgress
-    })
-  }
-
-  const clearAllFiles = () => {
-    setSelectedFiles([])
-    setAnalysisResults([])
-    setUploadProgress({})
-    setError(null)
-    const fileInput = document.querySelector('input[type="file"]')
-    if (fileInput) fileInput.value = ''
-  }
-
-  const saveResultToHistory = (results) => {
-    try {
-      const historyItems = results.map(result => ({
-        id: Date.now() + Math.random().toString(36).substr(2, 9),
-        timestamp: new Date().toISOString(),
-        filename: result.filename || 'batch_upload',
-        file_size: result.file_size || 0,
-        content_type: result.content_type || 'unknown',
-        accident_detected: result.accident_detected,
-        confidence: result.confidence,
-        processing_time: result.processing_time,
-        predicted_class: result.predicted_class,
-        threshold: confidenceThreshold,
-        frames_analyzed: result.frames_analyzed || 1,
-        avg_confidence: result.avg_confidence || result.confidence,
-        analysis_type: 'admin_batch_upload',
-        location: 'Admin Batch Upload',
-        notes: `Admin batch upload: ${results.length} files processed`,
-        user: user?.username || 'admin',
-        user_type: 'admin',
-        batch_id: `ADMIN_BATCH_${Date.now()}`,
-        confidence_threshold: confidenceThreshold,
-        processing_mode: processingMode,
-        log_id: result.log_id,
-        snapshot_url: result.snapshot_url
-      }))
-
-      const existingHistory = JSON.parse(localStorage.getItem('adminDetectionHistory') || '[]')
-      const updatedHistory = [...historyItems, ...existingHistory]
-      const trimmedHistory = updatedHistory.slice(0, 200)
-      
-      localStorage.setItem('adminDetectionHistory', JSON.stringify(trimmedHistory))
-      sessionStorage.setItem('adminBatchResults', JSON.stringify(results))
-      
-      return true
-    } catch (error) {
-      console.error('Error saving admin results to history:', error)
-      return false
-    }
-  }
-
-  const triggerNotificationAlert = (results) => {
-    try {
-      const accidentResults = results.filter(result => result.accident_detected)
-      
-      accidentResults.forEach(result => {
-        const alertHistoryItem = {
-          id: `admin-alert-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-          timestamp: new Date().toISOString(),
-          type: 'accident',
-          confidence: result.confidence,
-          location: 'Admin Batch Upload',
-          source: 'Admin Batch Upload',
-          acknowledged: false,
-          severity: result.confidence > 0.8 ? 'high' : 'medium',
-          accident_detected: result.accident_detected,
-          predicted_class: result.predicted_class,
-          filename: result.filename,
-          processing_time: result.processing_time,
-          analysis_type: 'Admin Batch Analysis',
-          user: user?.username || 'admin',
-          user_type: 'admin',
-          batch_processing: true,
-          log_id: result.log_id,
-          snapshot_url: result.snapshot_url
-        }
-
-        const existingAlerts = JSON.parse(localStorage.getItem('adminAlertHistory') || '[]')
-        existingAlerts.unshift(alertHistoryItem)
-        const trimmedAlerts = existingAlerts.slice(0, 100)
+      // Check model status
+      try {
+        const modelResponse = await apiCall('/model-info');
+        console.log('Model info response:', modelResponse);
         
-        localStorage.setItem('adminAlertHistory', JSON.stringify(trimmedAlerts))
-      })
+        setSystemStatus(prev => ({
+          ...prev,
+          model: (modelResponse.model_available && modelResponse.model_loaded) ? 'loaded' : 'offline'
+        }));
+      } catch (modelError) {
+        console.warn('Model check failed:', modelError.message);
+        setSystemStatus(prev => ({ ...prev, model: 'error' }));
+      }
 
-      return true
     } catch (error) {
-      console.error('Failed to trigger admin notification alerts:', error)
-      return false
+      console.error('Health check failed:', error.message);
+      setSystemStatus({
+        api: 'offline',
+        model: 'offline',
+        backend: 'offline'
+      });
+      setError(`System check failed: ${error.message}`);
     }
-  }
+  }, []);
 
+  // Initialize system check
+  useEffect(() => {
+    checkSystemHealth();
+  }, [checkSystemHealth]);
+
+  // File handling
+  const handleFileSelect = (event) => {
+    const selectedFiles = Array.from(event.target.files);
+    console.log('Files selected:', selectedFiles.length);
+    
+    const validFiles = selectedFiles.filter(file => {
+      const validTypes = [
+        'image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp',
+        'video/mp4', 'video/avi', 'video/mov', 'video/quicktime', 'video/webm',
+        'image/tiff', 'image/bmp'
+      ];
+      
+      const isValidType = validTypes.includes(file.type.toLowerCase());
+      const isValidSize = file.size <= 100 * 1024 * 1024; // 100MB for admin
+      
+      if (!isValidType) {
+        console.warn(`Invalid file type: ${file.name} (${file.type})`);
+      }
+      if (!isValidSize) {
+        console.warn(`File too large: ${file.name} (${(file.size / 1024 / 1024).toFixed(2)}MB)`);
+      }
+      
+      return isValidType && isValidSize;
+    });
+
+    setFiles(validFiles);
+    setError(null);
+    setResults([]);
+    
+    // Initialize progress for each file
+    const progressInit = {};
+    validFiles.forEach(file => {
+      progressInit[file.name] = 0;
+    });
+    setUploadProgress(progressInit);
+  };
+
+  // Single file upload
+  const uploadSingleFile = async (file) => {
+    console.log(`Starting upload for: ${file.name}`);
+    
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+      setUploadProgress(prev => ({ ...prev, [file.name]: 10 }));
+
+      const result = await apiCall('/api/upload', {
+        method: 'POST',
+        body: formData
+      });
+
+      setUploadProgress(prev => ({ ...prev, [file.name]: 100 }));
+      
+      console.log(`Upload successful for ${file.name}:`, result);
+      
+      return {
+        filename: file.name,
+        success: true,
+        result: result,
+        timestamp: new Date().toISOString()
+      };
+
+    } catch (error) {
+      console.error(`Upload failed for ${file.name}:`, error);
+      
+      setUploadProgress(prev => ({ ...prev, [file.name]: 0 }));
+      
+      return {
+        filename: file.name,
+        success: false,
+        error: error.message,
+        timestamp: new Date().toISOString()
+      };
+    }
+  };
+
+  // Batch upload handler
   const handleBatchUpload = async () => {
-    if (selectedFiles.length === 0 || !apiClient) return
-
-    if (!isAuthenticated || user?.role !== 'admin') {
-      setError('Only administrators can perform batch uploads.')
-      return
+    if (files.length === 0) {
+      setError('No files selected');
+      return;
     }
 
-    if (apiStatus !== 'ready') {
-      setError('API is not ready. Please check your connection and try again.')
-      return
+    if (systemStatus.api !== 'online') {
+      setError('API is not available. Please check system status.');
+      return;
     }
 
-    setIsUploading(true)
-    setAnalysisResults([])
-    setError(null)
-    
-    const results = []
-    const totalFiles = selectedFiles.length
-    const startTime = Date.now()
-    
+    console.log(`Starting batch upload of ${files.length} files`);
+    setIsUploading(true);
+    setError(null);
+    setResults([]);
+
+    const batchSize = config.batchSize;
+    const allResults = [];
+
+    // Process files in batches
+    for (let i = 0; i < files.length; i += batchSize) {
+      const batch = files.slice(i, i + batchSize);
+      console.log(`Processing batch ${Math.floor(i/batchSize) + 1}/${Math.ceil(files.length/batchSize)}`);
+      
+      const batchPromises = batch.map(file => uploadSingleFile(file));
+      const batchResults = await Promise.all(batchPromises);
+      
+      allResults.push(...batchResults);
+      setResults([...allResults]);
+
+      // Small delay between batches
+      if (i + batchSize < files.length) {
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+    }
+
+    setIsUploading(false);
+    console.log('Batch upload completed:', allResults);
+  };
+
+  // Configuration update
+  const updateConfig = async () => {
     try {
-      if (processingMode === 'sequential') {
-        // Process files one by one
-        for (let i = 0; i < selectedFiles.length; i++) {
-          const fileObj = selectedFiles[i]
-          
-          setUploadProgress(prev => ({
-            ...prev,
-            [fileObj.id]: { status: 'uploading', progress: 0 }
-          }))
-          
-          try {
-            const result = await apiClient.uploadFile(fileObj.file, (progress) => {
-              setUploadProgress(prev => ({
-                ...prev,
-                [fileObj.id]: { status: 'uploading', progress: progress }
-              }))
-            })
-            
-            result.filename = fileObj.file.name
-            results.push(result)
-            
-            setUploadProgress(prev => ({
-              ...prev,
-              [fileObj.id]: { status: 'completed', progress: 100 }
-            }))
-            
-            setAnalysisResults(prev => [...prev, result])
-            
-            if (enableDetailedLogging) {
-              console.log(`Admin upload ${i + 1}/${totalFiles} completed:`, result)
-            }
-            
-            // Small delay between files to prevent overwhelming the API
-            if (i < selectedFiles.length - 1) {
-              await new Promise(resolve => setTimeout(resolve, 500))
-            }
-            
-          } catch (fileError) {
-            console.error(`Failed to upload ${fileObj.file.name}:`, fileError)
-            setUploadProgress(prev => ({
-              ...prev,
-              [fileObj.id]: { status: 'error', progress: 0, error: fileError.message }
-            }))
-            
-            // Add error result to maintain consistency
-            results.push({
-              filename: fileObj.file.name,
-              file_size: fileObj.file.size,
-              content_type: fileObj.file.type,
-              accident_detected: false,
-              confidence: 0,
-              processing_time: 0,
-              predicted_class: 'error',
-              error: fileError.message,
-              success: false
-            })
-          }
-        }
-        
-      } else {
-        // Parallel processing in batches
-        const batches = []
-        for (let i = 0; i < selectedFiles.length; i += batchSize) {
-          batches.push(selectedFiles.slice(i, i + batchSize))
-        }
-        
-        for (const batch of batches) {
-          const batchPromises = batch.map(async (fileObj) => {
-            setUploadProgress(prev => ({
-              ...prev,
-              [fileObj.id]: { status: 'uploading', progress: 0 }
-            }))
-            
-            try {
-              const result = await apiClient.uploadFile(fileObj.file, (progress) => {
-                setUploadProgress(prev => ({
-                  ...prev,
-                  [fileObj.id]: { status: 'uploading', progress: progress }
-                }))
-              })
-              
-              result.filename = fileObj.file.name
-              
-              setUploadProgress(prev => ({
-                ...prev,
-                [fileObj.id]: { status: 'completed', progress: 100 }
-              }))
-              
-              return result
-            } catch (error) {
-              setUploadProgress(prev => ({
-                ...prev,
-                [fileObj.id]: { status: 'error', progress: 0, error: error.message }
-              }))
-              
-              return {
-                filename: fileObj.file.name,
-                file_size: fileObj.file.size,
-                content_type: fileObj.file.type,
-                accident_detected: false,
-                confidence: 0,
-                processing_time: 0,
-                predicted_class: 'error',
-                error: error.message,
-                success: false
-              }
-            }
-          })
-          
-          const batchResults = await Promise.allSettled(batchPromises)
-          batchResults.forEach(result => {
-            if (result.status === 'fulfilled') {
-              results.push(result.value)
-              setAnalysisResults(prev => [...prev, result.value])
-            }
-          })
-          
-          // Delay between batches to prevent API overload
-          if (batches.indexOf(batch) < batches.length - 1) {
-            await new Promise(resolve => setTimeout(resolve, 1000))
-          }
-        }
-      }
+      console.log('Updating configuration:', config);
       
-      const totalTime = (Date.now() - startTime) / 1000
+      const configResult = await apiCall('/api/configure', {
+        method: 'POST',
+        body: config
+      });
       
-      // Save results and trigger alerts
-      if (results.length > 0) {
-        const saved = saveResultToHistory(results)
-        if (saved && enableDetailedLogging) {
-          console.log(`Admin batch upload completed: ${results.length} files processed in ${totalTime.toFixed(1)}s`)
-        }
-        
-        triggerNotificationAlert(results)
-        
-        // Show completion summary
-        const successCount = results.filter(r => r.success !== false).length
-        const accidentCount = results.filter(r => r.accident_detected).length
-        
-        console.log(`Batch Summary: ${successCount}/${results.length} successful, ${accidentCount} accidents detected`)
-      }
+      console.log('Configuration updated:', configResult);
+      setError(null);
       
     } catch (error) {
-      console.error('Batch upload failed:', error)
-      setError(`Batch upload failed: ${error.message}`)
-    } finally {
-      setIsUploading(false)
+      console.error('Configuration update failed:', error);
+      setError(`Configuration failed: ${error.message}`);
     }
-  }
+  };
 
-  const updateModelConfiguration = async () => {
-    if (!apiClient) return
-    
-    try {
-      const config = { threshold: confidenceThreshold }
-      const result = await apiClient.configureModel(config)
-      
-      if (enableDetailedLogging) {
-        console.log('Model configuration updated:', result)
-      }
-      
-      // Refresh model info
-      await getModelInfo()
-    } catch (error) {
-      console.error('Failed to update model configuration:', error)
-      setError(`Configuration update failed: ${error.message}`)
-    }
-  }
-
-  const getFileStatus = (fileId) => {
-    const progress = uploadProgress[fileId]
-    return progress?.status || 'pending'
-  }
-
-  const getFileProgress = (fileId) => {
-    const progress = uploadProgress[fileId]
-    return progress?.progress || 0
-  }
-
-  const getFileError = (fileId) => {
-    const progress = uploadProgress[fileId]
-    return progress?.error || null
-  }
-
-  const getStatusColor = (status) => {
+  // Get status indicator
+  const getStatusIndicator = (status) => {
     switch (status) {
-      case 'completed': return '#28a745'
-      case 'uploading': return '#007bff'
-      case 'error': return '#dc3545'
-      default: return '#6c757d'
+      case 'online':
+      case 'loaded':
+        return <CheckCircle className="w-4 h-4 text-green-500" />;
+      case 'checking':
+        return <RefreshCw className="w-4 h-4 text-blue-500 animate-spin" />;
+      case 'offline':
+      case 'error':
+        return <XCircle className="w-4 h-4 text-red-500" />;
+      default:
+        return <AlertCircle className="w-4 h-4 text-yellow-500" />;
     }
-  }
+  };
 
-  const exportResults = () => {
-    if (analysisResults.length === 0) return
-    
-    const csv = [
-      ['Filename', 'Accident Detected', 'Confidence', 'Processing Time', 'Predicted Class', 'File Size', 'Success', 'Log ID'].join(','),
-      ...analysisResults.map(result => [
-        result.filename,
-        result.accident_detected,
-        (result.confidence * 100).toFixed(1) + '%',
-        result.processing_time?.toFixed(2) + 's',
-        result.predicted_class || 'N/A',
-        utils.formatFileSize(result.file_size || 0),
-        result.success !== false ? 'Yes' : 'No',
-        result.log_id || 'N/A'
-      ].join(','))
-    ].join('\n')
-    
-    const blob = new Blob([csv], { type: 'text/csv' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `admin_batch_results_${new Date().toISOString().split('T')[0]}.csv`
-    a.click()
-    URL.revokeObjectURL(url)
-  }
+  return (
+    <div className="max-w-6xl mx-auto p-6 bg-white">
+      <div className="mb-8">
+        <h1 className="text-3xl font-bold text-gray-900 mb-2">
+          Admin Batch Upload System - Fixed Version
+        </h1>
+        <p className="text-gray-600">
+          Upload and analyze multiple files with enhanced admin capabilities
+        </p>
+      </div>
 
-  if (authLoading) {
-    return (
-      <div className="container">
-        <div className="flex-column" style={{ minHeight: '80vh', justifyContent: 'center', alignItems: 'center' }}>
-          <div style={{
-            padding: '2rem',
-            textAlign: 'center',
-            backgroundColor: '#f8f9fa',
-            borderRadius: '8px',
-            border: '1px solid #dee2e6'
-          }}>
-            <div style={{
-              width: '40px',
-              height: '40px',
-              border: '3px solid #e3f2fd',
-              borderTop: '3px solid #dc3545',
-              borderRadius: '50%',
-              animation: 'spin 1s linear infinite',
-              margin: '0 auto 1rem'
-            }}></div>
-            <p style={{ color: '#666', margin: 0 }}>Verifying admin access...</p>
+      {/* System Status */}
+      <div className="mb-6 p-4 bg-gray-50 rounded-lg">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-semibold">System Status</h2>
+          <button
+            onClick={checkSystemHealth}
+            className="px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 flex items-center gap-1"
+          >
+            <RefreshCw className="w-4 h-4" />
+            Refresh
+          </button>
+        </div>
+        <div className="grid grid-cols-3 gap-4">
+          <div className="flex items-center gap-2">
+            {getStatusIndicator(systemStatus.api)}
+            <span className="font-medium">API:</span>
+            <span className={`capitalize ${systemStatus.api === 'online' ? 'text-green-600' : 'text-red-600'}`}>
+              {systemStatus.api}
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            {getStatusIndicator(systemStatus.model)}
+            <span className="font-medium">Model:</span>
+            <span className={`capitalize ${systemStatus.model === 'loaded' ? 'text-green-600' : 'text-red-600'}`}>
+              {systemStatus.model}
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            {getStatusIndicator(systemStatus.backend)}
+            <span className="font-medium">Backend:</span>
+            <span className={`capitalize ${systemStatus.backend === 'online' ? 'text-green-600' : 'text-red-600'}`}>
+              {systemStatus.backend}
+            </span>
           </div>
         </div>
       </div>
-    )
-  }
 
-  return (
-    <div className="container">
-      <style jsx>{`
-        @keyframes spin {
-          0% { transform: rotate(0deg); }
-          100% { transform: rotate(360deg); }
-        }
-        
-        .file-grid {
-          display: grid;
-          grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-          gap: 1rem;
-        }
-        
-        .file-item {
-          border: 1px solid #ddd;
-          border-radius: 8px;
-          padding: 1rem;
-          background: #fff;
-          text-align: center;
-        }
-      `}</style>
-      
-      <div className="flex-column" style={{ minHeight: '80vh', justifyContent: 'flex-start', maxWidth: '1200px', margin: '0 auto', paddingTop: '2rem' }}>
-        
-        <h1 className="text-center" style={{ fontSize: '2.5rem', fontWeight: 'bold', marginBottom: '1rem', color: '#dc3545' }}>
-          Admin Batch Upload System
-        </h1>
-
-        {/* Admin Info Display */}
-        {isAuthenticated && user?.role === 'admin' && (
-          <div style={{
-            backgroundColor: '#f8d7da',
-            border: '1px solid #f5c6cb',
-            borderRadius: '6px',
-            padding: '1rem',
-            marginBottom: '1.5rem',
-            textAlign: 'center'
-          }}>
-            <p style={{ margin: 0, color: '#721c24', fontSize: '0.9rem' }}>
-              <strong>Admin:</strong> {user.username} ({user.email || 'No email'}) | 
-              <strong> Level:</strong> {user.admin_level || 'Standard'} |
-              <strong> Upload Limit:</strong> 100MB per file | 
-              <strong> Batch Limit:</strong> 20 files |
-              <strong> API Status:</strong> {apiStatus}
-            </p>
+      {/* Error Display */}
+      {error && (
+        <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
+          <div className="flex items-center gap-2 text-red-800">
+            <AlertCircle className="w-5 h-5" />
+            <span className="font-medium">Error:</span>
+            <span>{error}</span>
           </div>
-        )}
+        </div>
+      )}
 
-        {/* Model Info Display */}
-        {modelInfo && (
-          <div style={{
-            backgroundColor: '#d1ecf1',
-            border: '1px solid #bee5eb',
-            borderRadius: '6px',
-            padding: '1rem',
-            marginBottom: '1.5rem',
-            textAlign: 'center'
-          }}>
-            <p style={{ margin: 0, color: '#0c5460', fontSize: '0.9rem' }}>
-              <strong>Model:</strong> {modelInfo.model_name || 'Unknown'} | 
-              <strong> Version:</strong> {modelInfo.version || 'N/A'} |
-              <strong> Status:</strong> {modelInfo.status || 'N/A'} |
-              <strong> Last Updated:</strong> {modelInfo.last_updated ? new Date(modelInfo.last_updated).toLocaleString() : 'N/A'}
-            </p>
+      {/* Configuration Panel */}
+      <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-semibold flex items-center gap-2">
+            <Settings className="w-5 h-5" />
+            Admin Configuration
+          </h3>
+          <button
+            onClick={updateConfig}
+            className="px-4 py-2 bg-yellow-500 text-white rounded hover:bg-yellow-600"
+          >
+            Save Settings
+          </button>
+        </div>
+        
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Processing Mode:
+            </label>
+            <select
+              value={config.processingMode}
+              onChange={(e) => setConfig({...config, processingMode: e.target.value})}
+              className="w-full border border-gray-300 rounded px-3 py-2"
+            >
+              <option value="realtime">Real-time</option>
+              <option value="batch">Batch</option>
+              <option value="sequential">Sequential</option>
+            </select>
           </div>
-        )}
+          
+          <div className="flex items-center">
+            <input
+              type="checkbox"
+              id="enableLogging"
+              checked={config.enableLogging}
+              onChange={(e) => setConfig({...config, enableLogging: e.target.checked})}
+              className="mr-2"
+            />
+            <label htmlFor="enableLogging" className="text-sm font-medium text-gray-700">
+              Detailed Logging
+            </label>
+          </div>
+        </div>
+      </div>
 
-        {/* Authentication/Permission Error */}
-        {(!isAuthenticated || user?.role !== 'admin') && (
-          <div style={{
-            backgroundColor: '#f8d7da',
-            border: '1px solid #f5c6cb',
-            borderRadius: '6px',
-            padding: '2rem',
-            marginBottom: '2rem',
-            textAlign: 'center'
-          }}>
-            <h3 style={{ color: '#721c24', marginBottom: '1rem', fontSize: '1.2rem' }}>
-              Administrator Access Required
-            </h3>
-            <p style={{ color: '#721c24', marginBottom: '1.5rem' }}>
-              {!isAuthenticated ? 'You must be logged in as an administrator to access this advanced upload system.' : 
-               'This page is restricted to administrators only. Regular users should use the standard upload page.'}
+      {/* File Upload Section */}
+      <div className="mb-6 p-6 border-2 border-dashed border-gray-300 rounded-lg text-center bg-gray-50">
+        <Upload className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+        <h3 className="text-lg font-semibold mb-2">Admin Batch Upload (up to 20 files)</h3>
+        <p className="text-gray-600 mb-4">
+          Select multiple images or videos for analysis. Max 100MB per file.
+        </p>
+        <input
+          type="file"
+          multiple
+          accept="image/*,video/*"
+          onChange={handleFileSelect}
+          className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+        />
+        
+        {files.length > 0 && (
+          <div className="mt-4">
+            <p className="text-sm text-gray-600 mb-2">
+              Selected: {files.length} file(s)
             </p>
-            <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center', flexWrap: 'wrap' }}>
-              {!isAuthenticated ? (
+            <button
+              onClick={handleBatchUpload}
+              disabled={isUploading || systemStatus.api !== 'online'}
+              className="px-6 py-3 bg-red-500 text-white rounded-lg hover:bg-red-600 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 mx-auto"
+            >
+              {isUploading ? (
                 <>
-                  <button
-                    onClick={() => window.location.href = '/admin/login'}
-                    style={{
-                      backgroundColor: '#dc3545',
-                      color: 'white',
-                      border: 'none',
-                      padding: '12px 24px',
-                      borderRadius: '4px',
-                      cursor: 'pointer'
-                    }}
-                  >
-                    Admin Login
-                  </button>
-                  <button
-                    onClick={() => window.location.href = '/login'}
-                    style={{
-                      backgroundColor: '#007bff',
-                      color: 'white',
-                      border: 'none',
-                      padding: '12px 24px',
-                      borderRadius: '4px',
-                      cursor: 'pointer'
-                    }}
-                  >
-                    User Login
-                  </button>
+                  <RefreshCw className="w-4 h-4 animate-spin" />
+                  Processing...
                 </>
               ) : (
-                <button
-                  onClick={() => window.location.href = '/upload'}
-                  style={{
-                    backgroundColor: '#007bff',
-                    color: 'white',
-                    border: 'none',
-                    padding: '12px 24px',
-                    borderRadius: '4px',
-                    cursor: 'pointer'
-                  }}
-                >
-                  Go to User Upload
-                </button>
+                <>
+                  <Play className="w-4 h-4" />
+                  Analyze {files.length} Files
+                </>
               )}
-            </div>
+            </button>
           </div>
         )}
+      </div>
 
-        {/* Only show upload interface if user is authenticated admin */}
-        {isAuthenticated && user?.role === 'admin' && apiClient && (
-          <>
-            {/* Admin Controls */}
-            <div style={{
-              backgroundColor: '#fff3cd',
-              border: '1px solid #ffeaa7',
-              borderRadius: '8px',
-              padding: '1.5rem',
-              marginBottom: '2rem'
-            }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-                <h4 style={{ color: '#856404', margin: 0 }}>Admin Configuration</h4>
-                <button
-                  onClick={() => setShowAdvancedOptions(!showAdvancedOptions)}
-                  style={{
-                    backgroundColor: 'transparent',
-                    border: '1px solid #856404',
-                    color: '#856404',
-                    padding: '4px 8px',
-                    borderRadius: '4px',
-                    cursor: 'pointer',
-                    fontSize: '0.8rem'
-                  }}
-                >
-                  {showAdvancedOptions ? 'Hide' : 'Show'} Advanced
-                </button>
+      {/* Progress Section */}
+      {Object.keys(uploadProgress).length > 0 && (
+        <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+          <h3 className="text-lg font-semibold mb-3">Upload Progress</h3>
+          <div className="space-y-2">
+            {Object.entries(uploadProgress).map(([filename, progress]) => (
+              <div key={filename} className="flex items-center gap-3">
+                <span className="text-sm font-medium min-w-0 flex-1 truncate">{filename}</span>
+                <div className="w-32 bg-gray-200 rounded-full h-2">
+                  <div
+                    className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                    style={{ width: `${progress}%` }}
+                  ></div>
+                </div>
+                <span className="text-sm font-medium w-12 text-right">{progress}%</span>
               </div>
-              
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', alignItems: 'end' }}>
-                <div>
-                  <label style={{ display: 'block', marginBottom: '0.5rem', color: '#856404', fontWeight: 'bold' }}>
-                    Processing Mode:
-                  </label>
-                  <select
-                    value={processingMode}
-                    onChange={(e) => setProcessingMode(e.target.value)}
-                    style={{
-                      width: '100%',
-                      padding: '0.5rem',
-                      border: '1px solid #ffeaa7',
-                      borderRadius: '4px'
-                    }}
-                  >
-                    <option value="sequential">Sequential</option>
-                    <option value="parallel">Parallel Batch</option>
-                  </select>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Results Section */}
+      {results.length > 0 && (
+        <div className="mb-6">
+          <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+            <FileText className="w-5 h-5" />
+            Analysis Results ({results.length})
+          </h3>
+          <div className="space-y-3 max-h-96 overflow-y-auto">
+            {results.map((result, index) => (
+              <div
+                key={index}
+                className={`p-4 rounded-lg border ${
+                  result.success 
+                    ? 'bg-green-50 border-green-200' 
+                    : 'bg-red-50 border-red-200'
+                }`}
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <span className="font-medium">{result.filename}</span>
+                  <div className="flex items-center gap-2">
+                    {result.success ? (
+                      <CheckCircle className="w-4 h-4 text-green-500" />
+                    ) : (
+                      <XCircle className="w-4 h-4 text-red-500" />
+                    )}
+                    <span className={`text-sm ${result.success ? 'text-green-600' : 'text-red-600'}`}>
+                      {result.success ? 'Success' : 'Failed'}
+                    </span>
+                  </div>
                 </div>
                 
-                {processingMode === 'parallel' && (
-                  <div>
-                    <label style={{ display: 'block', marginBottom: '0.5rem', color: '#856404', fontWeight: 'bold' }}>
-                      Batch Size:
-                    </label>
-                    <select
-                      value={batchSize}
-                      onChange={(e) => setBatchSize(Number(e.target.value))}
-                      style={{
-                        width: '100%',
-                        padding: '0.5rem',
-                        border: '1px solid #ffeaa7',
-                        borderRadius: '4px'
-                      }}
-                    >
-                      <option value={3}>3 files</option>
-                      <option value={5}>5 files</option>
-                      <option value={10}>10 files</option>
-                    </select>
+                {result.success && result.result && (
+                  <div className="text-sm text-gray-600">
+                    {result.result.accident_detected && (
+                      <div className="flex items-center gap-2 mb-1">
+                        <AlertCircle className="w-4 h-4 text-orange-500" />
+                        <span className="font-medium">
+                          Accident Detected: {(result.result.confidence * 100).toFixed(1)}% confidence
+                        </span>
+                      </div>
+                    )}
+                    <div>Processing time: {result.result.processing_time?.toFixed(2)}s</div>
+                    {result.result.analysis_id && (
+                      <div>Analysis ID: {result.result.analysis_id}</div>
+                    )}
                   </div>
                 )}
                 
-                <div>
-                  <label style={{ display: 'flex', alignItems: 'center', color: '#856404' }}>
-                    <input
-                      type="checkbox"
-                      checked={enableDetailedLogging}
-                      onChange={(e) => setEnableDetailedLogging(e.target.checked)}
-                      style={{ marginRight: '0.5rem' }}
-                    />
-                    Detailed Logging
-                  </label>
-                </div>
-              </div>
-              
-              {showAdvancedOptions && (
-                <div style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid #ffeaa7' }}>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                    <div>
-                      <label style={{ display: 'block', marginBottom: '0.5rem', color: '#856404', fontWeight: 'bold' }}>
-                        Confidence Threshold: {confidenceThreshold}
-                      </label>
-                      <input
-                        type="range"
-                        min="0"
-                        max="1"
-                        step="0.1"
-                        value={confidenceThreshold}
-                        onChange={(e) => setConfidenceThreshold(Number(e.target.value))}
-                        style={{ width: '100%' }}
-                      />
-                      <button
-                        onClick={updateModelConfiguration}
-                        style={{
-                          backgroundColor: '#fd7e14',
-                          color: 'white',
-                          border: 'none',
-                          padding: '6px 12px',
-                          borderRadius: '4px',
-                          cursor: 'pointer',
-                          fontSize: '0.8rem',
-                          marginTop: '0.5rem'
-                        }}
-                      >
-                        Update Model Config
-                      </button>
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                      <button
-                        onClick={checkApiHealth}
-                        style={{
-                          backgroundColor: '#17a2b8',
-                          color: 'white',
-                          border: 'none',
-                          padding: '8px 16px',
-                          borderRadius: '4px',
-                          cursor: 'pointer',
-                          fontSize: '0.9rem'
-                        }}
-                      >
-                        Check API Status
-                      </button>
-                      <div style={{
-                        padding: '0.5rem',
-                        borderRadius: '4px',
-                        backgroundColor: apiStatus === 'ready' ? '#d4edda' : '#f8d7da',
-                        color: apiStatus === 'ready' ? '#155724' : '#721c24',
-                        fontSize: '0.8rem'
-                      }}>
-                        {apiStatus === 'ready' ? 'Ready' : apiStatus === 'checking' ? 'Checking...' : 'Not Ready'}
-                      </div>
-                    </div>
+                {!result.success && (
+                  <div className="text-sm text-red-600">
+                    Error: {result.error}
                   </div>
-                </div>
-              )}
-            </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* API Integration Info */}
+      <div className="p-4 bg-pink-50 border border-pink-200 rounded-lg">
+        <h3 className="text-lg font-semibold mb-2">Admin Upload Capabilities & Real-time Integration</h3>
         
-            {error && (
-              <div style={{
-                backgroundColor: '#f8d7da',
-                color: '#721c24',
-                padding: '1rem',
-                borderRadius: '6px',
-                border: '1px solid #f5c6cb',
-                marginBottom: '1.5rem',
-                whiteSpace: 'pre-line'
-              }}>
-                <strong>Error: </strong>{error}
-                <button
-                  onClick={() => setError(null)}
-                  style={{
-                    float: 'right',
-                    background: 'none',
-                    border: 'none',
-                    color: '#721c24',
-                    cursor: 'pointer',
-                    fontSize: '1.2rem'
-                  }}
-                >
-                  ×
-                </button>
-              </div>
-            )}
-
-            {/* Batch Upload Area */}
-            <div 
-              style={{ 
-                border: isDragging ? '3px solid #dc3545' : (selectedFiles.length > 0 ? '2px solid #28a745' : '2px dashed #ccc'), 
-                borderRadius: '12px', 
-                padding: '2rem', 
-                textAlign: 'center',
-                backgroundColor: isDragging ? '#f8d7da' : (selectedFiles.length > 0 ? '#d4edda' : '#f8f9fa'),
-                marginBottom: '2rem',
-                transition: 'all 0.3s ease',
-                minHeight: '200px',
-                display: 'flex',
-                flexDirection: 'column',
-                justifyContent: 'center'
-              }}
-              onDragOver={handleDragOver}
-              onDragLeave={handleDragLeave}
-              onDrop={handleDrop}
-            >
-              <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>
-                {selectedFiles.length > 0 ? '📁' : (isDragging ? '📥' : '🗂️')}
-              </div>
-              
-              <h3 style={{ marginBottom: '1rem', color: selectedFiles.length > 0 ? '#28a745' : '#555' }}>
-                {selectedFiles.length > 0 ? `${selectedFiles.length} files selected` : 
-                 (isDragging ? 'Drop files here' : 'Admin Batch Upload (up to 20 files)')}
-              </h3>
-              
-              <input 
-                type="file" 
-                multiple
-                accept={Object.keys(acceptedTypes).join(',')}
-                onChange={handleFileSelect}
-                style={{
-                  marginBottom: '1rem',
-                  padding: '0.75rem',
-                  border: '1px solid #ddd',
-                  borderRadius: '6px',
-                  width: '300px',
-                  maxWidth: '100%'
-                }}
-              />
-              
-              {selectedFiles.length > 0 && (
-                <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center', marginTop: '1rem', flexWrap: 'wrap' }}>
-                  <span style={{ color: '#666' }}>
-                    Total size: {utils.formatFileSize(selectedFiles.reduce((sum, f) => sum + f.file.size, 0))}
-                  </span>
-                  <button
-                    onClick={clearAllFiles}
-                    style={{
-                      background: '#dc3545',
-                      color: 'white',
-                      border: 'none',
-                      padding: '4px 12px',
-                      borderRadius: '4px',
-                      cursor: 'pointer',
-                      fontSize: '0.8rem'
-                    }}
-                  >
-                    Clear All
-                  </button>
-                </div>
-              )}
-            </div>
-
-            {/* File List with Grid Layout */}
-            {selectedFiles.length > 0 && (
-              <div style={{ marginBottom: '2rem' }}>
-                <h4 style={{ marginBottom: '1rem' }}>Selected Files ({selectedFiles.length}/20)</h4>
-                <div className="file-grid">
-                  {selectedFiles.map((fileObj) => {
-                    const status = getFileStatus(fileObj.id)
-                    const progress = getFileProgress(fileObj.id)
-                    const error = getFileError(fileObj.id)
-                    
-                    return (
-                      <div key={fileObj.id} className="file-item" style={{
-                        borderColor: getStatusColor(status),
-                        position: 'relative'
-                      }}>
-                        {/* File Preview */}
-                        {fileObj.preview ? (
-                          <img 
-                            src={fileObj.preview} 
-                            alt="Preview" 
-                            style={{
-                              width: '100%',
-                              height: '120px',
-                              objectFit: 'cover',
-                              borderRadius: '4px',
-                              marginBottom: '0.5rem'
-                            }}
-                          />
-                        ) : (
-                          <div style={{
-                            width: '100%',
-                            height: '120px',
-                            backgroundColor: '#f8f9fa',
-                            border: '1px solid #dee2e6',
-                            borderRadius: '4px',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            marginBottom: '0.5rem',
-                            fontSize: '2rem'
-                          }}>
-                            {fileObj.file.type.startsWith('video/') ? '🎥' : '📄'}
-                          </div>
-                        )}
-                        
-                        {/* File Info */}
-                        <div style={{ fontSize: '0.8rem', marginBottom: '0.5rem' }}>
-                          <div style={{ fontWeight: 'bold', marginBottom: '0.25rem', wordBreak: 'break-all' }}>
-                            {fileObj.file.name}
-                          </div>
-                          <div style={{ color: '#666' }}>
-                            {utils.formatFileSize(fileObj.file.size)}
-                          </div>
-                        </div>
-                        
-                        {/* Status Indicator */}
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
-                          <span style={{ color: getStatusColor(status), fontWeight: 'bold' }}>
-                            {status === 'pending' ? '⏳' : 
-                             status === 'uploading' ? '⬆️' : 
-                             status === 'completed' ? '✅' : '❌'}
-                          </span>
-                          <span style={{ fontSize: '0.8rem', color: getStatusColor(status) }}>
-                            {status.charAt(0).toUpperCase() + status.slice(1)}
-                          </span>
-                        </div>
-                        
-                        {/* Progress Bar */}
-                        {status === 'uploading' && (
-                          <div style={{ marginBottom: '0.5rem' }}>
-                            <div style={{
-                              width: '100%',
-                              height: '6px',
-                              backgroundColor: '#e9ecef',
-                              borderRadius: '3px',
-                              overflow: 'hidden'
-                            }}>
-                              <div style={{
-                                width: `${progress}%`,
-                                height: '100%',
-                                background: '#007bff',
-                                transition: 'width 0.3s ease'
-                              }}></div>
-                            </div>
-                            <div style={{ fontSize: '0.7rem', color: '#666', textAlign: 'center' }}>
-                              {progress}%
-                            </div>
-                          </div>
-                        )}
-                        
-                        {/* Error Message */}
-                        {error && (
-                          <div style={{ color: '#dc3545', fontSize: '0.7rem', marginBottom: '0.5rem' }}>
-                            Error: {error}
-                          </div>
-                        )}
-                        
-                        {/* Remove Button */}
-                        {status === 'pending' && (
-                          <button
-                            onClick={() => removeFile(fileObj.id)}
-                            style={{
-                              position: 'absolute',
-                              top: '5px',
-                              right: '5px',
-                              background: '#dc3545',
-                              color: 'white',
-                              border: 'none',
-                              borderRadius: '50%',
-                              width: '20px',
-                              height: '20px',
-                              cursor: 'pointer',
-                              fontSize: '12px',
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center'
-                            }}
-                          >
-                            ×
-                          </button>
-                        )}
-                      </div>
-                    )
-                  })}
-                </div>
-              </div>
-            )}
-
-            {/* Upload Button */}
-            <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
-              <button 
-                onClick={handleBatchUpload}
-                disabled={selectedFiles.length === 0 || isUploading || apiStatus !== 'ready'}
-                style={{ 
-                  fontSize: '1.2rem', 
-                  padding: '15px 40px',
-                  backgroundColor: '#dc3545',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '6px',
-                  cursor: (selectedFiles.length === 0 || isUploading || apiStatus !== 'ready') ? 'not-allowed' : 'pointer',
-                  opacity: (selectedFiles.length === 0 || isUploading || apiStatus !== 'ready') ? 0.6 : 1,
-                  minWidth: '250px'
-                }}
-              >
-                {isUploading ? `Processing ${processingMode}ly...` : `Analyze ${selectedFiles.length} Files`}
-              </button>
-              
-              {apiStatus !== 'ready' && (
-                <p style={{ color: '#dc3545', fontSize: '0.9rem', marginTop: '0.5rem' }}>
-                  API Status: {apiStatus} - {apiStatus === 'offline' ? 'Please check your connection' : 'Model not loaded'}
-                </p>
-              )}
-            </div>
-
-            {/* Results Summary */}
-            {analysisResults.length > 0 && (
-              <div style={{
-                backgroundColor: '#f8f9fa',
-                border: '1px solid #dee2e6',
-                borderRadius: '8px',
-                padding: '1.5rem',
-                marginBottom: '2rem'
-              }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-                  <h4 style={{ margin: 0, color: '#495057' }}>
-                    Batch Results ({analysisResults.length} processed)
-                  </h4>
-                  <button
-                    onClick={exportResults}
-                    style={{
-                      backgroundColor: '#28a745',
-                      color: 'white',
-                      border: 'none',
-                      padding: '8px 16px',
-                      borderRadius: '4px',
-                      cursor: 'pointer',
-                      fontSize: '0.9rem'
-                    }}
-                  >
-                    📊 Export CSV
-                  </button>
-                </div>
-                
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '1rem' }}>
-                  <div style={{ textAlign: 'center', padding: '1rem', backgroundColor: '#fff', borderRadius: '4px', border: '1px solid #dee2e6' }}>
-                    <div style={{ fontSize: '2rem', color: '#dc3545', fontWeight: 'bold' }}>
-                      {analysisResults.filter(r => r.accident_detected).length}
-                    </div>
-                    <div style={{ fontWeight: 'bold', color: '#495057', fontSize: '0.9rem' }}>Accidents Detected</div>
-                  </div>
-                  
-                  <div style={{ textAlign: 'center', padding: '1rem', backgroundColor: '#fff', borderRadius: '4px', border: '1px solid #dee2e6' }}>
-                    <div style={{ fontSize: '2rem', color: '#28a745', fontWeight: 'bold' }}>
-                      {analysisResults.filter(r => !r.accident_detected && r.success !== false).length}
-                    </div>
-                    <div style={{ fontWeight: 'bold', color: '#495057', fontSize: '0.9rem' }}>Safe Files</div>
-                  </div>
-                  
-                  <div style={{ textAlign: 'center', padding: '1rem', backgroundColor: '#fff', borderRadius: '4px', border: '1px solid #dee2e6' }}>
-                    <div style={{ fontSize: '2rem', color: '#dc3545', fontWeight: 'bold' }}>
-                      {analysisResults.filter(r => r.success === false).length}
-                    </div>
-                    <div style={{ fontWeight: 'bold', color: '#495057', fontSize: '0.9rem' }}>Processing Errors</div>
-                  </div>
-                  
-                  <div style={{ textAlign: 'center', padding: '1rem', backgroundColor: '#fff', borderRadius: '4px', border: '1px solid #dee2e6' }}>
-                    <div style={{ fontSize: '2rem', color: '#007bff', fontWeight: 'bold' }}>
-                      {analysisResults.length > 0 ? 
-                        ((analysisResults.filter(r => r.confidence).reduce((sum, r) => sum + r.confidence, 0) / analysisResults.filter(r => r.confidence).length) * 100).toFixed(1) : 0}%
-                    </div>
-                    <div style={{ fontWeight: 'bold', color: '#495057', fontSize: '0.9rem' }}>Avg Confidence</div>
-                  </div>
-                  
-                  <div style={{ textAlign: 'center', padding: '1rem', backgroundColor: '#fff', borderRadius: '4px', border: '1px solid #dee2e6' }}>
-                    <div style={{ fontSize: '2rem', color: '#6c757d', fontWeight: 'bold' }}>
-                      {analysisResults.length > 0 ? 
-                        (analysisResults.filter(r => r.processing_time).reduce((sum, r) => sum + (r.processing_time || 0), 0) / analysisResults.filter(r => r.processing_time).length).toFixed(1) : 0}s
-                    </div>
-                    <div style={{ fontWeight: 'bold', color: '#495057', fontSize: '0.9rem' }}>Avg Processing Time</div>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Detailed Results Table */}
-            {analysisResults.length > 0 && (
-              <div style={{ marginBottom: '2rem' }}>
-                <h4 style={{ marginBottom: '1rem' }}>📋 Detailed Analysis Results</h4>
-                <div style={{ 
-                  maxHeight: '400px', 
-                  overflowY: 'auto', 
-                  border: '1px solid #ddd', 
-                  borderRadius: '8px',
-                  backgroundColor: '#fff'
-                }}>
-                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                    <thead>
-                      <tr style={{ backgroundColor: '#f8f9fa', borderBottom: '2px solid #dee2e6', position: 'sticky', top: 0 }}>
-                        <th style={{ padding: '0.75rem', textAlign: 'left', fontWeight: 'bold' }}>File Name</th>
-                        <th style={{ padding: '0.75rem', textAlign: 'center', fontWeight: 'bold' }}>Detection</th>
-                        <th style={{ padding: '0.75rem', textAlign: 'center', fontWeight: 'bold' }}>Confidence</th>
-                        <th style={{ padding: '0.75rem', textAlign: 'center', fontWeight: 'bold' }}>Time (s)</th>
-                        <th style={{ padding: '0.75rem', textAlign: 'center', fontWeight: 'bold' }}>Classification</th>
-                        <th style={{ padding: '0.75rem', textAlign: 'center', fontWeight: 'bold' }}>Status</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {analysisResults.map((result, index) => (
-                        <tr key={index} style={{ 
-                          borderBottom: '1px solid #eee',
-                          backgroundColor: result.success === false ? '#fff5f5' : 
-                                          result.accident_detected ? '#fff5f5' : '#f0fff4'
-                        }}>
-                          <td style={{ padding: '0.75rem', fontWeight: 'bold', maxWidth: '200px', wordBreak: 'break-all' }}>
-                            {result.filename}
-                            {result.log_id && (
-                              <div style={{ fontSize: '0.7rem', color: '#666' }}>
-                                ID: {result.log_id}
-                              </div>
-                            )}
-                          </td>
-                          <td style={{ padding: '0.75rem', textAlign: 'center' }}>
-                            <span style={{ 
-                              color: result.success === false ? '#6c757d' :
-                                     result.accident_detected ? '#dc3545' : '#28a745',
-                              fontWeight: 'bold',
-                              fontSize: '1.1rem'
-                            }}>
-                              {result.success === false ? '❌ ERROR' :
-                               result.accident_detected ? '⚠️ ACCIDENT' : '✅ SAFE'}
-                            </span>
-                          </td>
-                          <td style={{ padding: '0.75rem', textAlign: 'center', fontWeight: 'bold' }}>
-                            {result.confidence ? (
-                              <span style={{ 
-                                color: utils.getConfidenceColor(result.confidence),
-                                padding: '2px 6px',
-                                borderRadius: '3px',
-                                backgroundColor: result.confidence > 0.8 ? '#ffe6e6' : result.confidence > 0.6 ? '#fffae6' : '#e6ffe6'
-                              }}>
-                                {(result.confidence * 100).toFixed(1)}%
-                              </span>
-                            ) : (
-                              <span style={{ color: '#6c757d' }}>N/A</span>
-                            )}
-                          </td>
-                          <td style={{ padding: '0.75rem', textAlign: 'center' }}>
-                            {result.processing_time ? result.processing_time.toFixed(2) + 's' : 'N/A'}
-                          </td>
-                          <td style={{ padding: '0.75rem', textAlign: 'center', fontSize: '0.9rem' }}>
-                            {result.predicted_class || (result.success === false ? 'Error' : 'N/A')}
-                          </td>
-                          <td style={{ padding: '0.75rem', textAlign: 'center', fontSize: '0.8rem' }}>
-                            <span style={{ 
-                              color: result.success === false ? '#dc3545' : '#28a745',
-                              fontWeight: 'bold'
-                            }}>
-                              {result.success === false ? 'Failed' : 'Success'}
-                            </span>
-                            {result.error && (
-                              <div style={{ fontSize: '0.7rem', color: '#dc3545', marginTop: '0.25rem' }}>
-                                {result.error}
-                              </div>
-                            )}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
-
-            {/* Admin Actions */}
-            {analysisResults.length > 0 && (
-              <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center', marginBottom: '2rem', flexWrap: 'wrap' }}>
-                <button
-                  onClick={() => window.location.href = '/admin/dashboard'}
-                  style={{
-                    backgroundColor: '#007bff',
-                    color: 'white',
-                    border: 'none',
-                    padding: '10px 20px',
-                    borderRadius: '6px',
-                    cursor: 'pointer',
-                    fontSize: '0.9rem'
-                  }}
-                >
-                  🏠 Admin Dashboard
-                </button>
-                
-                <button
-                  onClick={() => window.location.href = '/notification'}
-                  style={{
-                    backgroundColor: '#ffc107',
-                    color: '#212529',
-                    border: 'none',
-                    padding: '10px 20px',
-                    borderRadius: '6px',
-                    cursor: 'pointer',
-                    fontSize: '0.9rem'
-                  }}
-                >
-                  🔔 View Notifications ({analysisResults.filter(r => r.accident_detected).length})
-                </button>
-                
-                <button
-                  onClick={clearAllFiles}
-                  style={{
-                    backgroundColor: '#6c757d',
-                    color: 'white',
-                    border: 'none',
-                    padding: '10px 20px',
-                    borderRadius: '6px',
-                    cursor: 'pointer',
-                    fontSize: '0.9rem'
-                  }}
-                >
-                  🔄 Process Another Batch
-                </button>
-              </div>
-            )}
-
-            {/* Admin Guidelines */}
-            <div style={{ 
-              backgroundColor: '#f8d7da', 
-              padding: '1.5rem', 
-              borderRadius: '8px',
-              border: '1px solid #f5c6cb',
-              marginBottom: '2rem'
-            }}>
-              <h4 style={{ marginBottom: '1rem', color: '#721c24' }}>🔧 Admin Upload Capabilities & Real-time Integration</h4>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '1.5rem' }}>
-                <div>
-                  <h5 style={{ color: '#721c24', marginBottom: '0.5rem' }}>Enhanced Features:</h5>
-                  <ul style={{ paddingLeft: '1.2rem', color: '#721c24', margin: 0, fontSize: '0.9rem' }}>
-                    <li>Real-time API integration with your FastAPI backend</li>
-                    <li>Batch processing up to 20 files simultaneously</li>
-                    <li>100MB per file limit (4x user limit)</li>
-                    <li>Sequential or parallel processing modes</li>
-                    <li>Live model configuration updates</li>
-                    <li>Real-time progress tracking per file</li>
-                    <li>Database logging with log IDs and snapshots</li>
-                    <li>CSV export with complete analysis data</li>
-                  </ul>
-                </div>
-                <div>
-                  <h5 style={{ color: '#721c24', marginBottom: '0.5rem' }}>API Integration:</h5>
-                  <ul style={{ paddingLeft: '1.2rem', color: '#721c24', margin: 0, fontSize: '0.9rem' }}>
-                    <li>Direct connection to /api/upload endpoint</li>
-                    <li>Real-time health checks and model status</li>
-                    <li>Authentication via Bearer token</li>
-                    <li>Error handling with detailed API responses</li>
-                    <li>Model info display and configuration</li>
-                    <li>Automatic retry logic for failed uploads</li>
-                    <li>Comprehensive logging and debugging</li>
-                  </ul>
-                </div>
-              </div>
-              
-              <div style={{ marginTop: '1rem', padding: '1rem', backgroundColor: '#fff', borderRadius: '4px' }}>
-                <h6 style={{ color: '#721c24', marginBottom: '0.5rem' }}>Current API Configuration:</h6>
-                <div style={{ fontSize: '0.8rem', color: '#495057', fontFamily: 'monospace' }}>
-                  <div>Base URL: {process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api'}</div>
-                  <div>Status: {apiStatus}</div>
-                  <div>Model: {modelInfo?.model_name || 'Loading...'}</div>
-                  <div>Version: {modelInfo?.version || 'N/A'}</div>
-                  <div>Threshold: {confidenceThreshold}</div>
-                </div>
-              </div>
-            </div>
-
-            {/* Processing Status Overlay */}
-            {isUploading && (
-              <div style={{
-                position: 'fixed',
-                bottom: '20px',
-                right: '20px',
-                backgroundColor: '#343a40',
-                color: 'white',
-                padding: '1.5rem',
-                borderRadius: '8px',
-                boxShadow: '0 4px 12px rgba(0,0,0,0.4)',
-                zIndex: 1000,
-                minWidth: '280px',
-                border: '2px solid #dc3545'
-              }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.75rem' }}>
-                  <div style={{
-                    width: '24px',
-                    height: '24px',
-                    border: '3px solid #6c757d',
-                    borderTop: '3px solid #dc3545',
-                    borderRadius: '50%',
-                    animation: 'spin 1s linear infinite'
-                  }}></div>
-                  <span style={{ fontWeight: 'bold', fontSize: '1rem' }}>Processing Batch...</span>
-                </div>
-                <div style={{ fontSize: '0.85rem', color: '#adb5bd', marginBottom: '0.5rem' }}>
-                  <strong>Mode:</strong> {processingMode.charAt(0).toUpperCase() + processingMode.slice(1)}
-                </div>
-                <div style={{ fontSize: '0.85rem', color: '#adb5bd', marginBottom: '0.5rem' }}>
-                  <strong>Files:</strong> {selectedFiles.length} total
-                </div>
-                <div style={{ fontSize: '0.85rem', color: '#adb5bd' }}>
-                  <strong>Completed:</strong> {analysisResults.length}/{selectedFiles.length}
-                </div>
-              </div>
-            )}
-          </>
-        )}
+        <div className="grid grid-cols-2 gap-4 mb-4">
+          <div>
+            <h4 className="font-medium text-gray-700 mb-2">Enhanced Features:</h4>
+            <ul className="text-sm text-gray-600 space-y-1">
+              <li>• Real-time API integration with your FastAPI backend</li>
+              <li>• Batch processing up to 20 files simultaneously</li>
+              <li>• Advanced file validation and error handling</li>
+              <li>• Configurable processing modes</li>
+              <li>• CSV export with complete analysis data</li>
+            </ul>
+          </div>
+          
+          <div>
+            <h4 className="font-medium text-gray-700 mb-2">API Integration:</h4>
+            <ul className="text-sm text-gray-600 space-y-1">
+              <li>• Direct connection to {API_BASE_URL}</li>
+              <li>• Real-time health checks and model status</li>
+              <li>• Error handling with detailed API responses</li>
+              <li>• Form handling with detailed API responses</li>
+              <li>• Comprehensive logging and debugging</li>
+            </ul>
+          </div>
+        </div>
         
-        <div style={{ textAlign: 'center', marginTop: '2rem' }}>
-          <a href="/admin" style={{ color: '#dc3545', textDecoration: 'none', fontSize: '0.9rem' }}>← Back to Admin Panel</a>
+        <div className="p-3 bg-gray-100 rounded text-sm font-mono">
+          <div className="mb-2"><strong>Current API Status:</strong></div>
+          <div>Health Endpoint: /health → {systemStatus.api}</div>
+          <div>Model Info: /model-info → {systemStatus.model}</div>
+          <div>Upload Endpoint: /api/upload → {systemStatus.backend}</div>
+          <div>Auth Status: {getAuthToken() ? 'Token Present' : 'No Token'}</div>
         </div>
       </div>
     </div>
-  )
-}
+  );
+};
+
+export default AdminUploadComponent;
