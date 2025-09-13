@@ -196,7 +196,7 @@ const AdminUploadDebugger = () => {
           'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({
-          url: 'https://via.placeholder.com/150x150.png'
+          url: 'https://httpbin.org/image/png'
         })
       });
 
