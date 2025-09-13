@@ -1,6 +1,3 @@
-// Complete Admin Upload Page - src/app/admin/upload/page.js
-'use client'
-
 import React, { useState, useRef, useCallback } from 'react';
 import { 
   Upload, 
