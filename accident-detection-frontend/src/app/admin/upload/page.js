@@ -1,545 +1,379 @@
-// Real-time Admin Upload Page - src/app/admin/upload/page.js
-'use client'
+'use client';
+import React, { useState, useEffect } from 'react';
+import { AlertCircle, CheckCircle, XCircle, RefreshCw, Key, User, Shield } from 'lucide-react';
 
-import React, { useState, useEffect, useCallback } from 'react';
-import { Upload, FileText, AlertCircle, CheckCircle, XCircle, Settings, RefreshCw, Play, Pause } from 'lucide-react';
+const AdminAuthDebugger = () => {
+  const [debugInfo, setDebugInfo] = useState({});
+  const [testResults, setTestResults] = useState({});
+  const [isLoading, setIsLoading] = useState(false);
+  const [authStatus, setAuthStatus] = useState('checking');
 
-const AdminUploadComponent = () => {
-  // State management
-  const [files, setFiles] = useState([]);
-  const [uploadProgress, setUploadProgress] = useState({});
-  const [results, setResults] = useState([]);
-  const [isUploading, setIsUploading] = useState(false);
-  const [config, setConfig] = useState({
-    processingMode: 'realtime',
-    enableLogging: true,
-    threshold: 0.5,
-    batchSize: 5
-  });
-  const [systemStatus, setSystemStatus] = useState({
-    api: 'checking',
-    model: 'checking',
-    backend: 'checking'
-  });
-  const [error, setError] = useState(null);
-
-  // API configuration
   const API_BASE_URL = 'https://accident-prediction-1-mpm0.onrender.com';
-  
-  const getAuthToken = () => {
-    const tokenSources = ['token', 'authToken', 'access_token'];
+
+  // Get all possible tokens
+  const getAllTokens = () => {
+    const tokens = {};
+    const tokenSources = ['token', 'authToken', 'access_token', 'admin_token'];
     
-    for (const key of tokenSources) {
-      const token = localStorage.getItem(key) || sessionStorage.getItem(key);
-      if (token && token !== 'null' && token !== 'undefined' && token.length > 10) {
-        return token;
+    tokenSources.forEach(key => {
+      const localToken = localStorage.getItem(key);
+      const sessionToken = sessionStorage.getItem(key);
+      
+      if (localToken && localToken !== 'null') {
+        tokens[`localStorage.${key}`] = localToken;
       }
-    }
-    
+      if (sessionToken && sessionToken !== 'null') {
+        tokens[`sessionStorage.${key}`] = sessionToken;
+      }
+    });
+
+    // Check user object
     try {
       const userStr = localStorage.getItem('user');
       if (userStr && userStr !== 'null') {
         const userData = JSON.parse(userStr);
-        if (userData.token && userData.token.length > 10) {
-          return userData.token;
+        if (userData.token) {
+          tokens['user.token'] = userData.token;
+        }
+        if (userData.access_token) {
+          tokens['user.access_token'] = userData.access_token;
         }
       }
     } catch (e) {
-      console.warn('Error parsing user data for token:', e);
-    }
-    
-    return null;
-  };
-
-  // Fixed API client with proper error handling
-  const apiCall = async (endpoint, options = {}) => {
-    const url = `${API_BASE_URL}${endpoint}`;
-    const token = getAuthToken();
-    
-    console.log(`Making API call: ${options.method || 'GET'} ${url}`);
-    console.log(`Auth token: ${token ? 'Present' : 'Missing'}`);
-
-    const config = {
-      method: options.method || 'GET',
-      mode: 'cors',
-      credentials: token ? 'include' : 'omit',
-      headers: {
-        'Accept': 'application/json',
-        ...(options.headers || {})
-      },
-      ...options
-    };
-
-    // Add auth header if token exists
-    if (token) {
-      config.headers['Authorization'] = `Bearer ${token}`;
+      tokens['user.parse_error'] = e.message;
     }
 
-    // Handle FormData properly
-    if (options.body && !(options.body instanceof FormData)) {
-      config.headers['Content-Type'] = 'application/json';
-      if (typeof options.body === 'object') {
-        config.body = JSON.stringify(options.body);
-      }
-    }
-
+    // Check admin user object
     try {
-      const response = await fetch(url, config);
-      
-      console.log(`Response: ${response.status} ${response.statusText}`);
-      
-      if (!response.ok) {
-        let errorMessage = `HTTP ${response.status}: ${response.statusText}`;
-        try {
-          const errorData = await response.json();
-          if (errorData.detail) {
-            errorMessage = Array.isArray(errorData.detail) 
-              ? errorData.detail.map(err => err.msg || err.message || err).join(', ')
-              : errorData.detail;
-          } else if (errorData.message) {
-            errorMessage = errorData.message;
-          }
-        } catch (parseError) {
-          console.warn('Could not parse error response');
+      const adminStr = localStorage.getItem('admin') || localStorage.getItem('adminUser');
+      if (adminStr && adminStr !== 'null') {
+        const adminData = JSON.parse(adminStr);
+        if (adminData.token) {
+          tokens['admin.token'] = adminData.token;
         }
-        throw new Error(errorMessage);
+        if (adminData.access_token) {
+          tokens['admin.access_token'] = adminData.access_token;
+        }
       }
-
-      const contentType = response.headers.get('content-type');
-      if (contentType && contentType.includes('application/json')) {
-        return await response.json();
-      } else {
-        const text = await response.text();
-        return { message: text || 'Success' };
-      }
-      
-    } catch (error) {
-      console.error(`API call failed for ${url}:`, error);
-      
-      if (error.message.includes('fetch') || error.message.includes('NetworkError')) {
-        throw new Error(`Network error: Cannot connect to ${API_BASE_URL}. Please check if the backend is running.`);
-      }
-      
-      throw error;
+    } catch (e) {
+      tokens['admin.parse_error'] = e.message;
     }
+
+    return tokens;
   };
 
-  // System health check
-  const checkSystemHealth = useCallback(async () => {
-    console.log('Checking system health...');
-    
+  // Test endpoint with different tokens
+  const testEndpointAuth = async (endpoint, token, tokenSource) => {
     try {
-      // Check main health endpoint
-      const healthResponse = await apiCall('/health');
-      console.log('Health check response:', healthResponse);
-      
-      setSystemStatus(prev => ({
-        ...prev,
-        api: healthResponse.status === 'healthy' ? 'online' : 'offline',
-        backend: 'online'
-      }));
-
-      // Check model status
-      try {
-        const modelResponse = await apiCall('/model-info');
-        console.log('Model info response:', modelResponse);
-        
-        setSystemStatus(prev => ({
-          ...prev,
-          model: (modelResponse.model_available && modelResponse.model_loaded) ? 'loaded' : 'offline'
-        }));
-      } catch (modelError) {
-        console.warn('Model check failed:', modelError.message);
-        setSystemStatus(prev => ({ ...prev, model: 'error' }));
-      }
-
-    } catch (error) {
-      console.error('Health check failed:', error.message);
-      setSystemStatus({
-        api: 'offline',
-        model: 'offline',
-        backend: 'offline'
+      const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+        method: 'GET',
+        mode: 'cors',
+        credentials: 'include',
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        }
       });
-      setError(`System check failed: ${error.message}`);
+
+      const result = {
+        status: response.status,
+        ok: response.ok,
+        statusText: response.statusText,
+        tokenSource: tokenSource
+      };
+
+      if (response.ok) {
+        try {
+          result.data = await response.json();
+        } catch {
+          result.data = await response.text();
+        }
+      } else {
+        try {
+          result.error = await response.json();
+        } catch {
+          result.error = await response.text();
+        }
+      }
+
+      return result;
+    } catch (error) {
+      return {
+        status: 'network_error',
+        error: error.message,
+        tokenSource: tokenSource
+      };
     }
-  }, []);
-
-  // Initialize system check
-  useEffect(() => {
-    checkSystemHealth();
-  }, [checkSystemHealth]);
-
-  // File handling
-  const handleFileSelect = (event) => {
-    const selectedFiles = Array.from(event.target.files);
-    console.log('Files selected:', selectedFiles.length);
-    
-    const validFiles = selectedFiles.filter(file => {
-      const validTypes = [
-        'image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp',
-        'video/mp4', 'video/avi', 'video/mov', 'video/quicktime', 'video/webm',
-        'image/tiff', 'image/bmp'
-      ];
-      
-      const isValidType = validTypes.includes(file.type.toLowerCase());
-      const isValidSize = file.size <= 100 * 1024 * 1024; // 100MB for admin
-      
-      if (!isValidType) {
-        console.warn(`Invalid file type: ${file.name} (${file.type})`);
-      }
-      if (!isValidSize) {
-        console.warn(`File too large: ${file.name} (${(file.size / 1024 / 1024).toFixed(2)}MB)`);
-      }
-      
-      return isValidType && isValidSize;
-    });
-
-    setFiles(validFiles);
-    setError(null);
-    setResults([]);
-    
-    // Initialize progress for each file
-    const progressInit = {};
-    validFiles.forEach(file => {
-      progressInit[file.name] = 0;
-    });
-    setUploadProgress(progressInit);
   };
 
-  // Single file upload
-  const uploadSingleFile = async (file) => {
-    console.log(`Starting upload for: ${file.name}`);
-    
+  // Test file upload with token
+  const testUploadAuth = async (token, tokenSource) => {
+    // Create a small test file
+    const testFile = new Blob(['test'], { type: 'text/plain' });
     const formData = new FormData();
-    formData.append('file', file);
+    formData.append('file', testFile, 'test.txt');
 
     try {
-      setUploadProgress(prev => ({ ...prev, [file.name]: 10 }));
-
-      const result = await apiCall('/api/upload', {
+      const response = await fetch(`${API_BASE_URL}/api/upload`, {
         method: 'POST',
+        mode: 'cors',
+        credentials: 'include',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        },
         body: formData
       });
 
-      setUploadProgress(prev => ({ ...prev, [file.name]: 100 }));
-      
-      console.log(`Upload successful for ${file.name}:`, result);
-      
-      return {
-        filename: file.name,
-        success: true,
-        result: result,
-        timestamp: new Date().toISOString()
+      const result = {
+        status: response.status,
+        ok: response.ok,
+        statusText: response.statusText,
+        tokenSource: tokenSource
       };
 
+      if (!response.ok) {
+        try {
+          result.error = await response.json();
+        } catch {
+          result.error = await response.text();
+        }
+      } else {
+        try {
+          result.data = await response.json();
+        } catch {
+          result.data = await response.text();
+        }
+      }
+
+      return result;
     } catch (error) {
-      console.error(`Upload failed for ${file.name}:`, error);
-      
-      setUploadProgress(prev => ({ ...prev, [file.name]: 0 }));
-      
       return {
-        filename: file.name,
-        success: false,
+        status: 'network_error',
         error: error.message,
-        timestamp: new Date().toISOString()
+        tokenSource: tokenSource
       };
     }
   };
 
-  // Batch upload handler
-  const handleBatchUpload = async () => {
-    if (files.length === 0) {
-      setError('No files selected');
-      return;
-    }
+  // Run comprehensive auth debugging
+  const runAuthDebug = async () => {
+    setIsLoading(true);
+    setAuthStatus('checking');
+    
+    const tokens = getAllTokens();
+    const results = {
+      tokenInventory: tokens,
+      endpointTests: {},
+      uploadTests: {}
+    };
 
-    if (systemStatus.api !== 'online') {
-      setError('API is not available. Please check system status.');
-      return;
-    }
+    // Test each token against various endpoints
+    const testEndpoints = [
+      '/auth/me',
+      '/auth/admin/me', 
+      '/api/dashboard/user/profile',
+      '/health'
+    ];
 
-    console.log(`Starting batch upload of ${files.length} files`);
-    setIsUploading(true);
-    setError(null);
-    setResults([]);
+    for (const [tokenSource, token] of Object.entries(tokens)) {
+      if (token && typeof token === 'string' && token.length > 10) {
+        results.endpointTests[tokenSource] = {};
+        
+        // Test each endpoint
+        for (const endpoint of testEndpoints) {
+          results.endpointTests[tokenSource][endpoint] = await testEndpointAuth(endpoint, token, tokenSource);
+        }
 
-    const batchSize = config.batchSize;
-    const allResults = [];
-
-    // Process files in batches
-    for (let i = 0; i < files.length; i += batchSize) {
-      const batch = files.slice(i, i + batchSize);
-      console.log(`Processing batch ${Math.floor(i/batchSize) + 1}/${Math.ceil(files.length/batchSize)}`);
-      
-      const batchPromises = batch.map(file => uploadSingleFile(file));
-      const batchResults = await Promise.all(batchPromises);
-      
-      allResults.push(...batchResults);
-      setResults([...allResults]);
-
-      // Small delay between batches
-      if (i + batchSize < files.length) {
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        // Test upload specifically
+        results.uploadTests[tokenSource] = await testUploadAuth(token, tokenSource);
       }
     }
 
-    setIsUploading(false);
-    console.log('Batch upload completed:', allResults);
-  };
+    setTestResults(results);
+    setDebugInfo(results);
+    
+    // Determine auth status
+    const hasValidAdminAuth = Object.values(results.endpointTests).some(tests => 
+      tests['/auth/admin/me']?.ok || tests['/auth/me']?.ok
+    );
+    
+    const hasValidUploadAuth = Object.values(results.uploadTests).some(test => 
+      test.ok || test.status === 400 // 400 might be file type error, not auth error
+    );
 
-  // Configuration update
-  const updateConfig = async () => {
-    try {
-      console.log('Updating configuration:', config);
-      
-      const configResult = await apiCall('/api/configure', {
-        method: 'POST',
-        body: config
-      });
-      
-      console.log('Configuration updated:', configResult);
-      setError(null);
-      
-    } catch (error) {
-      console.error('Configuration update failed:', error);
-      setError(`Configuration failed: ${error.message}`);
+    if (hasValidAdminAuth && hasValidUploadAuth) {
+      setAuthStatus('valid');
+    } else if (hasValidAdminAuth) {
+      setAuthStatus('partial');
+    } else {
+      setAuthStatus('invalid');
     }
+
+    setIsLoading(false);
   };
 
-  // Get status indicator
-  const getStatusIndicator = (status) => {
+  // Component mount
+  useEffect(() => {
+    runAuthDebug();
+  }, []);
+
+  const getStatusIcon = (status) => {
+    if (status === 'checking' || isLoading) {
+      return <RefreshCw className="w-4 h-4 animate-spin text-blue-500" />;
+    }
     switch (status) {
-      case 'online':
-      case 'loaded':
+      case 'valid':
         return <CheckCircle className="w-4 h-4 text-green-500" />;
-      case 'checking':
-        return <RefreshCw className="w-4 h-4 text-blue-500 animate-spin" />;
-      case 'offline':
-      case 'error':
+      case 'partial':
+        return <AlertCircle className="w-4 h-4 text-yellow-500" />;
+      case 'invalid':
         return <XCircle className="w-4 h-4 text-red-500" />;
       default:
-        return <AlertCircle className="w-4 h-4 text-yellow-500" />;
+        return <AlertCircle className="w-4 h-4 text-gray-500" />;
     }
+  };
+
+  const getStatusColor = (ok, status) => {
+    if (ok) return 'text-green-600 bg-green-50';
+    if (status === 401) return 'text-red-600 bg-red-50';
+    if (status === 403) return 'text-orange-600 bg-orange-50';
+    return 'text-gray-600 bg-gray-50';
   };
 
   return (
     <div className="max-w-6xl mx-auto p-6 bg-white">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">
-          Admin Batch Upload System - Fixed Version
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold text-gray-900 mb-2 flex items-center gap-2">
+          <Shield className="w-6 h-6" />
+          Admin Authentication Debugger
         </h1>
         <p className="text-gray-600">
-          Upload and analyze multiple files with enhanced admin capabilities
+          Comprehensive diagnosis of your admin authentication issues
         </p>
       </div>
 
-      {/* System Status */}
+      {/* Overall Status */}
       <div className="mb-6 p-4 bg-gray-50 rounded-lg">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold">System Status</h2>
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center gap-2">
+            {getStatusIcon(authStatus)}
+            <span className="font-semibold">Authentication Status:</span>
+            <span className={`capitalize ${
+              authStatus === 'valid' ? 'text-green-600' : 
+              authStatus === 'partial' ? 'text-yellow-600' : 'text-red-600'
+            }`}>
+              {authStatus}
+            </span>
+          </div>
           <button
-            onClick={checkSystemHealth}
-            className="px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 flex items-center gap-1"
+            onClick={runAuthDebug}
+            disabled={isLoading}
+            className="px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 disabled:opacity-50"
           >
-            <RefreshCw className="w-4 h-4" />
-            Refresh
-          </button>
-        </div>
-        <div className="grid grid-cols-3 gap-4">
-          <div className="flex items-center gap-2">
-            {getStatusIndicator(systemStatus.api)}
-            <span className="font-medium">API:</span>
-            <span className={`capitalize ${systemStatus.api === 'online' ? 'text-green-600' : 'text-red-600'}`}>
-              {systemStatus.api}
-            </span>
-          </div>
-          <div className="flex items-center gap-2">
-            {getStatusIndicator(systemStatus.model)}
-            <span className="font-medium">Model:</span>
-            <span className={`capitalize ${systemStatus.model === 'loaded' ? 'text-green-600' : 'text-red-600'}`}>
-              {systemStatus.model}
-            </span>
-          </div>
-          <div className="flex items-center gap-2">
-            {getStatusIndicator(systemStatus.backend)}
-            <span className="font-medium">Backend:</span>
-            <span className={`capitalize ${systemStatus.backend === 'online' ? 'text-green-600' : 'text-red-600'}`}>
-              {systemStatus.backend}
-            </span>
-          </div>
-        </div>
-      </div>
-
-      {/* Error Display */}
-      {error && (
-        <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
-          <div className="flex items-center gap-2 text-red-800">
-            <AlertCircle className="w-5 h-5" />
-            <span className="font-medium">Error:</span>
-            <span>{error}</span>
-          </div>
-        </div>
-      )}
-
-      {/* Configuration Panel */}
-      <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-semibold flex items-center gap-2">
-            <Settings className="w-5 h-5" />
-            Admin Configuration
-          </h3>
-          <button
-            onClick={updateConfig}
-            className="px-4 py-2 bg-yellow-500 text-white rounded hover:bg-yellow-600"
-          >
-            Save Settings
+            {isLoading ? 'Testing...' : 'Retest'}
           </button>
         </div>
         
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Processing Mode:
-            </label>
-            <select
-              value={config.processingMode}
-              onChange={(e) => setConfig({...config, processingMode: e.target.value})}
-              className="w-full border border-gray-300 rounded px-3 py-2"
-            >
-              <option value="realtime">Real-time</option>
-              <option value="batch">Batch</option>
-              <option value="sequential">Sequential</option>
-            </select>
+        {authStatus === 'invalid' && (
+          <div className="text-red-600 text-sm">
+            No valid admin authentication found. You may need to log in again as admin.
           </div>
-          
-          <div className="flex items-center">
-            <input
-              type="checkbox"
-              id="enableLogging"
-              checked={config.enableLogging}
-              onChange={(e) => setConfig({...config, enableLogging: e.target.checked})}
-              className="mr-2"
-            />
-            <label htmlFor="enableLogging" className="text-sm font-medium text-gray-700">
-              Detailed Logging
-            </label>
-          </div>
-        </div>
-      </div>
-
-      {/* File Upload Section */}
-      <div className="mb-6 p-6 border-2 border-dashed border-gray-300 rounded-lg text-center bg-gray-50">
-        <Upload className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-        <h3 className="text-lg font-semibold mb-2">Admin Batch Upload (up to 20 files)</h3>
-        <p className="text-gray-600 mb-4">
-          Select multiple images or videos for analysis. Max 100MB per file.
-        </p>
-        <input
-          type="file"
-          multiple
-          accept="image/*,video/*"
-          onChange={handleFileSelect}
-          className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
-        />
-        
-        {files.length > 0 && (
-          <div className="mt-4">
-            <p className="text-sm text-gray-600 mb-2">
-              Selected: {files.length} file(s)
-            </p>
-            <button
-              onClick={handleBatchUpload}
-              disabled={isUploading || systemStatus.api !== 'online'}
-              className="px-6 py-3 bg-red-500 text-white rounded-lg hover:bg-red-600 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 mx-auto"
-            >
-              {isUploading ? (
-                <>
-                  <RefreshCw className="w-4 h-4 animate-spin" />
-                  Processing...
-                </>
-              ) : (
-                <>
-                  <Play className="w-4 h-4" />
-                  Analyze {files.length} Files
-                </>
-              )}
-            </button>
+        )}
+        {authStatus === 'partial' && (
+          <div className="text-yellow-600 text-sm">
+            Admin authentication works for some endpoints but not uploads. Token may lack upload permissions.
           </div>
         )}
       </div>
 
-      {/* Progress Section */}
-      {Object.keys(uploadProgress).length > 0 && (
-        <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-          <h3 className="text-lg font-semibold mb-3">Upload Progress</h3>
+      {/* Token Inventory */}
+      {debugInfo.tokenInventory && (
+        <div className="mb-6 p-4 border rounded-lg">
+          <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
+            <Key className="w-5 h-5" />
+            Token Inventory
+          </h2>
           <div className="space-y-2">
-            {Object.entries(uploadProgress).map(([filename, progress]) => (
-              <div key={filename} className="flex items-center gap-3">
-                <span className="text-sm font-medium min-w-0 flex-1 truncate">{filename}</span>
-                <div className="w-32 bg-gray-200 rounded-full h-2">
-                  <div
-                    className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-                    style={{ width: `${progress}%` }}
-                  ></div>
-                </div>
-                <span className="text-sm font-medium w-12 text-right">{progress}%</span>
+            {Object.entries(debugInfo.tokenInventory).map(([source, token]) => (
+              <div key={source} className="flex items-center gap-2 text-sm font-mono">
+                <span className="font-medium min-w-0 flex-1">{source}:</span>
+                <span className="text-gray-600 truncate max-w-md">
+                  {typeof token === 'string' ? 
+                    `${token.substring(0, 20)}...` : 
+                    JSON.stringify(token)
+                  }
+                </span>
               </div>
             ))}
           </div>
         </div>
       )}
 
-      {/* Results Section */}
-      {results.length > 0 && (
-        <div className="mb-6">
-          <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-            <FileText className="w-5 h-5" />
-            Analysis Results ({results.length})
-          </h3>
-          <div className="space-y-3 max-h-96 overflow-y-auto">
-            {results.map((result, index) => (
-              <div
-                key={index}
-                className={`p-4 rounded-lg border ${
-                  result.success 
-                    ? 'bg-green-50 border-green-200' 
-                    : 'bg-red-50 border-red-200'
-                }`}
-              >
-                <div className="flex items-center justify-between mb-2">
-                  <span className="font-medium">{result.filename}</span>
-                  <div className="flex items-center gap-2">
-                    {result.success ? (
-                      <CheckCircle className="w-4 h-4 text-green-500" />
-                    ) : (
-                      <XCircle className="w-4 h-4 text-red-500" />
-                    )}
-                    <span className={`text-sm ${result.success ? 'text-green-600' : 'text-red-600'}`}>
-                      {result.success ? 'Success' : 'Failed'}
-                    </span>
-                  </div>
-                </div>
-                
-                {result.success && result.result && (
-                  <div className="text-sm text-gray-600">
-                    {result.result.accident_detected && (
-                      <div className="flex items-center gap-2 mb-1">
-                        <AlertCircle className="w-4 h-4 text-orange-500" />
+      {/* Endpoint Tests */}
+      {testResults.endpointTests && Object.keys(testResults.endpointTests).length > 0 && (
+        <div className="mb-6 p-4 border rounded-lg">
+          <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
+            <User className="w-5 h-5" />
+            Endpoint Authentication Tests
+          </h2>
+          <div className="space-y-4">
+            {Object.entries(testResults.endpointTests).map(([tokenSource, tests]) => (
+              <div key={tokenSource} className="border rounded p-3">
+                <h3 className="font-medium mb-2">{tokenSource}</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                  {Object.entries(tests).map(([endpoint, result]) => (
+                    <div key={endpoint} className={`p-2 rounded text-sm ${getStatusColor(result.ok, result.status)}`}>
+                      <div className="flex items-center justify-between">
+                        <span className="font-mono">{endpoint}</span>
                         <span className="font-medium">
-                          Accident Detected: {(result.result.confidence * 100).toFixed(1)}% confidence
+                          {result.status} {result.statusText}
                         </span>
                       </div>
-                    )}
-                    <div>Processing time: {result.result.processing_time?.toFixed(2)}s</div>
-                    {result.result.analysis_id && (
-                      <div>Analysis ID: {result.result.analysis_id}</div>
-                    )}
+                      {result.error && (
+                        <div className="text-xs mt-1 opacity-75">
+                          {typeof result.error === 'object' ? 
+                            result.error.detail || JSON.stringify(result.error) : 
+                            result.error
+                          }
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Upload Tests */}
+      {testResults.uploadTests && Object.keys(testResults.uploadTests).length > 0 && (
+        <div className="mb-6 p-4 border rounded-lg">
+          <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
+            <AlertCircle className="w-5 h-5" />
+            Upload Authentication Tests (This is your main problem!)
+          </h2>
+          <div className="space-y-3">
+            {Object.entries(testResults.uploadTests).map(([tokenSource, result]) => (
+              <div key={tokenSource} className={`p-3 rounded ${getStatusColor(result.ok, result.status)}`}>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="font-medium">{tokenSource}</span>
+                  <span className="font-medium">
+                    {result.status} {result.statusText}
+                  </span>
+                </div>
+                {result.error && (
+                  <div className="text-sm">
+                    <strong>Error:</strong> {typeof result.error === 'object' ? 
+                      result.error.detail || JSON.stringify(result.error) : 
+                      result.error
+                    }
                   </div>
                 )}
-                
-                {!result.success && (
-                  <div className="text-sm text-red-600">
-                    Error: {result.error}
+                {result.ok && result.data && (
+                  <div className="text-sm">
+                    <strong>Success:</strong> Upload authentication works with this token!
                   </div>
                 )}
               </div>
@@ -548,44 +382,39 @@ const AdminUploadComponent = () => {
         </div>
       )}
 
-      {/* API Integration Info */}
-      <div className="p-4 bg-pink-50 border border-pink-200 rounded-lg">
-        <h3 className="text-lg font-semibold mb-2">Admin Upload Capabilities & Real-time Integration</h3>
-        
-        <div className="grid grid-cols-2 gap-4 mb-4">
-          <div>
-            <h4 className="font-medium text-gray-700 mb-2">Enhanced Features:</h4>
-            <ul className="text-sm text-gray-600 space-y-1">
-              <li>• Real-time API integration with your FastAPI backend</li>
-              <li>• Batch processing up to 20 files simultaneously</li>
-              <li>• Advanced file validation and error handling</li>
-              <li>• Configurable processing modes</li>
-              <li>• CSV export with complete analysis data</li>
-            </ul>
+      {/* Recommendations */}
+      <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+        <h2 className="text-lg font-semibold mb-3">Recommended Solutions</h2>
+        <div className="space-y-2 text-sm">
+          <div className="flex items-start gap-2">
+            <span className="font-medium">1.</span>
+            <span>Check if you're logged in as admin - look for tokens with "admin" in the name above</span>
           </div>
-          
-          <div>
-            <h4 className="font-medium text-gray-700 mb-2">API Integration:</h4>
-            <ul className="text-sm text-gray-600 space-y-1">
-              <li>• Direct connection to {API_BASE_URL}</li>
-              <li>• Real-time health checks and model status</li>
-              <li>• Error handling with detailed API responses</li>
-              <li>• Form handling with detailed API responses</li>
-              <li>• Comprehensive logging and debugging</li>
-            </ul>
+          <div className="flex items-start gap-2">
+            <span className="font-medium">2.</span>
+            <span>If no admin tokens found, log out and log back in using admin credentials</span>
+          </div>
+          <div className="flex items-start gap-2">
+            <span className="font-medium">3.</span>
+            <span>Check if your backend requires different permissions for admin uploads vs user uploads</span>
+          </div>
+          <div className="flex items-start gap-2">
+            <span className="font-medium">4.</span>
+            <span>Verify your backend's `/api/upload` endpoint accepts admin tokens properly</span>
           </div>
         </div>
         
-        <div className="p-3 bg-gray-100 rounded text-sm font-mono">
-          <div className="mb-2"><strong>Current API Status:</strong></div>
-          <div>Health Endpoint: /health → {systemStatus.api}</div>
-          <div>Model Info: /model-info → {systemStatus.model}</div>
-          <div>Upload Endpoint: /api/upload → {systemStatus.backend}</div>
-          <div>Auth Status: {getAuthToken() ? 'Token Present' : 'No Token'}</div>
+        <div className="mt-4 p-3 bg-white rounded border">
+          <h3 className="font-medium mb-2">Quick Fix Commands:</h3>
+          <div className="space-y-1 text-xs font-mono bg-gray-100 p-2 rounded">
+            <div>// Clear all tokens and re-login as admin:</div>
+            <div>localStorage.clear(); sessionStorage.clear();</div>
+            <div>// Then navigate to admin login page</div>
+          </div>
         </div>
       </div>
     </div>
   );
 };
 
-export default AdminUploadComponent;
+export default AdminAuthDebugger;
