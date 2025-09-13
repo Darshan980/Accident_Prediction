@@ -1,9 +1,9 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
-import { useAuth } from '../contexts/AuthContext'
-import { apiClient } from '../lib/api'
-import notificationService from '../lib/notificationService'
+import { useAuth } from '../../contexts/AuthContext'
+import { apiClient } from '../../lib/api'
+import notificationService from '../../lib/notificationService'
 import { CheckCircle, XCircle, AlertCircle, Upload, Server, Key, User, FileText, Clock, Target } from 'lucide-react'
 
 const UserUploadPage = () => {
