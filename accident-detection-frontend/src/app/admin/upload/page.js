@@ -273,14 +273,14 @@ const UserUploadPage = () => {
     if (fileInput) fileInput.value = ''
   }
 
-  const StatusCard = ({ title, value, icon: Icon, status, gradient, textColor, iconColor }) => (
-    <div className="status-card" style={{ background: gradient }}>
+  const StatusCard = ({ title, value, icon: Icon, status, isDanger, isWarning }) => (
+    <div className={`status-card ${isDanger ? 'danger' : isWarning ? 'warning' : 'normal'}`}>
       <div className="status-card-content">
-        <div className="status-icon-container" style={{ backgroundColor: iconColor }}>
+        <div className="status-icon-container">
           <Icon className="status-card-icon" />
         </div>
         <div className="status-text">
-          <p className="status-value" style={{ color: textColor }}>{value}</p>
+          <p className="status-value">{value}</p>
           <p className="status-title">{title}</p>
         </div>
         <div className="status-indicator">
@@ -297,17 +297,17 @@ const UserUploadPage = () => {
       <div className="loading-container">
         <div className="loading-card">
           <div className="loading-spinner">
-            <div className="spinner-ring"></div>
-            <div className="spinner-ring"></div>
-            <div className="spinner-ring"></div>
+            <div className="spinner-dot"></div>
+            <div className="spinner-dot"></div>
+            <div className="spinner-dot"></div>
           </div>
-          <h3 className="loading-title">Initializing System</h3>
-          <p className="loading-text">Please wait while we authenticate your session...</p>
+          <h3 className="loading-title">System Initialization</h3>
+          <p className="loading-text">Authenticating session...</p>
         </div>
         <style jsx>{`
           .loading-container {
             min-height: 100vh;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: #f8f9fa;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -315,61 +315,48 @@ const UserUploadPage = () => {
           }
           
           .loading-card {
-            background: rgba(255, 255, 255, 0.95);
-            backdrop-filter: blur(10px);
-            border-radius: 20px;
+            background: white;
+            border-radius: 8px;
             padding: 3rem;
             text-align: center;
-            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
-            border: 1px solid rgba(255, 255, 255, 0.2);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            border: 1px solid #e9ecef;
+            max-width: 400px;
           }
           
           .loading-spinner {
-            position: relative;
-            width: 80px;
-            height: 80px;
+            display: flex;
+            justify-content: center;
+            gap: 0.5rem;
             margin: 0 auto 2rem;
           }
           
-          .spinner-ring {
-            position: absolute;
-            width: 100%;
-            height: 100%;
-            border: 4px solid transparent;
+          .spinner-dot {
+            width: 12px;
+            height: 12px;
+            background: #6c757d;
             border-radius: 50%;
-            animation: spin 1.5s linear infinite;
+            animation: bounce 1.4s ease-in-out infinite both;
           }
           
-          .spinner-ring:nth-child(1) {
-            border-top-color: #667eea;
-            animation-delay: 0s;
-          }
-          
-          .spinner-ring:nth-child(2) {
-            border-right-color: #764ba2;
-            animation-delay: 0.3s;
-          }
-          
-          .spinner-ring:nth-child(3) {
-            border-bottom-color: #f093fb;
-            animation-delay: 0.6s;
-          }
+          .spinner-dot:nth-child(1) { animation-delay: -0.32s; }
+          .spinner-dot:nth-child(2) { animation-delay: -0.16s; }
           
           .loading-title {
-            font-size: 1.5rem;
-            font-weight: 700;
-            color: #2d3748;
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: #212529;
             margin-bottom: 0.5rem;
           }
           
           .loading-text {
-            color: #718096;
+            color: #6c757d;
             margin: 0;
           }
           
-          @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
+          @keyframes bounce {
+            0%, 80%, 100% { transform: scale(0); }
+            40% { transform: scale(1); }
           }
         `}</style>
       </div>
@@ -388,14 +375,18 @@ const UserUploadPage = () => {
               </div>
               <div className="header-text">
                 <h1>Accident Detection System</h1>
-                <p>Advanced AI-Powered Traffic Safety Analysis</p>
+                <p>Enterprise AI-Powered Traffic Safety Analysis</p>
               </div>
             </div>
             {isAuthenticated && user && (
               <div className="user-badge">
-                <User size={20} />
-                <span>{user.username}</span>
-                {user.role && <span>• {user.role.charAt(0).toUpperCase() + user.role.slice(1)}</span>}
+                <User size={18} />
+                <span className="user-name">{user.username}</span>
+                {user.role && (
+                  <span className="user-role">
+                    • {user.role.charAt(0).toUpperCase() + user.role.slice(1)}
+                  </span>
+                )}
               </div>
             )}
           </div>
@@ -410,21 +401,21 @@ const UserUploadPage = () => {
               </div>
               <h2 className="auth-error-title">Authentication Required</h2>
               <p className="auth-error-text">
-                You must be logged in to upload files for accident detection analysis. 
-                Please authenticate to access the advanced AI analysis features.
+                Access to the accident detection system requires valid user credentials. 
+                Please authenticate to proceed with file analysis.
               </p>
               <div className="auth-error-buttons">
                 <button
                   onClick={() => window.location.href = '/auth'}
                   className="btn btn-primary"
                 >
-                  Login / Register
+                  Sign In / Register
                 </button>
                 <button
                   onClick={() => window.location.href = '/'}
                   className="btn btn-secondary"
                 >
-                  Go Home
+                  Return Home
                 </button>
               </div>
             </div>
@@ -437,46 +428,32 @@ const UserUploadPage = () => {
             {/* Status Cards */}
             <div className="status-grid">
               <StatusCard
-                title="Authentication Status"
-                value={`Welcome, ${user?.username || 'User'}`}
+                title="User Authentication"
+                value={`Authenticated: ${user?.username || 'User'}`}
                 icon={Shield}
                 status="success"
-                gradient="linear-gradient(135deg, #10b981 0%, #059669 100%)"
-                textColor="#ffffff"
-                iconColor="rgba(255, 255, 255, 0.2)"
               />
 
               <StatusCard
-                title="AI Analysis Engine"
-                value={apiStatus === 'ready' ? 'Ready for Analysis' : 'Initializing...'}
+                title="Analysis Engine"
+                value={apiStatus === 'ready' ? 'Service Ready' : 'Initializing'}
                 icon={Zap}
                 status={apiStatus === 'ready' ? 'success' : 'warning'}
-                gradient={apiStatus === 'ready' ? 
-                  "linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)" : 
-                  "linear-gradient(135deg, #f59e0b 0%, #d97706 100%)"
-                }
-                textColor="#ffffff"
-                iconColor="rgba(255, 255, 255, 0.2)"
+                isWarning={apiStatus !== 'ready'}
               />
 
               <StatusCard
-                title="System Performance"
-                value="Optimal"
+                title="System Status"
+                value="Operational"
                 icon={Activity}
                 status="success"
-                gradient="linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)"
-                textColor="#ffffff"
-                iconColor="rgba(255, 255, 255, 0.2)"
               />
 
               <StatusCard
                 title="Data Processing"
-                value="Real-time Analysis"
+                value="Real-time Available"
                 icon={Database}
                 status="success"
-                gradient="linear-gradient(135deg, #ef4444 0%, #dc2626 100%)"
-                textColor="#ffffff"
-                iconColor="rgba(255, 255, 255, 0.2)"
               />
             </div>
 
@@ -484,7 +461,7 @@ const UserUploadPage = () => {
             {error && (
               <div className="error-alert">
                 <div className="error-content">
-                  <AlertTriangle size={24} color="#dc2626" />
+                  <AlertTriangle size={20} />
                   <span className="error-text">{error}</span>
                 </div>
               </div>
@@ -492,6 +469,18 @@ const UserUploadPage = () => {
 
             {/* Upload Section */}
             <div className="upload-section">
+              <div className="section-header">
+                <div className="section-icon">
+                  <FileUp size={20} />
+                </div>
+                <div>
+                  <h3 className="section-title">File Analysis Upload</h3>
+                  <p className="section-description">
+                    Upload image or video files for AI-powered accident detection analysis
+                  </p>
+                </div>
+              </div>
+
               <div 
                 className={`upload-area ${
                   isDragging ? 'dragging' : 
@@ -508,12 +497,12 @@ const UserUploadPage = () => {
                 
                 <h3 className="upload-title">
                   {selectedFile ? selectedFile.name : 
-                   (isDragging ? 'Drop your file here' : 'Advanced File Analysis')}
+                   (isDragging ? 'Drop file to upload' : 'File Upload Area')}
                 </h3>
                 
                 <p className="upload-subtitle">
-                  {selectedFile ? 'File ready for AI analysis' :
-                   (isDragging ? 'Release to upload' : 'Upload images or videos for intelligent accident detection')}
+                  {selectedFile ? 'Ready for analysis' :
+                   (isDragging ? 'Release to select file' : 'Select or drag files for processing')}
                 </p>
                 
                 {!selectedFile && (
@@ -527,12 +516,12 @@ const UserUploadPage = () => {
                     />
                     
                     <label htmlFor="file-upload" className="file-input-label">
-                      <Upload size={20} />
-                      Choose File
+                      <Upload size={18} />
+                      Select File
                     </label>
                     
                     <p className="upload-hint">
-                      Supported: {Object.values(acceptedTypes).join(', ')} • Max: 25MB • AI-Powered Analysis
+                      Accepted formats: {Object.values(acceptedTypes).join(', ')} | Maximum size: 25MB
                     </p>
                   </>
                 )}
@@ -542,36 +531,43 @@ const UserUploadPage = () => {
                     {filePreview && (
                       <img 
                         src={filePreview} 
-                        alt="Preview" 
+                        alt="File Preview" 
                         className="file-preview"
                       />
                     )}
                     
                     <div className="file-details">
-                      <p><strong>Filename:</strong> {selectedFile.name}</p>
-                      <p><strong>Size:</strong> {formatFileSize(selectedFile.size)}</p>
-                      <p><strong>Type:</strong> {selectedFile.type}</p>
+                      <div className="file-detail-row">
+                        <span className="detail-label">Filename:</span>
+                        <span className="detail-value">{selectedFile.name}</span>
+                      </div>
+                      <div className="file-detail-row">
+                        <span className="detail-label">Size:</span>
+                        <span className="detail-value">{formatFileSize(selectedFile.size)}</span>
+                      </div>
+                      <div className="file-detail-row">
+                        <span className="detail-label">Type:</span>
+                        <span className="detail-value">{selectedFile.type}</span>
+                      </div>
                     </div>
                     
                     <div className="file-actions">
                       <button
                         onClick={handleUpload}
                         disabled={isUploading || apiStatus !== 'ready'}
-                        className={`btn ${
-                          isUploading || apiStatus !== 'ready' 
-                            ? '' 
-                            : 'btn-primary'
+                        className={`btn btn-primary ${
+                          isUploading || apiStatus !== 'ready' ? 'disabled' : ''
                         }`}
                       >
                         {isUploading ? (
                           <>
-                            <Activity size={20} className="animate-spin" />
-                            Analyzing... {uploadProgress}%
+                            <div className="btn-spinner"></div>
+                            Processing {uploadProgress}%
                           </>
                         ) : (
                           <>
-                            <Zap size={20} />
-                            Start AI Analysis
+                            <Zap size={18} />
+                            Start Analysis
                           </>
                         )}
                       </button>
@@ -581,7 +577,7 @@ const UserUploadPage = () => {
                         disabled={isUploading}
                         className="btn btn-secondary"
                       >
-                        Clear File
+                        Clear Selection
                       </button>
                     </div>
                   </div>
@@ -594,7 +590,7 @@ const UserUploadPage = () => {
               <div className="progress-section">
                 <div className="progress-header">
                   <div className="progress-spinner"></div>
-                  <span className="progress-text">AI Processing in Progress...</span>
+                  <span className="progress-text">Analysis in Progress</span>
                 </div>
                 <div className="progress-bar">
                   <div 
@@ -603,7 +599,7 @@ const UserUploadPage = () => {
                   ></div>
                 </div>
                 <p className="progress-label">
-                  {uploadProgress}% • Advanced neural network analysis
+                  {uploadProgress}% • Processing with neural network analysis
                 </p>
               </div>
             )}
@@ -611,21 +607,25 @@ const UserUploadPage = () => {
             {/* Analysis Results */}
             {analysisResult && (
               <div className="results-section">
-                <div className="results-header">
-                  <div className="results-icon">
-                    <Target size={24} />
+                <div className="section-header">
+                  <div className="section-icon">
+                    <Target size={20} />
                   </div>
-                  <h3 className="results-title">AI Analysis Results</h3>
+                  <div>
+                    <h3 className="section-title">Analysis Results</h3>
+                  </div>
                 </div>
                 
                 <div className={`result-alert ${
                   analysisResult.accident_detected ? 'accident' : 'safe'
                 }`}>
                   <div className="result-content">
-                    <div className="result-emoji">
-                      {analysisResult.accident_detected ? '🚨' : '✅'}
+                    <div className="result-icon">
+                      {analysisResult.accident_detected ? 
+                        <XCircle size={24} /> : <CheckCircle size={24} />
+                      }
                     </div>
-                    <div>
+                    <div className="result-info">
                       <h4 className={`result-status ${
                         analysisResult.accident_detected ? 'accident' : 'safe'
                       }`}>
@@ -634,7 +634,7 @@ const UserUploadPage = () => {
                       <p className={`result-confidence ${
                         analysisResult.accident_detected ? 'accident' : 'safe'
                       }`}>
-                        AI Confidence: {(analysisResult.confidence * 100).toFixed(1)}%
+                        Confidence Level: {(analysisResult.confidence * 100).toFixed(1)}%
                       </p>
                     </div>
                   </div>
@@ -644,38 +644,62 @@ const UserUploadPage = () => {
                   <div className="result-card">
                     <div className="result-card-header">
                       <div className="result-card-icon">
-                        <FileText size={20} />
+                        <FileText size={18} />
                       </div>
-                      <span className="result-card-title">File Analysis</span>
+                      <span className="result-card-title">File Information</span>
                     </div>
                     <div className="result-card-content">
-                      <p><strong>Filename:</strong> {analysisResult.filename}</p>
-                      <p><strong>File Size:</strong> {formatFileSize(analysisResult.file_size)}</p>
-                      <p><strong>Content Type:</strong> {analysisResult.content_type}</p>
-                      <p><strong>Predicted Class:</strong> {analysisResult.predicted_class}</p>
+                      <div className="result-detail">
+                        <span className="detail-label">Filename:</span>
+                        <span className="detail-value">{analysisResult.filename}</span>
+                      </div>
+                      <div className="result-detail">
+                        <span className="detail-label">File Size:</span>
+                        <span className="detail-value">{formatFileSize(analysisResult.file_size)}</span>
+                      </div>
+                      <div className="result-detail">
+                        <span className="detail-label">Content Type:</span>
+                        <span className="detail-value">{analysisResult.content_type}</span>
+                      </div>
+                      <div className="result-detail">
+                        <span className="detail-label">Classification:</span>
+                        <span className="detail-value">{analysisResult.predicted_class}</span>
+                      </div>
                     </div>
                   </div>
                   
                   <div className="result-card">
                     <div className="result-card-header">
                       <div className="result-card-icon">
-                        <Clock size={20} />
+                        <Clock size={18} />
                       </div>
                       <span className="result-card-title">Processing Metrics</span>
                     </div>
                     <div className="result-card-content">
-                      <p><strong>Analysis Time:</strong> {analysisResult.processing_time?.toFixed(3)}s</p>
-                      <p><strong>Frames Analyzed:</strong> {analysisResult.frames_analyzed || 1}</p>
-                      <p><strong>Model Version:</strong> v2.1.0</p>
-                      <p><strong>Processing Mode:</strong> Real-time</p>
+                      <div className="result-detail">
+                        <span className="detail-label">Analysis Time:</span>
+                        <span className="detail-value">{analysisResult.processing_time?.toFixed(3)}s</span>
+                      </div>
+                      <div className="result-detail">
+                        <span className="detail-label">Frames Analyzed:</span>
+                        <span className="detail-value">{analysisResult.frames_analyzed || 1}</span>
+                      </div>
+                      <div className="result-detail">
+                        <span className="detail-label">Model Version:</span>
+                        <span className="detail-value">v2.1.0</span>
+                      </div>
+                      <div className="result-detail">
+                        <span className="detail-label">Processing Type:</span>
+                        <span className="detail-value">Real-time</span>
+                      </div>
                     </div>
                   </div>
                 </div>
                 
                 {analysisResult.details && (
                   <div className="result-details">
-                    <h4><strong>Analysis Details:</strong></h4>
-                    <p>{analysisResult.details}</p>
+                    <h4 className="details-title">Additional Analysis Information</h4>
+                    <p className="details-content">{analysisResult.details}</p>
                   </div>
                 )}
               </div>
@@ -684,21 +708,23 @@ const UserUploadPage = () => {
             {/* Upload History */}
             {uploadHistory.length > 0 && (
               <div className="history-section">
-                <div className="history-header">
-                  <div className="history-icon">
-                    <BarChart3 size={24} />
+                <div className="section-header">
+                  <div className="section-icon">
+                    <BarChart3 size={20} />
                   </div>
-                  <h3 className="history-title">Analysis History</h3>
+                  <div>
+                    <h3 className="section-title">Recent Analysis History</h3>
+                  </div>
                 </div>
                 <div className="history-list">
                   {uploadHistory.slice(0, 5).map((item) => (
                     <div key={item.id} className="history-item">
                       <div className="history-info">
                         <div className="history-file-icon">
-                          <FileText size={20} />
+                          <FileText size={16} />
                         </div>
                         <div className="history-details">
-                          <h4>{item.filename}</h4>
+                          <h4 className="history-filename">{item.filename}</h4>
                           <p className="history-timestamp">
                             {new Date(item.timestamp).toLocaleString()}
                           </p>
@@ -708,7 +734,7 @@ const UserUploadPage = () => {
                         <span className={`history-badge ${
                           item.accident_detected ? 'accident' : 'safe'
                         }`}>
-                          {item.accident_detected ? '🚨 ACCIDENT' : '✅ SAFE'}
+                          {item.accident_detected ? 'ACCIDENT' : 'SAFE'}
                         </span>
                         <p className="history-confidence">
                           {(item.confidence * 100).toFixed(1)}% confidence
@@ -721,7 +747,7 @@ const UserUploadPage = () => {
                 {uploadHistory.length > 5 && (
                   <div className="view-all-section">
                     <a href="/dashboard" className="view-all-link">
-                      <Eye size={20} />
+                      <Eye size={16} />
                       View Complete History
                     </a>
                   </div>
@@ -731,21 +757,29 @@ const UserUploadPage = () => {
 
             {/* Navigation Section */}
             <div className="navigation-section">
-              <h3 className="nav-title">System Navigation</h3>
+              <div className="section-header">
+                <div className="section-icon">
+                  <Settings size={20} />
+                </div>
+                <div>
+                  <h3 className="section-title">System Navigation</h3>
+                  <p className="section-description">Access other system modules and features</p>
+                </div>
+              </div>
               <div className="navigation-grid">
                 <a href="/dashboard" className="nav-link">
                   <div className="nav-icon">
-                    <BarChart3 size={24} />
+                    <BarChart3 size={20} />
                   </div>
                   <div className="nav-text">
                     <div className="nav-link-title">Analytics Dashboard</div>
-                    <div className="nav-link-desc">Comprehensive data insights</div>
+                    <div className="nav-link-desc">System metrics and reports</div>
                   </div>
                 </a>
                 
                 <a href="/live" className="nav-link">
                   <div className="nav-icon">
-                    <Eye size={24} />
+                    <Eye size={20} />
                   </div>
                   <div className="nav-text">
                     <div className="nav-link-title">Live Detection</div>
@@ -755,21 +789,21 @@ const UserUploadPage = () => {
                 
                 <a href="/notification" className="nav-link">
                   <div className="nav-icon">
-                    <AlertCircle size={24} />
+                    <AlertCircle size={20} />
                   </div>
                   <div className="nav-text">
-                    <div className="nav-link-title">Alert Center</div>
-                    <div className="nav-link-desc">Notification management</div>
+                    <div className="nav-link-title">Notifications</div>
+                    <div className="nav-link-desc">Alert management</div>
                   </div>
                 </a>
                 
                 <a href="/settings" className="nav-link">
                   <div className="nav-icon">
-                    <Settings size={24} />
+                    <Settings size={20} />
                   </div>
                   <div className="nav-text">
                     <div className="nav-link-title">System Settings</div>
-                    <div className="nav-link-desc">Configure preferences</div>
+                    <div className="nav-link-desc">Configuration options</div>
                   </div>
                 </a>
               </div>
@@ -781,23 +815,22 @@ const UserUploadPage = () => {
       <style jsx>{`
         .admin-container {
           min-height: 100vh;
-          background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
-          padding: 2rem;
+          background: #f8f9fa;
+          padding: 1.5rem;
         }
         
         .admin-wrapper {
-          max-width: 1400px;
+          max-width: 1200px;
           margin: 0 auto;
         }
         
         .admin-header {
-          background: rgba(255, 255, 255, 0.95);
-          backdrop-filter: blur(15px);
-          border-radius: 24px;
+          background: white;
+          border-radius: 8px;
           padding: 2rem;
           margin-bottom: 2rem;
-          box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
-          border: 1px solid rgba(255, 255, 255, 0.2);
+          box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+          border: 1px solid #dee2e6;
         }
         
         .header-content {
@@ -817,8 +850,8 @@ const UserUploadPage = () => {
         .header-icon {
           width: 48px;
           height: 48px;
-          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-          border-radius: 12px;
+          background: #495057;
+          border-radius: 8px;
           display: flex;
           align-items: center;
           justify-content: center;
@@ -826,38 +859,46 @@ const UserUploadPage = () => {
         }
         
         .header-text h1 {
-          font-size: 2rem;
-          font-weight: 800;
-          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-          -webkit-background-clip: text;
-          -webkit-text-fill-color: transparent;
+          font-size: 1.75rem;
+          font-weight: 600;
+          color: #212529;
           margin: 0;
         }
         
         .header-text p {
-          color: #718096;
+          color: #6c757d;
           margin: 0.25rem 0 0 0;
+          font-size: 0.875rem;
         }
         
         .user-badge {
           display: flex;
           align-items: center;
-          gap: 0.75rem;
-          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-          color: white;
-          padding: 0.75rem 1.5rem;
-          border-radius: 50px;
+          gap: 0.5rem;
+          background: #f8f9fa;
+          border: 1px solid #dee2e6;
+          color: #495057;
+          padding: 0.5rem 1rem;
+          border-radius: 6px;
+          font-size: 0.875rem;
+        }
+        
+        .user-name {
           font-weight: 600;
+          color: #212529;
+        }
+        
+        .user-role {
+          color: #6c757d;
         }
         
         .auth-error {
-          background: rgba(255, 255, 255, 0.95);
-          backdrop-filter: blur(15px);
-          border-radius: 24px;
+          background: white;
+          border-radius: 8px;
           padding: 2.5rem;
           margin-bottom: 2rem;
-          box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
-          border: 1px solid rgba(239, 68, 68, 0.2);
+          box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+          border: 1px solid #f8d7da;
           text-align: center;
         }
         
@@ -867,10 +908,10 @@ const UserUploadPage = () => {
         }
         
         .auth-error-icon {
-          width: 80px;
-          height: 80px;
-          background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
-          border-radius: 20px;
+          width: 64px;
+          height: 64px;
+          background: #dc3545;
+          border-radius: 8px;
           display: flex;
           align-items: center;
           justify-content: center;
@@ -880,15 +921,15 @@ const UserUploadPage = () => {
         
         .auth-error-title {
           font-size: 1.5rem;
-          font-weight: 700;
-          color: #1a202c;
+          font-weight: 600;
+          color: #212529;
           margin-bottom: 1rem;
         }
         
         .auth-error-text {
-          color: #718096;
+          color: #6c757d;
           margin-bottom: 2rem;
-          line-height: 1.6;
+          line-height: 1.5;
         }
         
         .auth-error-buttons {
@@ -899,63 +940,83 @@ const UserUploadPage = () => {
         }
         
         .btn {
-          padding: 0.75rem 2rem;
-          border-radius: 12px;
-          font-weight: 600;
+          padding: 0.75rem 1.5rem;
+          border-radius: 6px;
+          font-weight: 500;
           text-decoration: none;
           cursor: pointer;
           border: none;
-          transition: all 0.3s ease;
-          position: relative;
-          overflow: hidden;
+          transition: all 0.2s ease;
           display: inline-flex;
           align-items: center;
           gap: 0.5rem;
+          font-size: 0.875rem;
         }
         
         .btn-primary {
-          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+          background: #007bff;
           color: white;
-          box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+          border: 1px solid #007bff;
         }
         
-        .btn-primary:hover {
-          transform: translateY(-2px);
-          box-shadow: 0 15px 30px rgba(102, 126, 234, 0.4);
+        .btn-primary:hover:not(.disabled) {
+          background: #0056b3;
+          border-color: #0056b3;
         }
         
         .btn-secondary {
-          background: linear-gradient(135deg, #718096 0%, #4a5568 100%);
+          background: #6c757d;
           color: white;
-          box-shadow: 0 10px 20px rgba(113, 128, 150, 0.3);
+          border: 1px solid #6c757d;
         }
         
         .btn-secondary:hover {
-          transform: translateY(-2px);
-          box-shadow: 0 15px 30px rgba(113, 128, 150, 0.4);
+          background: #545b62;
+          border-color: #545b62;
         }
         
+        .btn.disabled,
         .btn:disabled {
-          background: #e2e8f0;
-          color: #a0aec0;
+          background: #e9ecef;
+          color: #6c757d;
           cursor: not-allowed;
-          transform: none;
-          box-shadow: none;
+          border-color: #dee2e6;
+        }
+        
+        .btn-spinner {
+          width: 16px;
+          height: 16px;
+          border: 2px solid transparent;
+          border-top-color: currentColor;
+          border-radius: 50%;
+          animation: spin 1s linear infinite;
         }
         
         .status-grid {
           display: grid;
-          grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+          grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
           gap: 1.5rem;
           margin-bottom: 2rem;
         }
         
         .status-card {
-          border-radius: 20px;
+          background: white;
+          border-radius: 8px;
           padding: 1.5rem;
-          box-shadow: 0 15px 30px rgba(0, 0, 0, 0.1);
-          border: 1px solid rgba(255, 255, 255, 0.2);
-          backdrop-filter: blur(15px);
+          box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+          border: 1px solid #dee2e6;
+        }
+        
+        .status-card.danger {
+          border-left: 4px solid #dc3545;
+        }
+        
+        .status-card.warning {
+          border-left: 4px solid #ffc107;
+        }
+        
+        .status-card.normal {
+          border-left: 4px solid #28a745;
         }
         
         .status-card-content {
@@ -965,18 +1026,19 @@ const UserUploadPage = () => {
         }
         
         .status-icon-container {
-          width: 50px;
-          height: 50px;
-          border-radius: 12px;
+          width: 40px;
+          height: 40px;
+          background: #f8f9fa;
+          border-radius: 6px;
           display: flex;
           align-items: center;
           justify-content: center;
         }
         
         .status-card-icon {
-          width: 24px;
-          height: 24px;
-          color: white;
+          width: 20px;
+          height: 20px;
+          color: #495057;
         }
         
         .status-text {
@@ -984,13 +1046,14 @@ const UserUploadPage = () => {
         }
         
         .status-value {
-          font-size: 1.25rem;
-          font-weight: 700;
+          font-size: 1rem;
+          font-weight: 600;
+          color: #212529;
           margin: 0 0 0.25rem 0;
         }
         
         .status-title {
-          color: rgba(255, 255, 255, 0.8);
+          color: #6c757d;
           font-size: 0.875rem;
           margin: 0;
         }
@@ -1000,99 +1063,133 @@ const UserUploadPage = () => {
         }
         
         .indicator-success {
-          width: 24px;
-          height: 24px;
-          color: #10b981;
+          width: 20px;
+          height: 20px;
+          color: #28a745;
         }
         
         .indicator-error {
-          width: 24px;
-          height: 24px;
-          color: #ef4444;
+          width: 20px;
+          height: 20px;
+          color: #dc3545;
         }
         
         .indicator-warning {
-          width: 24px;
-          height: 24px;
-          color: #f59e0b;
+          width: 20px;
+          height: 20px;
+          color: #ffc107;
         }
         
         .error-alert {
-          background: rgba(255, 255, 255, 0.95);
-          backdrop-filter: blur(15px);
-          border-radius: 16px;
-          padding: 1.5rem;
+          background: #f8d7da;
+          border: 1px solid #f5c6cb;
+          border-radius: 6px;
+          padding: 1rem;
           margin-bottom: 2rem;
-          border: 1px solid rgba(239, 68, 68, 0.2);
         }
         
         .error-content {
           display: flex;
           align-items: center;
-          gap: 1rem;
+          gap: 0.75rem;
         }
         
         .error-text {
-          color: #dc2626;
-          font-weight: 600;
+          color: #721c24;
+          font-weight: 500;
         }
         
-        .upload-section {
-          background: rgba(255, 255, 255, 0.95);
-          backdrop-filter: blur(15px);
-          border-radius: 24px;
+        .upload-section,
+        .results-section,
+        .history-section,
+        .navigation-section,
+        .progress-section {
+          background: white;
+          border-radius: 8px;
           padding: 2rem;
           margin-bottom: 2rem;
-          box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
-          border: 1px solid rgba(255, 255, 255, 0.2);
+          box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+          border: 1px solid #dee2e6;
+        }
+        
+        .progress-section {
+          border-left: 4px solid #007bff;
+        }
+        
+        .section-header {
+          margin-bottom: 1.5rem;
+          padding-bottom: 1rem;
+          border-bottom: 1px solid #dee2e6;
+          display: flex;
+          align-items: flex-start;
+          gap: 1rem;
+        }
+        
+        .section-icon {
+          width: 32px;
+          height: 32px;
+          background: #f8f9fa;
+          border-radius: 6px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          color: #495057;
+          flex-shrink: 0;
+        }
+        
+        .section-title {
+          font-size: 1.25rem;
+          font-weight: 600;
+          color: #212529;
+          margin: 0;
+        }
+        
+        .section-description {
+          color: #6c757d;
+          margin: 0.5rem 0 0 0;
+          font-size: 0.875rem;
         }
         
         .upload-area {
-          border: 2px dashed #cbd5e0;
-          border-radius: 20px;
+          border: 2px dashed #dee2e6;
+          border-radius: 8px;
           padding: 3rem 2rem;
           text-align: center;
-          transition: all 0.3s ease;
-          background: linear-gradient(135deg, #f7fafc 0%, #edf2f7 100%);
+          transition: all 0.2s ease;
+          background: #f8f9fa;
         }
         
         .upload-area.dragging {
-          border-color: #667eea;
-          background: linear-gradient(135deg, #ebf4ff 0%, #dbeafe 100%);
-          transform: scale(1.02);
+          border-color: #007bff;
+          background: #e3f2fd;
         }
         
         .upload-area.has-file {
-          border-color: #10b981;
-          background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%);
+          border-color: #28a745;
+          background: #f8fff9;
         }
         
         .upload-icon {
-          width: 80px;
-          height: 80px;
-          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-          border-radius: 20px;
+          width: 64px;
+          height: 64px;
+          background: #495057;
+          border-radius: 8px;
           display: flex;
           align-items: center;
           justify-content: center;
           color: white;
           margin: 0 auto 1.5rem;
-          transition: all 0.3s ease;
-        }
-        
-        .upload-area.dragging .upload-icon {
-          transform: scale(1.1);
         }
         
         .upload-title {
-          font-size: 1.5rem;
-          font-weight: 700;
-          color: #2d3748;
+          font-size: 1.25rem;
+          font-weight: 600;
+          color: #212529;
           margin-bottom: 0.5rem;
         }
         
         .upload-subtitle {
-          color: #718096;
+          color: #6c757d;
           margin-bottom: 2rem;
         }
         
@@ -1104,23 +1201,23 @@ const UserUploadPage = () => {
           display: inline-flex;
           align-items: center;
           gap: 0.5rem;
-          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+          background: #007bff;
           color: white;
-          padding: 0.75rem 2rem;
-          border-radius: 12px;
+          padding: 0.75rem 1.5rem;
+          border-radius: 6px;
           cursor: pointer;
-          font-weight: 600;
-          transition: all 0.3s ease;
-          box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+          font-weight: 500;
+          transition: background-color 0.2s ease;
+          border: 1px solid #007bff;
         }
         
         .file-input-label:hover {
-          transform: translateY(-2px);
-          box-shadow: 0 15px 30px rgba(102, 126, 234, 0.4);
+          background: #0056b3;
+          border-color: #0056b3;
         }
         
         .upload-hint {
-          color: #a0aec0;
+          color: #6c757d;
           font-size: 0.875rem;
           margin-top: 1rem;
         }
@@ -1128,17 +1225,40 @@ const UserUploadPage = () => {
         .file-preview {
           max-width: 300px;
           max-height: 200px;
-          border-radius: 12px;
+          border-radius: 6px;
           margin: 0 auto 1.5rem;
-          box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
+          border: 1px solid #dee2e6;
         }
         
         .file-details {
-          background: rgba(247, 250, 252, 0.8);
-          border-radius: 12px;
+          background: #f8f9fa;
+          border: 1px solid #dee2e6;
+          border-radius: 6px;
           padding: 1rem;
           margin-bottom: 1.5rem;
-          color: #4a5568;
+          text-align: left;
+          max-width: 400px;
+          margin-left: auto;
+          margin-right: auto;
+        }
+        
+        .file-detail-row {
+          display: flex;
+          justify-content: space-between;
+          margin-bottom: 0.5rem;
+        }
+        
+        .file-detail-row:last-child {
+          margin-bottom: 0;
+        }
+        
+        .detail-label {
+          font-weight: 500;
+          color: #495057;
+        }
+        
+        .detail-value {
+          color: #212529;
         }
         
         .file-actions {
@@ -1146,16 +1266,6 @@ const UserUploadPage = () => {
           gap: 1rem;
           justify-content: center;
           flex-wrap: wrap;
-        }
-        
-        .progress-section {
-          background: rgba(255, 255, 255, 0.95);
-          backdrop-filter: blur(15px);
-          border-radius: 20px;
-          padding: 2rem;
-          margin-bottom: 2rem;
-          box-shadow: 0 15px 30px rgba(0, 0, 0, 0.1);
-          border: 1px solid rgba(59, 130, 246, 0.2);
         }
         
         .progress-header {
@@ -1166,10 +1276,10 @@ const UserUploadPage = () => {
         }
         
         .progress-spinner {
-          width: 40px;
-          height: 40px;
-          border: 3px solid #e5e7eb;
-          border-top-color: #3b82f6;
+          width: 32px;
+          height: 32px;
+          border: 3px solid #e9ecef;
+          border-top-color: #007bff;
           border-radius: 50%;
           animation: spin 1s linear infinite;
         }
@@ -1177,132 +1287,101 @@ const UserUploadPage = () => {
         .progress-text {
           font-size: 1.125rem;
           font-weight: 600;
-          color: #1e40af;
+          color: #212529;
         }
         
         .progress-bar {
           width: 100%;
-          height: 12px;
-          background: #e5e7eb;
-          border-radius: 6px;
+          height: 8px;
+          background: #e9ecef;
+          border-radius: 4px;
           overflow: hidden;
         }
         
         .progress-fill {
           height: 100%;
-          background: linear-gradient(90deg, #3b82f6 0%, #1d4ed8 100%);
+          background: #007bff;
           transition: width 0.3s ease;
-          border-radius: 6px;
+          border-radius: 4px;
         }
         
         .progress-label {
           text-align: center;
-          color: #1d4ed8;
-          font-weight: 600;
+          color: #495057;
+          font-size: 0.875rem;
           margin-top: 1rem;
         }
         
-        .results-section {
-          background: rgba(255, 255, 255, 0.95);
-          backdrop-filter: blur(15px);
-          border-radius: 24px;
-          padding: 2rem;
-          margin-bottom: 2rem;
-          box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
-          border: 1px solid rgba(255, 255, 255, 0.2);
-        }
-        
-        .results-header {
-          display: flex;
-          align-items: center;
-          gap: 1rem;
-          margin-bottom: 2rem;
-        }
-        
-        .results-icon {
-          width: 50px;
-          height: 50px;
-          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-          border-radius: 12px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          color: white;
-        }
-        
-        .results-title {
-          font-size: 1.5rem;
-          font-weight: 700;
-          color: #2d3748;
-          margin: 0;
-        }
-        
         .result-alert {
-          border-radius: 16px;
-          padding: 2rem;
+          border-radius: 6px;
+          padding: 1.5rem;
           margin-bottom: 2rem;
           border: 1px solid;
         }
         
         .result-alert.accident {
-          background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%);
-          border-color: #fecaca;
+          background: #f8d7da;
+          border-color: #f5c6cb;
         }
         
         .result-alert.safe {
-          background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
-          border-color: #bbf7d0;
+          background: #d4edda;
+          border-color: #c3e6cb;
         }
         
         .result-content {
           display: flex;
           align-items: center;
-          gap: 1.5rem;
+          gap: 1rem;
         }
         
-        .result-emoji {
-          font-size: 3rem;
+        .result-icon {
+          color: inherit;
+        }
+        
+        .result-info {
+          flex: 1;
         }
         
         .result-status {
-          font-size: 1.5rem;
-          font-weight: 800;
+          font-size: 1.25rem;
+          font-weight: 700;
           margin-bottom: 0.5rem;
         }
         
         .result-status.accident {
-          color: #dc2626;
+          color: #721c24;
         }
         
         .result-status.safe {
-          color: #059669;
+          color: #155724;
         }
         
         .result-confidence {
-          font-size: 1rem;
-          font-weight: 600;
+          font-size: 0.875rem;
+          font-weight: 500;
+          margin: 0;
         }
         
         .result-confidence.accident {
-          color: #b91c1c;
+          color: #721c24;
         }
         
         .result-confidence.safe {
-          color: #047857;
+          color: #155724;
         }
         
         .result-grid {
           display: grid;
-          grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+          grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
           gap: 1.5rem;
         }
         
         .result-card {
-          background: linear-gradient(135deg, #f7fafc 0%, #edf2f7 100%);
-          border-radius: 16px;
+          background: #f8f9fa;
+          border: 1px solid #dee2e6;
+          border-radius: 6px;
           padding: 1.5rem;
-          border: 1px solid rgba(255, 255, 255, 0.5);
-          backdrop-filter: blur(10px);
         }
         
         .result-card-header {
@@ -1310,13 +1389,15 @@ const UserUploadPage = () => {
           align-items: center;
           gap: 0.75rem;
           margin-bottom: 1rem;
+          padding-bottom: 0.75rem;
+          border-bottom: 1px solid #dee2e6;
         }
         
         .result-card-icon {
-          width: 40px;
-          height: 40px;
-          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-          border-radius: 10px;
+          width: 32px;
+          height: 32px;
+          background: #495057;
+          border-radius: 6px;
           display: flex;
           align-items: center;
           justify-content: center;
@@ -1324,57 +1405,45 @@ const UserUploadPage = () => {
         }
         
         .result-card-title {
-          font-weight: 700;
-          color: #2d3748;
-          font-size: 1.125rem;
+          font-weight: 600;
+          color: #212529;
+          font-size: 1rem;
         }
         
         .result-card-content {
-          color: #4a5568;
-          line-height: 1.6;
+          color: #495057;
+          line-height: 1.5;
+        }
+        
+        .result-detail {
+          display: flex;
+          justify-content: space-between;
+          margin-bottom: 0.5rem;
+        }
+        
+        .result-detail:last-child {
+          margin-bottom: 0;
         }
         
         .result-details {
-          background: linear-gradient(135deg, #f7fafc 0%, #edf2f7 100%);
-          border-radius: 12px;
+          background: #f8f9fa;
+          border: 1px solid #dee2e6;
+          border-radius: 6px;
           padding: 1.5rem;
           margin-top: 1.5rem;
-          border: 1px solid rgba(255, 255, 255, 0.5);
         }
         
-        .history-section {
-          background: rgba(255, 255, 255, 0.95);
-          backdrop-filter: blur(15px);
-          border-radius: 24px;
-          padding: 2rem;
-          margin-bottom: 2rem;
-          box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
-          border: 1px solid rgba(255, 255, 255, 0.2);
+        .details-title {
+          font-weight: 600;
+          color: #212529;
+          margin-bottom: 0.75rem;
+          font-size: 1rem;
         }
         
-        .history-header {
-          display: flex;
-          align-items: center;
-          gap: 1rem;
-          margin-bottom: 2rem;
-        }
-        
-        .history-icon {
-          width: 50px;
-          height: 50px;
-          background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-          border-radius: 12px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          color: white;
-        }
-        
-        .history-title {
-          font-size: 1.5rem;
-          font-weight: 700;
-          color: #2d3748;
+        .details-content {
+          color: #495057;
           margin: 0;
+          line-height: 1.5;
         }
         
         .history-list {
@@ -1387,16 +1456,10 @@ const UserUploadPage = () => {
           display: flex;
           align-items: center;
           justify-content: space-between;
-          padding: 1.5rem;
-          background: linear-gradient(135deg, #f7fafc 0%, #edf2f7 100%);
-          border-radius: 16px;
-          border: 1px solid rgba(255, 255, 255, 0.5);
-          transition: all 0.3s ease;
-        }
-        
-        .history-item:hover {
-          transform: translateY(-2px);
-          box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
+          padding: 1rem;
+          background: #f8f9fa;
+          border: 1px solid #dee2e6;
+          border-radius: 6px;
         }
         
         .history-info {
@@ -1406,25 +1469,30 @@ const UserUploadPage = () => {
         }
         
         .history-file-icon {
-          width: 45px;
-          height: 45px;
-          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-          border-radius: 12px;
+          width: 36px;
+          height: 36px;
+          background: #495057;
+          border-radius: 6px;
           display: flex;
           align-items: center;
           justify-content: center;
           color: white;
         }
         
-        .history-details h4 {
-          font-weight: 600;
-          color: #2d3748;
+        .history-details {
+          
+        }
+        
+        .history-filename {
+          font-weight: 500;
+          color: #212529;
           margin: 0 0 0.25rem 0;
+          font-size: 0.875rem;
         }
         
         .history-timestamp {
-          font-size: 0.875rem;
-          color: #718096;
+          font-size: 0.75rem;
+          color: #6c757d;
           margin: 0;
         }
         
@@ -1433,132 +1501,108 @@ const UserUploadPage = () => {
         }
         
         .history-badge {
-          padding: 0.5rem 1rem;
-          border-radius: 25px;
-          font-size: 0.875rem;
+          padding: 0.25rem 0.75rem;
+          border-radius: 4px;
+          font-size: 0.75rem;
           font-weight: 600;
-          margin-bottom: 0.5rem;
+          margin-bottom: 0.25rem;
           display: inline-block;
         }
         
         .history-badge.accident {
-          background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%);
-          color: #991b1b;
+          background: #f8d7da;
+          color: #721c24;
+          border: 1px solid #f5c6cb;
         }
         
         .history-badge.safe {
-          background: linear-gradient(135deg, #dcfce7 0%, #bbf7d0 100%);
-          color: #166534;
+          background: #d4edda;
+          color: #155724;
+          border: 1px solid #c3e6cb;
         }
         
         .history-confidence {
-          font-size: 0.875rem;
-          color: #718096;
+          font-size: 0.75rem;
+          color: #6c757d;
+          margin: 0;
         }
         
         .view-all-section {
           text-align: center;
-          margin-top: 2rem;
-          padding-top: 2rem;
-          border-top: 1px solid #e2e8f0;
+          margin-top: 1.5rem;
+          padding-top: 1.5rem;
+          border-top: 1px solid #dee2e6;
         }
         
         .view-all-link {
           display: inline-flex;
           align-items: center;
           gap: 0.5rem;
-          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-          color: white;
-          padding: 0.75rem 2rem;
-          border-radius: 25px;
+          background: white;
+          color: #007bff;
+          padding: 0.5rem 1rem;
+          border: 1px solid #007bff;
+          border-radius: 6px;
           text-decoration: none;
-          font-weight: 600;
-          transition: all 0.3s ease;
-          box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+          font-weight: 500;
+          transition: all 0.2s ease;
+          font-size: 0.875rem;
         }
         
         .view-all-link:hover {
-          transform: translateY(-2px);
-          box-shadow: 0 15px 30px rgba(102, 126, 234, 0.4);
-        }
-        
-        .navigation-section {
-          background: rgba(255, 255, 255, 0.95);
-          backdrop-filter: blur(15px);
-          border-radius: 24px;
-          padding: 2rem;
-          box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
-          border: 1px solid rgba(255, 255, 255, 0.2);
-        }
-        
-        .nav-title {
-          text-align: center;
-          font-size: 1.25rem;
-          font-weight: 700;
-          color: #2d3748;
-          margin-bottom: 2rem;
+          background: #007bff;
+          color: white;
         }
         
         .navigation-grid {
           display: grid;
-          grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+          grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
           gap: 1rem;
         }
         
         .nav-link {
           display: flex;
-          flex-direction: column;
           align-items: center;
           gap: 1rem;
-          padding: 2rem 1rem;
-          background: linear-gradient(135deg, #f7fafc 0%, #edf2f7 100%);
-          border-radius: 20px;
+          padding: 1.5rem;
+          background: #f8f9fa;
+          border: 1px solid #dee2e6;
+          border-radius: 6px;
           text-decoration: none;
-          color: #2d3748;
-          font-weight: 600;
-          transition: all 0.3s ease;
-          border: 1px solid rgba(255, 255, 255, 0.5);
+          color: #212529;
+          transition: all 0.2s ease;
         }
         
         .nav-link:hover {
-          transform: translateY(-5px);
-          box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
-          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-          color: white;
+          background: #e9ecef;
+          text-decoration: none;
+          color: #212529;
         }
         
         .nav-icon {
-          width: 60px;
-          height: 60px;
-          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-          border-radius: 15px;
+          width: 40px;
+          height: 40px;
+          background: #495057;
+          border-radius: 6px;
           display: flex;
           align-items: center;
           justify-content: center;
           color: white;
-          transition: all 0.3s ease;
-        }
-        
-        .nav-link:hover .nav-icon {
-          background: rgba(255, 255, 255, 0.2);
+          flex-shrink: 0;
         }
         
         .nav-text {
-          text-align: center;
+          flex: 1;
         }
         
         .nav-link-title {
-          font-size: 1.125rem;
-          margin-bottom: 0.5rem;
+          font-weight: 600;
+          margin-bottom: 0.25rem;
         }
         
         .nav-link-desc {
           font-size: 0.875rem;
-          opacity: 0.8;
-        }
-        
-        .animate-spin {
-          animation: spin 1s linear infinite;
+          color: #6c757d;
         }
         
         @keyframes spin {
@@ -1566,9 +1610,18 @@ const UserUploadPage = () => {
           100% { transform: rotate(360deg); }
         }
         
+        @keyframes bounce {
+          0%, 80%, 100% { transform: scale(0); }
+          40% { transform: scale(1); }
+        }
+        
         @media (max-width: 768px) {
           .admin-container {
             padding: 1rem;
+          }
+          
+          .admin-header {
+            padding: 1.5rem;
           }
           
           .header-content {
@@ -1596,6 +1649,30 @@ const UserUploadPage = () => {
           
           .upload-area {
             padding: 2rem 1rem;
+          }
+          
+          .file-actions {
+            flex-direction: column;
+            align-items: center;
+          }
+          
+          .auth-error-buttons {
+            flex-direction: column;
+            align-items: center;
+          }
+          
+          .upload-section,
+          .results-section,
+          .history-section,
+          .navigation-section,
+          .progress-section {
+            padding: 1.5rem;
+          }
+          
+          .section-header {
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 0.75rem;
           }
         }
       `}</style>
