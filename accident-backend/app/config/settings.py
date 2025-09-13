@@ -109,11 +109,12 @@ def is_allowed_origin(origin: str) -> bool:
     
     return False
 
-# File validation
-ALLOWED_FILE_TYPES = {
+# File validation - FIXED: Changed from set to list
+ALLOWED_FILE_TYPES = [
     'image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp',
-    'video/mp4', 'video/avi', 'video/mov', 'video/quicktime', 'video/x-msvideo'
-}
+    'video/mp4', 'video/avi', 'video/mov', 'video/quicktime', 'video/x-msvideo',
+    'text/plain', 'text/csv'  # Added for admin uploads
+]
 MAX_FILE_SIZE = 50 * 1024 * 1024  # 50MB
 
 # Environment variables for production
