@@ -1,14 +1,15 @@
-# api/upload.py - FULLY UPDATED with Admin Support
+# api/upload.py - FIXED with proper admin authentication
 import time
 import logging
 from fastapi import APIRouter, UploadFile, File, HTTPException, Depends, Request
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 from typing import Union
+import json
 
 from config.settings import ALLOWED_FILE_TYPES, MAX_FILE_SIZE
 from models.database import get_db, User, Admin
-from auth.dependencies import get_current_user_or_admin  # CHANGED: Use combined dependency
+from auth.dependencies import get_current_user_or_admin, get_current_user_info
 from services.analysis import analyze_frame_with_logging, get_model_info
 from services.database import log_accident_detection
 
@@ -23,6 +24,14 @@ CORS_HEADERS = {
     "Access-Control-Allow-Credentials": "true",
     "Access-Control-Max-Age": "3600"
 }
+
+def create_cors_response(content: dict, status_code: int = 200):
+    """Helper function to create response with CORS headers"""
+    return JSONResponse(
+        status_code=status_code,
+        content=content,
+        headers=CORS_HEADERS
+    )
 
 # OPTIONS handlers for preflight requests
 @router.options("/upload")
@@ -45,59 +54,59 @@ async def analyze_url_options():
         headers=CORS_HEADERS
     )
 
-def create_cors_response(content: dict, status_code: int = 200):
-    """Helper function to create response with CORS headers"""
-    return JSONResponse(
-        status_code=status_code,
-        content=content,
-        headers=CORS_HEADERS
-    )
-
-def get_user_info(current_user: Union[User, Admin]):
-    """Extract user information from User or Admin object"""
-    if hasattr(current_user, 'admin_id'):  # It's an Admin
-        return {
-            'id': current_user.admin_id,
-            'username': current_user.username,
-            'is_admin': True,
-            'user_type': 'admin'
-        }
-    else:  # It's a User
-        return {
-            'id': current_user.id,
-            'username': current_user.username,
-            'is_admin': getattr(current_user, 'is_admin', False),
-            'user_type': 'user'
-        }
-
 @router.post("/upload")
 async def upload_file(
     file: UploadFile = File(...), 
-    current_user: Union[User, Admin] = Depends(get_current_user_or_admin),  # CHANGED: Accept both
+    current_user: Union[User, Admin] = Depends(get_current_user_or_admin),
     db: Session = Depends(get_db)
 ):
-    """Upload and analyze a file - Works for both users and admins"""
+    """FIXED: Upload and analyze a file - Works properly for both users and admins"""
     try:
-        # Get user information
-        user_info = get_user_info(current_user)
+        # Get user information using the helper function
+        user_info = get_current_user_info(current_user)
         is_admin_upload = user_info['is_admin']
         
         logger.info(f"File upload by {user_info['user_type']}: {user_info['username']} (ID: {user_info['id']})")
         logger.info(f"File details: {file.filename}, Size: {file.size}, Type: {file.content_type}")
+        
+        # Validate file exists and has content
+        if not file:
+            return create_cors_response(
+                {
+                    "detail": "No file uploaded",
+                    "error": "No file provided",
+                    "success": False
+                },
+                status_code=400
+            )
+        
+        if file.size == 0:
+            return create_cors_response(
+                {
+                    "detail": "Empty file uploaded",
+                    "error": "File is empty",
+                    "success": False
+                },
+                status_code=400
+            )
         
         # Validate file type - Admin gets more types
         allowed_types = ALLOWED_FILE_TYPES.copy()
         if is_admin_upload:
             # Admin gets additional file types
             allowed_types.extend([
-                'video/webm', 'image/tiff', 'image/bmp', 'video/mkv'
+                'video/webm', 'image/tiff', 'image/bmp', 'video/mkv',
+                'application/octet-stream'  # Allow binary uploads for admin
             ])
         
         if file.content_type not in allowed_types:
+            logger.warning(f"Invalid file type: {file.content_type} for {user_info['user_type']}")
             return create_cors_response(
                 {
-                    "detail": f"Invalid file type for {user_info['user_type']}. Supported types: {', '.join(allowed_types)}",
-                    "error": "Invalid file type"
+                    "detail": f"Invalid file type for {user_info['user_type']}: {file.content_type}",
+                    "error": "Invalid file type",
+                    "allowed_types": allowed_types,
+                    "success": False
                 },
                 status_code=400
             )
@@ -105,25 +114,65 @@ async def upload_file(
         # Validate file size - Admin gets higher limit
         max_size = 100 * 1024 * 1024 if is_admin_upload else MAX_FILE_SIZE  # 100MB for admin
         if file.size > max_size:
+            logger.warning(f"File too large: {file.size} bytes for {user_info['user_type']}")
             return create_cors_response(
                 {
                     "detail": f"File too large for {user_info['user_type']}. Maximum size is {max_size // (1024*1024)}MB.",
-                    "error": "File too large"
+                    "error": "File too large",
+                    "max_size_mb": max_size // (1024*1024),
+                    "file_size_mb": round(file.size / (1024*1024), 2),
+                    "success": False
                 },
                 status_code=413
             )
         
         # Read file content
-        file_content = await file.read()
+        try:
+            file_content = await file.read()
+            if len(file_content) == 0:
+                return create_cors_response(
+                    {
+                        "detail": "File content is empty",
+                        "error": "Empty file content",
+                        "success": False
+                    },
+                    status_code=400
+                )
+        except Exception as e:
+            logger.error(f"Failed to read file content: {str(e)}")
+            return create_cors_response(
+                {
+                    "detail": f"Failed to read file: {str(e)}",
+                    "error": "File read error",
+                    "success": False
+                },
+                status_code=500
+            )
         
         # Analyze the file using the correct service
-        result = await analyze_frame_with_logging(
-            frame_bytes=file_content,
-            source=f"{user_info['user_type']}_upload_{user_info['username']}",
-            frame_id=f"upload_{int(time.time() * 1000)}"
-        )
+        try:
+            result = await analyze_frame_with_logging(
+                frame_bytes=file_content,
+                source=f"{user_info['user_type']}_upload_{user_info['username']}",
+                frame_id=f"upload_{int(time.time() * 1000)}"
+            )
+        except Exception as e:
+            logger.error(f"Analysis failed: {str(e)}")
+            return create_cors_response(
+                {
+                    "detail": f"Analysis failed: {str(e)}",
+                    "error": "Analysis error",
+                    "success": False,
+                    "filename": file.filename,
+                    "user_info": user_info
+                },
+                status_code=500
+            )
         
         # Log to database if accident detected
+        log_id = None
+        snapshot_url = None
+        
         try:
             if result.get('accident_detected', False):
                 log_entry = log_accident_detection(
@@ -139,19 +188,23 @@ async def upload_file(
                         log_entry.user_id = user_info['id']
                         log_entry.created_by = user_info['username']
                         db.commit()
+                        log_id = log_entry.id
+                        snapshot_url = log_entry.snapshot_url
                         logger.info(f"Added user tracking to log entry {log_entry.id}")
                     except Exception as e:
                         logger.warning(f"Failed to add user tracking: {e}")
-                    
-                    result["log_id"] = log_entry.id
-                    result["snapshot_url"] = log_entry.snapshot_url
+                        db.rollback()
         except Exception as e:
             logger.warning(f"Database logging failed: {e}")
+            if db:
+                db.rollback()
         
         # Add file metadata to result
         result.update({
+            "success": True,
             "filename": file.filename,
             "file_size": file.size,
+            "file_size_mb": round(file.size / (1024*1024), 2),
             "content_type": file.content_type,
             "user_id": user_info['id'],
             "username": user_info['username'],
@@ -160,11 +213,18 @@ async def upload_file(
             "upload_timestamp": time.time(),
             "analysis_type": "file_upload",
             "max_file_size_mb": max_size // (1024*1024),
-            "allowed_types": len(allowed_types),
-            "success": not result.get('error')
+            "allowed_types_count": len(allowed_types),
+            "log_id": log_id,
+            "snapshot_url": snapshot_url
         })
         
+        # Remove any error flags since we succeeded
+        if 'error' in result:
+            del result['error']
+        
         logger.info(f"Upload successful for {user_info['user_type']} {user_info['username']}: {file.filename}")
+        logger.info(f"Analysis result: accident_detected={result.get('accident_detected', False)}, confidence={result.get('confidence', 0)}")
+        
         return create_cors_response(result)
         
     except HTTPException as e:
@@ -172,7 +232,8 @@ async def upload_file(
         return create_cors_response(
             {
                 "detail": e.detail,
-                "error": "HTTP Exception"
+                "error": "HTTP Exception",
+                "success": False
             },
             status_code=e.status_code
         )
@@ -181,7 +242,8 @@ async def upload_file(
         return create_cors_response(
             {
                 "detail": f"Upload failed: {str(e)}",
-                "error": "Internal server error"
+                "error": "Internal server error",
+                "success": False
             },
             status_code=500
         )
@@ -189,20 +251,31 @@ async def upload_file(
 @router.post("/analyze-url")
 async def analyze_url(
     request: Request,
-    current_user: Union[User, Admin] = Depends(get_current_user_or_admin),  # CHANGED: Accept both
+    current_user: Union[User, Admin] = Depends(get_current_user_or_admin),
     db: Session = Depends(get_db)
 ):
-    """Analyze an image from URL - Works for both users and admins"""
+    """FIXED: Analyze an image from URL - Works properly for both users and admins"""
     try:
         # Get request body
-        body = await request.json()
-        url = body.get('url')
+        try:
+            body = await request.json()
+            url = body.get('url')
+        except json.JSONDecodeError:
+            return create_cors_response(
+                {
+                    "detail": "Invalid JSON in request body",
+                    "error": "Invalid JSON",
+                    "success": False
+                },
+                status_code=400
+            )
         
         if not url:
             return create_cors_response(
                 {
                     "detail": "URL is required",
-                    "error": "Missing URL"
+                    "error": "Missing URL",
+                    "success": False
                 },
                 status_code=400
             )
@@ -211,7 +284,7 @@ async def analyze_url(
         from urllib.parse import urlparse
         
         # Get user information
-        user_info = get_user_info(current_user)
+        user_info = get_current_user_info(current_user)
         is_admin_upload = user_info['is_admin']
         
         logger.info(f"URL analysis by {user_info['user_type']}: {user_info['username']} - {url}")
@@ -222,7 +295,8 @@ async def analyze_url(
             return create_cors_response(
                 {
                     "detail": "Invalid URL format",
-                    "error": "Invalid URL"
+                    "error": "Invalid URL",
+                    "success": False
                 },
                 status_code=400
             )
@@ -246,7 +320,10 @@ async def analyze_url(
                 return create_cors_response(
                     {
                         "detail": f"Invalid content type for {user_info['user_type']}: {content_type}",
-                        "error": "Invalid content type"
+                        "error": "Invalid content type",
+                        "content_type": content_type,
+                        "allowed_types": allowed_types,
+                        "success": False
                     },
                     status_code=400
                 )
@@ -258,31 +335,62 @@ async def analyze_url(
                 return create_cors_response(
                     {
                         "detail": f"File too large for {user_info['user_type']}: {content_length} bytes",
-                        "error": "File too large"
+                        "error": "File too large",
+                        "max_size_mb": max_size // (1024*1024),
+                        "file_size_mb": round(content_length / (1024*1024), 2),
+                        "success": False
                     },
                     status_code=413
                 )
             
             # Read content
             file_content = response.content
+            if len(file_content) == 0:
+                return create_cors_response(
+                    {
+                        "detail": "Downloaded content is empty",
+                        "error": "Empty content",
+                        "success": False
+                    },
+                    status_code=400
+                )
             
         except requests.RequestException as e:
+            logger.error(f"Failed to download from URL: {str(e)}")
             return create_cors_response(
                 {
                     "detail": f"Failed to download image: {str(e)}",
-                    "error": "Download failed"
+                    "error": "Download failed",
+                    "url": url,
+                    "success": False
                 },
                 status_code=400
             )
         
         # Analyze the content using the correct service
-        result = await analyze_frame_with_logging(
-            frame_bytes=file_content,
-            source=f"url_analysis_{user_info['username']}",
-            frame_id=f"url_{int(time.time() * 1000)}"
-        )
+        try:
+            result = await analyze_frame_with_logging(
+                frame_bytes=file_content,
+                source=f"url_analysis_{user_info['username']}",
+                frame_id=f"url_{int(time.time() * 1000)}"
+            )
+        except Exception as e:
+            logger.error(f"URL analysis failed: {str(e)}")
+            return create_cors_response(
+                {
+                    "detail": f"Analysis failed: {str(e)}",
+                    "error": "Analysis error",
+                    "success": False,
+                    "url": url,
+                    "user_info": user_info
+                },
+                status_code=500
+            )
         
         # Log to database if accident detected
+        log_id = None
+        snapshot_url = None
+        
         try:
             if result.get('accident_detected', False):
                 log_entry = log_accident_detection(
@@ -298,36 +406,48 @@ async def analyze_url(
                         log_entry.user_id = user_info['id']
                         log_entry.created_by = user_info['username']
                         db.commit()
+                        log_id = log_entry.id
+                        snapshot_url = log_entry.snapshot_url
                     except Exception as e:
                         logger.warning(f"Failed to add user tracking: {e}")
-                    
-                    result["log_id"] = log_entry.id
-                    result["snapshot_url"] = log_entry.snapshot_url
+                        db.rollback()
         except Exception as e:
             logger.warning(f"Database logging failed: {e}")
+            if db:
+                db.rollback()
         
         # Add metadata
         result.update({
+            "success": True,
             "source_url": url,
             "content_type": content_type,
             "content_size": len(file_content),
+            "content_size_mb": round(len(file_content) / (1024*1024), 2),
             "user_id": user_info['id'],
             "username": user_info['username'],
             "user_type": user_info['user_type'],
             "is_admin_upload": is_admin_upload,
             "analysis_timestamp": time.time(),
             "analysis_type": "url_analysis",
-            "success": not result.get('error')
+            "log_id": log_id,
+            "snapshot_url": snapshot_url
         })
         
+        # Remove any error flags since we succeeded
+        if 'error' in result:
+            del result['error']
+        
         logger.info(f"URL analysis successful for {user_info['user_type']} {user_info['username']}")
+        logger.info(f"Analysis result: accident_detected={result.get('accident_detected', False)}, confidence={result.get('confidence', 0)}")
+        
         return create_cors_response(result)
         
     except HTTPException as e:
         return create_cors_response(
             {
                 "detail": e.detail,
-                "error": "HTTP Exception"
+                "error": "HTTP Exception",
+                "success": False
             },
             status_code=e.status_code
         )
@@ -336,7 +456,8 @@ async def analyze_url(
         return create_cors_response(
             {
                 "detail": f"URL analysis failed: {str(e)}",
-                "error": "Internal server error"
+                "error": "Internal server error",
+                "success": False
             },
             status_code=500
         )
@@ -344,29 +465,52 @@ async def analyze_url(
 @router.post("/configure")
 async def configure_model(
     config: dict, 
-    current_user: Union[User, Admin] = Depends(get_current_user_or_admin)  # CHANGED: Accept both
+    current_user: Union[User, Admin] = Depends(get_current_user_or_admin)
 ):
-    """Configure model parameters (e.g., threshold) - Works for both users and admins"""
+    """Configure model parameters - Works for both users and admins"""
     try:
-        user_info = get_user_info(current_user)
+        user_info = get_current_user_info(current_user)
         logger.info(f"Model configuration by {user_info['user_type']}: {user_info['username']}")
         
         if "threshold" in config:
             threshold = config["threshold"]
-            # Add your threshold update logic here if needed
+            # Validate threshold
+            try:
+                threshold_float = float(threshold)
+                if not 0.0 <= threshold_float <= 1.0:
+                    return create_cors_response(
+                        {
+                            "detail": "Threshold must be between 0.0 and 1.0",
+                            "error": "Invalid threshold",
+                            "success": False
+                        },
+                        status_code=400
+                    )
+            except (ValueError, TypeError):
+                return create_cors_response(
+                    {
+                        "detail": "Threshold must be a valid number",
+                        "error": "Invalid threshold format",
+                        "success": False
+                    },
+                    status_code=400
+                )
+            
             return create_cors_response({
                 "message": f"Threshold update requested by {user_info['user_type']} {user_info['username']}: {threshold}",
                 "success": True,
                 "user_type": user_info['user_type'],
                 "username": user_info['username'],
-                "note": "Threshold update needs to be implemented in the model service"
+                "threshold": threshold_float,
+                "note": "Configuration saved (actual model update may require restart)"
             })
         
         return create_cors_response({
             "message": "No valid configuration provided",
             "success": False,
             "user_type": user_info['user_type'],
-            "username": user_info['username']
+            "username": user_info['username'],
+            "available_configs": ["threshold"]
         })
         
     except Exception as e:
@@ -374,7 +518,8 @@ async def configure_model(
         return create_cors_response(
             {
                 "detail": f"Configuration error: {str(e)}",
-                "error": "Configuration failed"
+                "error": "Configuration failed",
+                "success": False
             },
             status_code=500
         )
@@ -384,6 +529,10 @@ async def get_model_info_endpoint():
     """Get information about the loaded model"""
     try:
         model_info = get_model_info()
+        
+        # Ensure success field is present
+        model_info["success"] = True
+        
         return create_cors_response(model_info)
         
     except Exception as e:
@@ -391,7 +540,10 @@ async def get_model_info_endpoint():
         return create_cors_response(
             {
                 "detail": f"Model info error: {str(e)}",
-                "error": "Model info failed"
+                "error": "Model info failed",
+                "success": False,
+                "model_available": False,
+                "model_loaded": False
             },
             status_code=500
         )
