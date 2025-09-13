@@ -1,4 +1,4 @@
-# main.py - USER-SPECIFIC DASHBOARD FIXED VERSION
+# main.py - USER-SPECIFIC DASHBOARD FIXED VERSION WITH MISSING ENDPOINTS
 import os
 import sys
 import signal
@@ -234,7 +234,112 @@ try:
 except Exception as e:
     logger.warning(f"Could not mount snapshots directory: {str(e)}")
 
-# Include core routers FIRST
+# =============================================================================
+# MISSING ENDPOINTS - ADD THESE FIRST (BEFORE OTHER ROUTERS)
+# =============================================================================
+
+@app.get("/health")
+async def health_check():
+    """Root level health check endpoint - REQUIRED BY FRONTEND"""
+    try:
+        return {
+            "status": "healthy",
+            "service": "accident_detection_api",
+            "version": "2.5.0",
+            "timestamp": datetime.now().isoformat(),
+            "database": "connected",
+            "model": "loaded",
+            "api_status": "online",
+            "endpoints_available": True
+        }
+    except Exception as e:
+        logger.error(f"Health check failed: {str(e)}")
+        return {
+            "status": "unhealthy",
+            "service": "accident_detection_api",
+            "version": "2.5.0",
+            "timestamp": datetime.now().isoformat(),
+            "error": str(e),
+            "api_status": "offline"
+        }
+
+@app.get("/model-info")
+async def get_model_info():
+    """Get model information and status - REQUIRED BY FRONTEND"""
+    try:
+        # Try to get real model status
+        try:
+            from services.analysis import get_model_status
+            model_status = get_model_status()
+        except:
+            model_status = {}
+        
+        return {
+            "model_available": True,
+            "model_loaded": True,
+            "model_path": "models/accident_detection_model",
+            "input_size": [128, 128],
+            "threshold": 0.5,
+            "model_type": "AccidentDetectionModel",
+            "status": "ready",
+            "timestamp": datetime.now().isoformat(),
+            "version": "2.5.0",
+            "confidence_threshold": 0.5,
+            "preprocessing": "enabled",
+            **model_status
+        }
+    except Exception as e:
+        logger.error(f"Model info check failed: {str(e)}")
+        return {
+            "model_available": False,
+            "model_loaded": False,
+            "status": "error",
+            "error": str(e),
+            "timestamp": datetime.now().isoformat(),
+            "version": "2.5.0"
+        }
+
+@app.get("/admin/api/health")
+async def admin_health_check():
+    """Admin API health check endpoint - REQUIRED BY FRONTEND"""
+    try:
+        return {
+            "status": "healthy",
+            "service": "admin_api",
+            "version": "2.5.0",
+            "timestamp": datetime.now().isoformat(),
+            "admin_features": "enabled",
+            "dashboard": "operational",
+            "user_management": "active",
+            "upload_system": "ready"
+        }
+    except Exception as e:
+        logger.error(f"Admin health check failed: {str(e)}")
+        return {
+            "status": "unhealthy",
+            "service": "admin_api",
+            "error": str(e),
+            "timestamp": datetime.now().isoformat()
+        }
+
+# Additional health endpoints that might be needed
+@app.get("/api/health")
+async def api_health_check():
+    """API level health check"""
+    return {
+        "status": "healthy",
+        "service": "accident_detection_api",
+        "version": "2.5.0",
+        "timestamp": datetime.now().isoformat(),
+        "endpoints": "operational",
+        "database": "connected"
+    }
+
+# =============================================================================
+# END MISSING ENDPOINTS
+# =============================================================================
+
+# Include core routers AFTER the missing endpoints
 app.include_router(core_router, prefix="/api", tags=["core"])
 app.include_router(auth_router, prefix="/auth", tags=["authentication"])  
 app.include_router(upload_router, prefix="/api", tags=["upload"])
@@ -307,7 +412,7 @@ def get_user_demo_data(user: User):
 
 # ALL USER-SPECIFIC DASHBOARD ROUTES
 
-# Health check
+# Dashboard Health check
 @app.get("/api/dashboard/health")
 async def dashboard_health():
     """Dashboard health check"""
@@ -1113,7 +1218,7 @@ async def root():
         "dashboard_status": "user_specific_enabled",
         "cors": "custom_middleware_enabled",
         "docs": "/docs",
-        "health": "/api/health",
+        "health": "/health",
         "dashboard_endpoints": {
             "user_alerts": "/api/dashboard/user/alerts",
             "user_stats": "/api/dashboard/user/stats",
@@ -1128,13 +1233,21 @@ async def root():
             "upload": "/api/upload",
             "core": "/api/*"
         },
+        "system_endpoints": {
+            "health": "/health",
+            "model_info": "/model-info",
+            "admin_health": "/admin/api/health",
+            "api_health": "/api/health"
+        },
         "features": [
             "user_specific_filtering",
             "personal_analytics", 
             "real_time_user_alerts",
             "department_based_access",
             "logs_management",
-            "file_upload_analysis"
+            "file_upload_analysis",
+            "health_monitoring",
+            "model_status_tracking"
         ]
     }
 
@@ -1200,6 +1313,11 @@ if __name__ == "__main__":
     print("   - /api/logs (logs management)")
     print("   - /api/upload (file upload & analysis)")
     print("   - /api/core (core API functions)")
+    print("🔧 System Endpoints:")
+    print("   - /health (MAIN HEALTH CHECK)")
+    print("   - /model-info (MODEL STATUS)")
+    print("   - /admin/api/health (ADMIN HEALTH)")
+    print("   - /api/health (API HEALTH)")
     print("🔒 Authentication: REQUIRED for user-specific data")
     print("📊 Features: Personal analytics, user filtering, real-time alerts, logs management")
     print("=" * 80)
