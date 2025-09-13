@@ -205,8 +205,9 @@ def require_admin(current_user: Union[User, Admin] = Depends(get_current_user_or
     )
 
 def get_current_user_info(current_user: Union[User, Admin]) -> dict:
-    """Extract user information from User or Admin object"""
-    if hasattr(current_user, 'admin_id'):  # Admin object
+    """FIXED: Extract user information from User or Admin object"""
+    # Check if this is an Admin object (has admin_id)
+    if hasattr(current_user, 'admin_id'):
         return {
             'id': current_user.admin_id,
             'username': current_user.username,
@@ -215,12 +216,23 @@ def get_current_user_info(current_user: Union[User, Admin]) -> dict:
             'user_type': 'admin',
             'is_active': getattr(current_user, 'is_active', True)
         }
-    else:  # User object
+    # Check if this is a User object but with admin privileges
+    elif hasattr(current_user, 'is_admin') and getattr(current_user, 'is_admin', False):
         return {
             'id': current_user.id,
             'username': current_user.username,
             'email': getattr(current_user, 'email', ''),
-            'is_admin': getattr(current_user, 'is_admin', False),
+            'is_admin': True,
+            'user_type': 'admin',
+            'is_active': getattr(current_user, 'is_active', True)
+        }
+    # Regular User object
+    else:
+        return {
+            'id': current_user.id,
+            'username': current_user.username,
+            'email': getattr(current_user, 'email', ''),
+            'is_admin': False,
             'user_type': 'user',
             'is_active': getattr(current_user, 'is_active', True)
         }
