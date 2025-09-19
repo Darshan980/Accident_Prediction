@@ -22,7 +22,7 @@ const RouteHandler = ({ children }) => {
       const isPublic = isPublicRoute(pathname);
       
       if (!isAuthenticated) {
-        if (!isPublic && pathname !== '/') {
+        if (!isPublic && pathname !== '/auth') {
           console.log('Not authenticated, redirecting to auth from:', pathname);
           router.push('/auth');
           return;
