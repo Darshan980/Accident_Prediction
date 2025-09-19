@@ -406,6 +406,16 @@ export default function AuthPage() {
           text-decoration: underline;
         }
 
+        /* Animation for smooth transitions */
+        @keyframes fadeIn {
+          from { opacity: 0; transform: translateY(20px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+
+        .form-wrapper {
+          animation: fadeIn 0.4s ease-out;
+        }
+
         /* Mobile Responsive */
         @media (max-width: 768px) {
           .auth-page {
