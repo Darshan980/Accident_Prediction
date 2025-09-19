@@ -37,7 +37,7 @@ const Navigation = () => {
     
     return [
       { 
-        href: isAdmin ? '/dashboard' : '/userdashboard', // Fixed: Changed from '/' to '/userdashboard'
+        href: isAdmin ? '/dashboard' : '/userdashboard', 
         icon: Home, 
         label: 'Dashboard' 
       },
@@ -139,7 +139,7 @@ const Navigation = () => {
           {/* Logo */}
           <div style={{ display: 'flex', alignItems: 'center' }}>
             <Link 
-              href={isAuthenticated ? (user?.role === 'admin' ? '/dashboard' : '/userdashboard') : '/'}
+              href={isAuthenticated ? (user?.role === 'admin' ? '/dashboard' : '/userdashboard') : '/auth'}
               style={{
                 display: 'flex',
                 alignItems: 'center',
@@ -618,15 +618,7 @@ const RouteHandler = ({ children }) => {
           router.push('/auth');
           return;
         }
-        // If on homepage and not authenticated, redirect to auth
-        if (pathname === '/') {
-          console.log('On homepage but not authenticated, redirecting to auth');
-          router.push('/auth');
-          return;
-        }
-      } else {
-        // User is authenticated
-        console.log('User authenticated:', user?.username, 'role:', user?.role, 'pathname:', pathname);
+      
         
         if (isPublicRoute) {
           // If authenticated and trying to access auth pages, redirect to appropriate dashboard
@@ -639,17 +631,7 @@ const RouteHandler = ({ children }) => {
           return;
         }
         
-        // If authenticated and on homepage, redirect to appropriate dashboard
-        if (pathname === '/') {
-          console.log('Authenticated user on homepage, redirecting based on role');
-          if (user?.role === 'admin') {
-            router.push('/dashboard');
-          } else {
-            router.push('/userdashboard'); // Fixed: Changed to redirect to user dashboard
-          }
-          return;
-        }
-        
+     
         // Optional: Add role-based access control for specific routes
         if (pathname === '/dashboard' && user?.role !== 'admin') {
           console.log('Non-admin user trying to access dashboard, redirecting to user dashboard');
@@ -670,26 +652,7 @@ const RouteHandler = ({ children }) => {
   const publicRoutes = ['/auth', '/auth/register'];
   const isPublicRoute = publicRoutes.some(route => pathname.startsWith(route));
   
-  // Don't show content if we're about to redirect
-  if (!isAuthenticated && !isPublicRoute && pathname !== '/') {
-    console.log('About to redirect unauthenticated user, showing spinner');
-    return <LoadingSpinner />;
-  }
   
-  if (isAuthenticated && isPublicRoute) {
-    console.log('About to redirect authenticated user from public route, showing spinner');
-    return <LoadingSpinner />;
-  }
-  
-  if (isAuthenticated && pathname === '/' && user?.role === 'admin') {
-    console.log('About to redirect admin from homepage, showing spinner');
-    return <LoadingSpinner />;
-  }
-
-  if (isAuthenticated && pathname === '/' && user?.role !== 'admin') {
-    console.log('About to redirect regular user from homepage to user dashboard');
-    return <LoadingSpinner />;
-  }
 
   console.log('Rendering children for:', pathname);
   return children;
