@@ -1,4 +1,3 @@
-//src/app/auth/page.js
 'use client';
 import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
@@ -36,7 +35,6 @@ export default function AuthPage() {
 
   const switchToRegister = () => {
     setIsLogin(false);
-    // Update URL without page reload
     const url = new URL(window.location);
     url.searchParams.set('mode', 'register');
     window.history.pushState({}, '', url);
@@ -44,116 +42,98 @@ export default function AuthPage() {
 
   const switchToLogin = () => {
     setIsLogin(true);
-    // Update URL without page reload
     const url = new URL(window.location);
     url.searchParams.delete('mode');
     window.history.pushState({}, '', url);
   };
 
   return (
-    <>
-      <div style={{
-        minHeight: '100vh',
-        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: '2rem'
-      }}>
-        {/* Background Pattern */}
-        <div style={{
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          opacity: 0.1,
-          backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.4'%3E%3Ccircle cx='7' cy='7' r='7'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`,
-          backgroundSize: '60px 60px'
-        }} />
+    <div className="auth-page">
+      {/* Left Side - Branding/Info */}
+      <div className="auth-branding">
+        <div className="branding-content">
+          <div className="logo-section">
+            <div className="logo-icon">🚗</div>
+            <h1 className="brand-title">AccidentGuard</h1>
+            <p className="brand-subtitle">AI-Powered Accident Prevention System</p>
+          </div>
+          
+          <div className="features-list">
+            <div className="feature-item">
+              <span className="feature-icon">⚡</span>
+              <span>Real-time Detection</span>
+            </div>
+            <div className="feature-item">
+              <span className="feature-icon">🛡️</span>
+              <span>Advanced Safety Analytics</span>
+            </div>
+            <div className="feature-item">
+              <span className="feature-icon">📊</span>
+              <span>Comprehensive Reports</span>
+            </div>
+          </div>
+          
+          <div className="testimonial">
+            <blockquote>
+              "Reduced accidents by 65% in our fleet operations"
+            </blockquote>
+            <cite>- Transport Manager</cite>
+          </div>
+        </div>
+      </div>
 
-        <div style={{
-          position: 'relative',
-          width: '100%',
-          maxWidth: '400px',
-          zIndex: 1
-        }}>
-          {/* Mode Toggle Buttons */}
+      {/* Right Side - Auth Forms */}
+      <div className="auth-forms">
+        <div className="form-container">
+          {/* Header */}
+          <div className="form-header">
+            <h2 className="form-title">
+              {isAdmin ? 'Admin Access' : isLogin ? 'Welcome Back' : 'Create Account'}
+            </h2>
+            <p className="form-description">
+              {isAdmin 
+                ? 'Administrative portal access'
+                : isLogin 
+                ? 'Sign in to your account to continue' 
+                : 'Join us to get started with accident prevention'
+              }
+            </p>
+          </div>
+
+          {/* Admin Mode Indicator */}
+          {isAdmin && (
+            <div className="admin-notice">
+              <div className="admin-notice-content">
+                <span className="admin-icon">👨‍💼</span>
+                <div>
+                  <strong>Admin Login Mode</strong>
+                  <p>Enhanced security access required</p>
+                </div>
+              </div>
+              <a href="/auth" className="back-link">← Regular Login</a>
+            </div>
+          )}
+
+          {/* Mode Toggle (only for non-admin) */}
           {!isAdmin && (
-            <div style={{
-              display: 'flex',
-              backgroundColor: 'rgba(255, 255, 255, 0.2)',
-              borderRadius: '12px',
-              padding: '4px',
-              marginBottom: '2rem',
-              backdropFilter: 'blur(10px)'
-            }}>
+            <div className="mode-toggle">
               <button
                 onClick={switchToLogin}
-                style={{
-                  flex: 1,
-                  padding: '0.75rem 1rem',
-                  backgroundColor: isLogin ? 'rgba(255, 255, 255, 0.9)' : 'transparent',
-                  color: isLogin ? '#333' : 'rgba(255, 255, 255, 0.8)',
-                  border: 'none',
-                  borderRadius: '8px',
-                  fontWeight: '600',
-                  cursor: 'pointer',
-                  transition: 'all 0.3s ease'
-                }}
+                className={`toggle-btn ${isLogin ? 'active' : ''}`}
               >
                 Sign In
               </button>
               <button
                 onClick={switchToRegister}
-                style={{
-                  flex: 1,
-                  padding: '0.75rem 1rem',
-                  backgroundColor: !isLogin ? 'rgba(255, 255, 255, 0.9)' : 'transparent',
-                  color: !isLogin ? '#333' : 'rgba(255, 255, 255, 0.8)',
-                  border: 'none',
-                  borderRadius: '8px',
-                  fontWeight: '600',
-                  cursor: 'pointer',
-                  transition: 'all 0.3s ease'
-                }}
+                className={`toggle-btn ${!isLogin ? 'active' : ''}`}
               >
                 Sign Up
               </button>
             </div>
           )}
 
-          {/* Admin Mode Indicator */}
-          {isAdmin && (
-            <div style={{
-              backgroundColor: 'rgba(220, 53, 69, 0.1)',
-              border: '1px solid rgba(220, 53, 69, 0.3)',
-              borderRadius: '8px',
-              padding: '1rem',
-              marginBottom: '1rem',
-              textAlign: 'center',
-              color: 'white'
-            }}>
-              <strong>Admin Login Mode</strong>
-              <p style={{ margin: '0.5rem 0 0 0', fontSize: '0.9rem', opacity: 0.9 }}>
-                <a 
-                  href="/auth" 
-                  style={{ 
-                    color: 'rgba(255, 255, 255, 0.8)', 
-                    textDecoration: 'underline' 
-                  }}
-                >
-                  ← Back to regular login
-                </a>
-              </p>
-            </div>
-          )}
-
-          {/* Form Container */}
-          <div style={{
-            transform: 'translateY(0)',
-            transition: 'transform 0.3s ease'
-          }}>
+          {/* Auth Forms */}
+          <div className="form-wrapper">
             {isLogin ? (
               <LoginForm 
                 isAdmin={isAdmin}
@@ -166,83 +146,319 @@ export default function AuthPage() {
             )}
           </div>
 
-          {/* Admin Login Link */}
-          {!isAdmin && isLogin && (
-            <div style={{
-              textAlign: 'center',
-              marginTop: '1rem'
-            }}>
-              <a
-                href="/auth?admin=true"
-                style={{
-                  color: 'rgba(255, 255, 255, 0.7)',
-                  fontSize: '0.9rem',
-                  textDecoration: 'underline',
-                  transition: 'color 0.2s ease'
-                }}
-                onMouseOver={(e) => e.target.style.color = 'rgba(255, 255, 255, 0.9)'}
-                onMouseOut={(e) => e.target.style.color = 'rgba(255, 255, 255, 0.7)'}
-              >
-                Admin Login
+          {/* Footer Links */}
+          <div className="form-footer">
+            {!isAdmin && isLogin && (
+              <a href="/auth?admin=true" className="admin-link">
+                Admin Portal →
               </a>
+            )}
+            
+            <div className="help-links">
+              <a href="/forgot-password">Forgot Password?</a>
+              <a href="/help">Need Help?</a>
             </div>
-          )}
+          </div>
         </div>
       </div>
 
-      {/* Global Styles */}
-      <style jsx global>{`
-        @keyframes spin {
-          0% { transform: rotate(0deg); }
-          100% { transform: rotate(360deg); }
+      <style jsx>{`
+        .auth-page {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          min-height: 100vh;
+          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         }
-        
-        /* Ensure body doesn't have extra margin/padding that might interfere */
-        body {
+
+        .auth-branding {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          padding: 3rem;
+          color: white;
+          position: relative;
+          overflow: hidden;
+        }
+
+        .auth-branding::before {
+          content: '';
+          position: absolute;
+          top: 0;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          background: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.1'%3E%3Ccircle cx='7' cy='7' r='7'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E") repeat;
+          background-size: 60px 60px;
+        }
+
+        .branding-content {
+          position: relative;
+          z-index: 1;
+          text-align: center;
+          max-width: 400px;
+        }
+
+        .logo-section {
+          margin-bottom: 3rem;
+        }
+
+        .logo-icon {
+          font-size: 4rem;
+          margin-bottom: 1rem;
+          display: block;
+        }
+
+        .brand-title {
+          font-size: 2.5rem;
+          font-weight: 700;
+          margin: 0 0 0.5rem 0;
+          background: linear-gradient(45deg, #fff, #e2e8f0);
+          background-clip: text;
+          -webkit-background-clip: text;
+          -webkit-text-fill-color: transparent;
+        }
+
+        .brand-subtitle {
+          font-size: 1.1rem;
+          opacity: 0.9;
+          margin: 0 0 2rem 0;
+        }
+
+        .features-list {
+          margin-bottom: 3rem;
+        }
+
+        .feature-item {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          margin-bottom: 1rem;
+          font-size: 1.1rem;
+        }
+
+        .feature-icon {
+          margin-right: 0.75rem;
+          font-size: 1.5rem;
+        }
+
+        .testimonial {
+          background: rgba(255, 255, 255, 0.1);
+          padding: 1.5rem;
+          border-radius: 12px;
+          backdrop-filter: blur(10px);
+        }
+
+        .testimonial blockquote {
+          font-style: italic;
+          margin: 0 0 0.5rem 0;
+          font-size: 1.1rem;
+        }
+
+        .testimonial cite {
+          font-size: 0.9rem;
+          opacity: 0.8;
+        }
+
+        .auth-forms {
+          background: white;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          padding: 2rem;
+        }
+
+        .form-container {
+          width: 100%;
+          max-width: 420px;
+        }
+
+        .form-header {
+          text-align: center;
+          margin-bottom: 2rem;
+        }
+
+        .form-title {
+          font-size: 2rem;
+          font-weight: 700;
+          color: #1a202c;
+          margin: 0 0 0.5rem 0;
+        }
+
+        .form-description {
+          color: #718096;
+          font-size: 1rem;
           margin: 0;
-          padding: 0;
-          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-            'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-            sans-serif;
-          -webkit-font-smoothing: antialiased;
-          -moz-osx-font-smoothing: grayscale;
         }
-        
-        /* Input focus styles for better UX */
-        input:focus {
-          border-color: #007bff !important;
-          box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.1) !important;
+
+        .admin-notice {
+          background: linear-gradient(135deg, #fee2e2, #fef2f2);
+          border: 1px solid #fca5a5;
+          border-radius: 12px;
+          padding: 1rem;
+          margin-bottom: 1.5rem;
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
         }
-        
-        /* Button hover effects */
-        button:hover:not(:disabled) {
-          transform: translateY(-1px);
-          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+
+        .admin-notice-content {
+          display: flex;
+          align-items: center;
         }
-        
-        /* Smooth transitions for all interactive elements */
-        button, input, a {
+
+        .admin-icon {
+          font-size: 1.5rem;
+          margin-right: 0.75rem;
+        }
+
+        .admin-notice strong {
+          display: block;
+          color: #dc2626;
+          font-weight: 600;
+        }
+
+        .admin-notice p {
+          margin: 0;
+          color: #7f1d1d;
+          font-size: 0.9rem;
+        }
+
+        .back-link {
+          color: #dc2626;
+          text-decoration: none;
+          font-weight: 500;
+          font-size: 0.9rem;
+        }
+
+        .back-link:hover {
+          text-decoration: underline;
+        }
+
+        .mode-toggle {
+          display: flex;
+          background: #f7fafc;
+          padding: 4px;
+          border-radius: 12px;
+          margin-bottom: 2rem;
+        }
+
+        .toggle-btn {
+          flex: 1;
+          padding: 0.75rem 1rem;
+          border: none;
+          background: transparent;
+          color: #718096;
+          font-weight: 600;
+          border-radius: 8px;
+          cursor: pointer;
           transition: all 0.2s ease;
         }
-        
-        /* Custom scrollbar for the page */
-        ::-webkit-scrollbar {
-          width: 8px;
+
+        .toggle-btn.active {
+          background: white;
+          color: #1a202c;
+          box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
         }
-        
-        ::-webkit-scrollbar-track {
-          background: rgba(255, 255, 255, 0.1);
+
+        .toggle-btn:hover:not(.active) {
+          color: #4a5568;
         }
-        
-        ::-webkit-scrollbar-thumb {
-          background: rgba(255, 255, 255, 0.3);
-          border-radius: 4px;
+
+        .form-wrapper {
+          margin-bottom: 2rem;
         }
-        
-        ::-webkit-scrollbar-thumb:hover {
-          background: rgba(255, 255, 255, 0.5);
+
+        .form-footer {
+          text-align: center;
+        }
+
+        .admin-link {
+          display: inline-block;
+          color: #667eea;
+          text-decoration: none;
+          font-weight: 600;
+          margin-bottom: 1rem;
+          padding: 0.5rem 1rem;
+          border-radius: 6px;
+          transition: all 0.2s ease;
+        }
+
+        .admin-link:hover {
+          background: #edf2f7;
+          transform: translateY(-1px);
+        }
+
+        .help-links {
+          display: flex;
+          justify-content: center;
+          gap: 2rem;
+        }
+
+        .help-links a {
+          color: #a0aec0;
+          text-decoration: none;
+          font-size: 0.9rem;
+          transition: color 0.2s ease;
+        }
+
+        .help-links a:hover {
+          color: #4a5568;
+          text-decoration: underline;
+        }
+
+        /* Mobile Responsive */
+        @media (max-width: 768px) {
+          .auth-page {
+            grid-template-columns: 1fr;
+            grid-template-rows: auto 1fr;
+          }
+
+          .auth-branding {
+            padding: 2rem 1rem;
+            min-height: auto;
+          }
+
+          .branding-content {
+            max-width: none;
+          }
+
+          .logo-icon {
+            font-size: 3rem;
+          }
+
+          .brand-title {
+            font-size: 2rem;
+          }
+
+          .features-list,
+          .testimonial {
+            display: none;
+          }
+
+          .auth-forms {
+            padding: 1rem;
+          }
+
+          .help-links {
+            flex-direction: column;
+            gap: 0.5rem;
+          }
+        }
+
+        @media (max-width: 480px) {
+          .form-header {
+            margin-bottom: 1.5rem;
+          }
+
+          .form-title {
+            font-size: 1.75rem;
+          }
+
+          .mode-toggle {
+            margin-bottom: 1.5rem;
+          }
         }
       `}</style>
-    </>
+    </div>
   );
 }
