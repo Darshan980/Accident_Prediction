@@ -3,7 +3,7 @@ import React from 'react';
 import Navigation from './components/layout/Navigation';
 import Footer from './components/layout/Footer';
 import RouteHandler from './components/routing/RouteHandler';
-import './styles/animations.css';
+import './../styles/animations.css';
 
 export default function ClientLayout({ children }) {
   return (
