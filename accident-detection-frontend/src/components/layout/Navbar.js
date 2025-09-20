@@ -537,41 +537,32 @@ const Navigation = ({ user, isAuthenticated, logout, isLoading }) => {
           .navigation {
             height: auto;
             min-height: 60px;
-            overflow: hidden;
           }
 
           .nav-container {
-            padding: 0.75rem 0.5rem;
+            padding: 0.75rem 1rem;
             height: auto;
             min-height: 60px;
-            gap: 0.25rem;
+            gap: 0.5rem;
             align-items: center;
             justify-content: space-between;
-            width: 100%;
-            box-sizing: border-box;
           }
 
           .nav-logo {
-            flex: 1 1 auto;
-            min-width: 0;
-          }
-
-          .logo-link {
-            gap: 0.5rem;
+            flex: 1;
           }
 
           .logo-icon {
-            font-size: 1.4rem;
+            font-size: 1.5rem;
           }
 
           .logo-text {
-            font-size: 1.1rem;
+            font-size: 1.2rem;
           }
 
           .nav-content {
-            gap: 0.25rem;
+            gap: 0.5rem;
             flex: 0 0 auto;
-            flex-shrink: 0;
           }
 
           .nav-links {
@@ -579,8 +570,8 @@ const Navigation = ({ user, isAuthenticated, logout, isLoading }) => {
           }
 
           .user-menu-button {
-            padding: 0.4rem 0.6rem;
-            gap: 0.4rem;
+            padding: 0.5rem 0.75rem;
+            gap: 0.5rem;
             min-width: auto;
           }
 
@@ -593,8 +584,8 @@ const Navigation = ({ user, isAuthenticated, logout, isLoading }) => {
           }
 
           .user-avatar {
-            width: 26px;
-            height: 26px;
+            width: 28px;
+            height: 28px;
           }
 
           .dropdown-menu {
@@ -606,111 +597,45 @@ const Navigation = ({ user, isAuthenticated, logout, isLoading }) => {
             padding: 1rem;
           }
 
+          /* Hide auth links on mobile */
           .auth-links {
-            gap: 0.2rem;
-            flex-shrink: 0;
-            display: flex;
-            align-items: center;
-          }
-
-          .auth-link {
-            padding: 0.35rem 0.5rem;
-            font-size: 0.75rem;
-            white-space: nowrap;
-            flex-shrink: 0;
-          }
-
-          .auth-link span {
             display: none;
           }
         }
 
         @media (max-width: 480px) {
           .nav-container {
-            padding: 0.5rem 0.25rem;
+            padding: 0.5rem;
             min-height: 50px;
           }
 
           .logo-icon {
-            font-size: 1.2rem;
+            font-size: 1.25rem;
           }
 
           .logo-text {
-            font-size: 0.95rem;
+            font-size: 1rem;
           }
 
           .user-menu-button {
-            padding: 0.3rem 0.4rem;
+            padding: 0.4rem 0.6rem;
           }
 
           .user-avatar {
-            width: 22px;
-            height: 22px;
+            width: 24px;
+            height: 24px;
           }
 
           .dropdown-menu {
             min-width: 180px;
             right: -5px;
           }
-
-          .auth-links {
-            gap: 0.15rem;
-          }
-
-          .auth-link {
-            padding: 0.3rem 0.4rem;
-            font-size: 0.7rem;
-            min-width: auto;
-            border-radius: 6px;
-          }
-
-          .auth-link.register {
-            padding: 0.3rem 0.35rem;
-          }
-        }
-
-        @media (max-width: 390px) {
-          .nav-container {
-            padding: 0.4rem 0.2rem;
-            min-height: 45px;
-          }
-
-          .logo-text {
-            font-size: 0.85rem;
-          }
-
-          .logo-icon {
-            font-size: 1.1rem;
-          }
-
-          .auth-links {
-            gap: 0.1rem;
-          }
-
-          .auth-link {
-            padding: 0.25rem 0.3rem;
-            font-size: 0.65rem;
-            border-radius: 5px;
-          }
-
-          .auth-link.register {
-            padding: 0.25rem 0.25rem;
-          }
-
-          .user-menu-button {
-            padding: 0.25rem 0.3rem;
-          }
-
-          .user-avatar {
-            width: 20px;
-            height: 20px;
-          }
         }
 
         @media (max-width: 360px) {
           .nav-container {
-            padding: 0.3rem 0.15rem;
-            min-height: 42px;
+            padding: 0.5rem;
+            min-height: 45px;
           }
 
           .logo-text {
@@ -718,7 +643,7 @@ const Navigation = ({ user, isAuthenticated, logout, isLoading }) => {
           }
 
           .logo-icon {
-            font-size: 1.3rem;
+            font-size: 1.5rem;
           }
 
           .dropdown-menu {
@@ -741,29 +666,6 @@ const Navigation = ({ user, isAuthenticated, logout, isLoading }) => {
 
           .dropdown-user-email {
             font-size: 0.75rem;
-          }
-
-          .auth-links {
-            gap: 0.1rem;
-          }
-
-          .auth-link {
-            padding: 0.25rem 0.25rem;
-            font-size: 0.6rem;
-            border-radius: 4px;
-          }
-
-          .auth-link.register {
-            padding: 0.25rem 0.2rem;
-          }
-
-          .user-menu-button {
-            padding: 0.25rem 0.25rem;
-          }
-
-          .user-avatar {
-            width: 18px;
-            height: 18px;
           }
         }
       `}</style>
