@@ -512,5 +512,4 @@ export const useAlerts = (useRealTime = true) => {
     error,
     isConnected
   };
-};
-};
+
