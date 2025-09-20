@@ -222,7 +222,7 @@ const Navigation = ({ user, isAuthenticated, logout, isLoading }) => {
               <>
                 {/* Mobile Hamburger Button */}
                 <button
-                  className="mobile-menu-button"
+                  className="hamburger-button"
                   onClick={() => setShowMobileMenu(!showMobileMenu)}
                   aria-label="Toggle mobile menu"
                 >
@@ -230,7 +230,7 @@ const Navigation = ({ user, isAuthenticated, logout, isLoading }) => {
                 </button>
 
                 {/* Mobile User Avatar */}
-                <div className="mobile-user-avatar">
+                <div className="mobile-user-circle">
                   <User size={20} />
                 </div>
               </>
@@ -385,35 +385,69 @@ const Navigation = ({ user, isAuthenticated, logout, isLoading }) => {
           gap: 0.75rem;
         }
 
-        .nav-links {
-          display: flex;
-          gap: 0.5rem;
+        /* Mobile button default styles - HIDDEN by default */
+        .hamburger-button {
+          display: none;
+          align-items: center;
+          justify-content: center;
+          width: 44px;
+          height: 44px;
+          background: linear-gradient(135deg, #3b82f6, #2563eb);
+          color: white;
+          border: 2px solid #3b82f6;
+          border-radius: 12px;
+          cursor: pointer;
+          transition: all 0.3s ease;
+          box-shadow: 0 2px 8px rgba(59, 130, 246, 0.25);
         }
 
-        /* Mobile Responsive Breakpoints */
+        .hamburger-button:hover {
+          background: linear-gradient(135deg, #2563eb, #1d4ed8);
+          transform: translateY(-1px);
+          box-shadow: 0 4px 12px rgba(59, 130, 246, 0.35);
+        }
+
+        .mobile-user-circle {
+          display: none;
+          align-items: center;
+          justify-content: center;
+          width: 40px;
+          height: 40px;
+          background: linear-gradient(135deg, #3b82f6, #2563eb);
+          color: white;
+          border-radius: 50%;
+          margin-left: 0.75rem;
+        }
+
+        /* Mobile Responsive - Show/Hide Elements */
         @media screen and (max-width: 768px) {
+          /* HIDE desktop nav completely */
           .nav-content.desktop-nav {
             display: none !important;
           }
 
+          /* SHOW mobile nav */
           .mobile-nav {
             display: flex !important;
             align-items: center !important;
             gap: 0.75rem !important;
           }
 
-          .nav-links {
-            display: none !important;
+          /* SHOW hamburger button */
+          .hamburger-button {
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
           }
 
-          .auth-links {
-            display: none !important;
+          /* SHOW mobile user avatar */
+          .mobile-user-circle {
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
           }
 
-          .user-menu-container {
-            display: none !important;
-          }
-
+          /* Adjust container */
           .nav-container {
             padding: 0 1rem;
             height: 60px;
@@ -429,28 +463,6 @@ const Navigation = ({ user, isAuthenticated, logout, isLoading }) => {
 
           .mobile-menu-overlay {
             top: 60px;
-          }
-
-          .mobile-menu-button {
-            display: flex !important;
-            align-items: center !important;
-            justify-content: center !important;
-            background: linear-gradient(135deg, #3b82f6, #2563eb) !important;
-            color: white !important;
-            border: 2px solid #3b82f6 !important;
-            width: 44px !important;
-            height: 44px !important;
-          }
-
-          .mobile-user-avatar {
-            display: flex !important;
-            align-items: center !important;
-            justify-content: center !important;
-            width: 40px !important;
-            height: 40px !important;
-            background: linear-gradient(135deg, #3b82f6, #2563eb) !important;
-            color: white !important;
-            border-radius: 50% !important;
           }
         }
 
