@@ -3,6 +3,15 @@ import { AlertTriangle, Bell, CheckCircle, MapPin, Clock, TrendingUp, Shield, Ey
 import { formatTimestamp } from '../utils/dateUtils';
 
 const AlertCard = ({ alert, isRead, onMarkAsRead, onViewDetails }) => {
+  // Debug logging
+  console.log('AlertCard Debug:', {
+    alertId: alert.id,
+    isRead,
+    alertData: alert,
+    hasOnMarkAsRead: typeof onMarkAsRead === 'function',
+    hasOnViewDetails: typeof onViewDetails === 'function'
+  });
+
   const getSeverityIcon = (severity) => {
     switch (severity) {
       case 'high':
@@ -14,8 +23,26 @@ const AlertCard = ({ alert, isRead, onMarkAsRead, onViewDetails }) => {
     }
   };
 
+  const handleMarkAsRead = () => {
+    console.log('Mark as read clicked for alert:', alert.id);
+    if (onMarkAsRead) {
+      onMarkAsRead();
+    } else {
+      console.error('onMarkAsRead function not provided');
+    }
+  };
+
+  const handleViewDetails = () => {
+    console.log('View details clicked for alert:', alert.id);
+    if (onViewDetails) {
+      onViewDetails();
+    } else {
+      console.error('onViewDetails function not provided');
+    }
+  };
+
   return (
-    <div className={`alert-card ${alert.severity} ${!isRead ? 'unread' : ''}`}>
+    <div className={`alert-card ${alert.severity || 'medium'} ${!isRead ? 'unread' : ''}`}>
       <div className="alert-content">
         <div className="alert-main">
           <div className="alert-header">
@@ -32,16 +59,18 @@ const AlertCard = ({ alert, isRead, onMarkAsRead, onViewDetails }) => {
                   )}
                 </div>
               </div>
-              <p className="alert-message">{alert.message}</p>
+              <p className="alert-message">{alert.message || 'No message available'}</p>
               <div className="alert-metadata">
                 <div className="metadata-row">
                   <div className="metadata-item">
                     <MapPin size={14} />
-                    <span className="metadata-text">{alert.location}</span>
+                    <span className="metadata-text">{alert.location || 'Unknown location'}</span>
                   </div>
                   <div className="metadata-item">
                     <Clock size={14} />
-                    <span className="metadata-text">{formatTimestamp(alert.timestamp)}</span>
+                    <span className="metadata-text">
+                      {alert.timestamp ? formatTimestamp(alert.timestamp) : 'No timestamp'}
+                    </span>
                   </div>
                 </div>
                 <div className="metadata-row">
@@ -56,7 +85,7 @@ const AlertCard = ({ alert, isRead, onMarkAsRead, onViewDetails }) => {
                   <div className="metadata-item">
                     <Shield size={14} />
                     <span className="metadata-text">
-                      Type: {alert.type.replace('_', ' ')}
+                      Type: {alert.type ? alert.type.replace('_', ' ') : 'Unknown'}
                     </span>
                   </div>
                 </div>
@@ -67,21 +96,20 @@ const AlertCard = ({ alert, isRead, onMarkAsRead, onViewDetails }) => {
         
         <div className="alert-actions">
           <div className="alert-actions-row">
-            {alert.snapshot_url && (
-              <button
-                onClick={onViewDetails}
-                className="action-button view"
-                aria-label="View alert details"
-              >
-                <Eye size={16} />
-                <span>View</span>
-              </button>
-            )}
+            <button
+              onClick={handleViewDetails}
+              className="action-button view"
+              aria-label="View alert details"
+            >
+              <Eye size={16} />
+              <span>View</span>
+            </button>
             {!isRead && (
               <button
-                onClick={onMarkAsRead}
+                onClick={handleMarkAsRead}
                 className="action-button primary"
                 aria-label="Mark alert as read"
+                style={{ backgroundColor: !isRead ? '#10b981' : '#6b7280' }}
               >
                 <CheckCircle size={16} />
                 <span>Mark Read</span>
