@@ -13,7 +13,7 @@ const useAuth = () => {
 };
 
 // FIXED: API configuration with correct Render URL
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://accident-prediction-1-mpm0.onrender.com';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://accident-prediction-7i4e.onrender.com';
 
 // Auth Provider Component
 const AuthProvider = ({ children }) => {
