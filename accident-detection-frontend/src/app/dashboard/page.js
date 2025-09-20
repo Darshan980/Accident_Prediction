@@ -14,7 +14,7 @@ const AccidentDashboard = () => {
   const [statusUpdateLoading, setStatusUpdateLoading] = useState(null);
 
   const logsPerPage = 10;
-  const API_BASE_URL = 'https://accident-prediction-1-mpm0.onrender.com';
+  const API_BASE_URL = 'https://accident-prediction-7i4e.onrender.com';
 
   useEffect(() => {
     checkAuthAndLoadData();
