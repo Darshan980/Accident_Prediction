@@ -537,32 +537,41 @@ const Navigation = ({ user, isAuthenticated, logout, isLoading }) => {
           .navigation {
             height: auto;
             min-height: 60px;
+            overflow: hidden;
           }
 
           .nav-container {
-            padding: 0.75rem 1rem;
+            padding: 0.75rem 0.5rem;
             height: auto;
             min-height: 60px;
-            gap: 0.5rem;
+            gap: 0.25rem;
             align-items: center;
             justify-content: space-between;
+            width: 100%;
+            box-sizing: border-box;
           }
 
           .nav-logo {
-            flex: 0 0 auto;
+            flex: 1 1 auto;
+            min-width: 0;
+          }
+
+          .logo-link {
+            gap: 0.5rem;
           }
 
           .logo-icon {
-            font-size: 1.5rem;
+            font-size: 1.4rem;
           }
 
           .logo-text {
-            font-size: 1.2rem;
+            font-size: 1.1rem;
           }
 
           .nav-content {
-            gap: 0.5rem;
+            gap: 0.25rem;
             flex: 0 0 auto;
+            flex-shrink: 0;
           }
 
           .nav-links {
@@ -570,8 +579,8 @@ const Navigation = ({ user, isAuthenticated, logout, isLoading }) => {
           }
 
           .user-menu-button {
-            padding: 0.5rem 0.75rem;
-            gap: 0.5rem;
+            padding: 0.4rem 0.6rem;
+            gap: 0.4rem;
             min-width: auto;
           }
 
@@ -584,8 +593,8 @@ const Navigation = ({ user, isAuthenticated, logout, isLoading }) => {
           }
 
           .user-avatar {
-            width: 28px;
-            height: 28px;
+            width: 26px;
+            height: 26px;
           }
 
           .dropdown-menu {
@@ -598,14 +607,17 @@ const Navigation = ({ user, isAuthenticated, logout, isLoading }) => {
           }
 
           .auth-links {
-            gap: 0.25rem;
+            gap: 0.2rem;
             flex-shrink: 0;
+            display: flex;
+            align-items: center;
           }
 
           .auth-link {
-            padding: 0.4rem 0.6rem;
-            font-size: 0.8rem;
+            padding: 0.35rem 0.5rem;
+            font-size: 0.75rem;
             white-space: nowrap;
+            flex-shrink: 0;
           }
 
           .auth-link span {
@@ -615,25 +627,25 @@ const Navigation = ({ user, isAuthenticated, logout, isLoading }) => {
 
         @media (max-width: 480px) {
           .nav-container {
-            padding: 0.5rem;
+            padding: 0.5rem 0.25rem;
             min-height: 50px;
           }
 
           .logo-icon {
-            font-size: 1.25rem;
+            font-size: 1.2rem;
           }
 
           .logo-text {
-            font-size: 1rem;
+            font-size: 0.95rem;
           }
 
           .user-menu-button {
-            padding: 0.35rem 0.5rem;
+            padding: 0.3rem 0.4rem;
           }
 
           .user-avatar {
-            width: 24px;
-            height: 24px;
+            width: 22px;
+            height: 22px;
           }
 
           .dropdown-menu {
@@ -642,20 +654,63 @@ const Navigation = ({ user, isAuthenticated, logout, isLoading }) => {
           }
 
           .auth-links {
-            gap: 0.2rem;
+            gap: 0.15rem;
           }
 
           .auth-link {
-            padding: 0.35rem 0.5rem;
-            font-size: 0.75rem;
+            padding: 0.3rem 0.4rem;
+            font-size: 0.7rem;
             min-width: auto;
+            border-radius: 6px;
+          }
+
+          .auth-link.register {
+            padding: 0.3rem 0.35rem;
+          }
+        }
+
+        @media (max-width: 390px) {
+          .nav-container {
+            padding: 0.4rem 0.2rem;
+            min-height: 45px;
+          }
+
+          .logo-text {
+            font-size: 0.85rem;
+          }
+
+          .logo-icon {
+            font-size: 1.1rem;
+          }
+
+          .auth-links {
+            gap: 0.1rem;
+          }
+
+          .auth-link {
+            padding: 0.25rem 0.3rem;
+            font-size: 0.65rem;
+            border-radius: 5px;
+          }
+
+          .auth-link.register {
+            padding: 0.25rem 0.25rem;
+          }
+
+          .user-menu-button {
+            padding: 0.25rem 0.3rem;
+          }
+
+          .user-avatar {
+            width: 20px;
+            height: 20px;
           }
         }
 
         @media (max-width: 360px) {
           .nav-container {
-            padding: 0.4rem;
-            min-height: 45px;
+            padding: 0.3rem 0.15rem;
+            min-height: 42px;
           }
 
           .logo-text {
@@ -663,7 +718,7 @@ const Navigation = ({ user, isAuthenticated, logout, isLoading }) => {
           }
 
           .logo-icon {
-            font-size: 1.2rem;
+            font-size: 1.3rem;
           }
 
           .dropdown-menu {
@@ -689,22 +744,26 @@ const Navigation = ({ user, isAuthenticated, logout, isLoading }) => {
           }
 
           .auth-links {
-            gap: 0.15rem;
+            gap: 0.1rem;
           }
 
           .auth-link {
-            padding: 0.3rem 0.4rem;
-            font-size: 0.7rem;
-            border-radius: 6px;
+            padding: 0.25rem 0.25rem;
+            font-size: 0.6rem;
+            border-radius: 4px;
+          }
+
+          .auth-link.register {
+            padding: 0.25rem 0.2rem;
           }
 
           .user-menu-button {
-            padding: 0.3rem 0.4rem;
+            padding: 0.25rem 0.25rem;
           }
 
           .user-avatar {
-            width: 22px;
-            height: 22px;
+            width: 18px;
+            height: 18px;
           }
         }
       `}</style>
