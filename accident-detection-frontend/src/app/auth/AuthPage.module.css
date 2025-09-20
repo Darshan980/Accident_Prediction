@@ -32,6 +32,7 @@
   z-index: 1;
   text-align: center;
   max-width: 400px;
+  width: 100%;
 }
 
 .logoSection {
@@ -305,35 +306,37 @@
 }
 
 @media (max-width: 768px) {
+  .authPage {
+    flex-direction: column;
+    min-height: 100vh;
+  }
+
   .authBranding {
     padding: 2rem 1rem;
     min-height: 250px;
+    display: flex;
     justify-content: center;
     align-items: center;
   }
 
   .authForms {
     padding: 1.5rem 1rem;
+    display: flex;
     justify-content: center;
     align-items: center;
+    flex-grow: 1;
   }
 
   .brandingContent {
     max-width: 100%;
     width: 100%;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
+    text-align: center;
   }
 
   .formContainer {
     max-width: 100%;
     width: 100%;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
+    text-align: center;
   }
 
   .logoIcon {
@@ -347,26 +350,28 @@
   .brandSubtitle {
     font-size: 1rem;
     margin-bottom: 2rem;
-    text-align: center;
   }
 
   .featuresList {
     margin-bottom: 2rem;
     width: 100%;
     max-width: 400px;
+    margin-left: auto;
+    margin-right: auto;
   }
 
   .featureItem {
     font-size: 1rem;
     padding: 0.5rem 0.75rem;
     margin-bottom: 1rem;
+    justify-content: center;
   }
 
   .testimonial {
     padding: 1.5rem;
     width: 100%;
     max-width: 400px;
-    text-align: center;
+    margin: 0 auto;
   }
 
   .testimonial blockquote {
@@ -379,40 +384,55 @@
   }
 
   .formHeader {
-    text-align: center;
     width: 100%;
+    text-align: center;
   }
 
   .modeToggle {
     width: 100%;
     max-width: 400px;
+    margin: 0 auto 2rem auto;
   }
 
   .formWrapper {
     width: 100%;
     max-width: 400px;
+    margin: 0 auto 2rem auto;
   }
 
   .formFooter {
     width: 100%;
     max-width: 400px;
+    margin: 0 auto;
+    text-align: center;
+  }
+
+  .adminNotice {
+    flex-direction: column;
+    gap: 1rem;
+    text-align: center;
+    max-width: 400px;
+    margin: 0 auto 1.5rem auto;
+  }
+
+  .adminNoticeContent {
+    justify-content: center;
   }
 }
 
 @media (max-width: 480px) {
+  .authPage {
+    min-height: 100vh;
+  }
+
   .authBranding {
     padding: 1.5rem 1rem;
     min-height: 200px;
-    display: flex;
-    justify-content: center;
-    align-items: center;
   }
 
   .authForms {
     padding: 1rem;
-    display: flex;
-    justify-content: center;
-    align-items: center;
+    flex-grow: 1;
   }
 
   .brandingContent {
@@ -429,7 +449,6 @@
 
   .logoSection {
     margin-bottom: 2rem;
-    text-align: center;
   }
 
   .logoIcon {
@@ -458,7 +477,6 @@
   .testimonial {
     padding: 1rem;
     margin-top: 1rem;
-    text-align: center;
   }
 
   .testimonial blockquote {
@@ -467,7 +485,6 @@
 
   .formHeader {
     margin-bottom: 1.5rem;
-    text-align: center;
   }
 
   .formTitle {
@@ -495,7 +512,6 @@
 
   .formFooter {
     width: 100%;
-    text-align: center;
   }
 }
 
@@ -507,16 +523,11 @@
   .authBranding {
     min-height: 180px;
     padding: 1rem;
-    display: flex;
-    justify-content: center;
-    align-items: center;
   }
 
   .authForms {
     padding: 1rem;
-    display: flex;
-    justify-content: center;
-    align-items: center;
+    flex-grow: 1;
   }
 
   .brandingContent {
