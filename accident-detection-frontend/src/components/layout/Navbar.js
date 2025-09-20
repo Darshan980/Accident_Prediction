@@ -831,11 +831,11 @@ const Navigation = ({ user, isAuthenticated, logout, isLoading }) => {
         /* Mobile Responsive Breakpoints */
         @media (max-width: 768px) {
           .desktop-nav {
-            display: none;
+            display: none !important;
           }
 
           .mobile-nav {
-            display: flex;
+            display: flex !important;
             align-items: center;
           }
 
@@ -933,6 +933,25 @@ const Navigation = ({ user, isAuthenticated, logout, isLoading }) => {
 
           .mobile-user-email {
             font-size: 0.8rem;
+          }
+        }
+
+        /* Force mobile nav visibility */
+        @media screen and (max-width: 768px) {
+          .mobile-nav {
+            display: flex !important;
+            align-items: center !important;
+            gap: 0.75rem;
+          }
+
+          .desktop-nav {
+            display: none !important;
+          }
+
+          .mobile-menu-button {
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
           }
         }
       `}</style>
