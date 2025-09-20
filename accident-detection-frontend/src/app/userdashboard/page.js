@@ -29,20 +29,49 @@ export default function DashboardPage() {
     refreshAlerts
   } = useAlerts(useRealTime);
 
-  const { stats, lastUpdateTime, handleRefresh } = useDashboardData(alerts);
+  const { stats, lastUpdateTime } = useDashboardData(alerts);
 
-  // Combined refresh function
-  const handleRefreshAll = () => {
-    handleRefresh();
-    refreshAlerts();
-  };
-
+  // Loading State
   if (loading && alerts.length === 0) {
-    return <LoadingState />;
+    return (
+      <div className="dashboard-container">
+        <div className="dashboard-content">
+          <div className="loading-state">
+            <div className="loading-content">
+              <div className="loading-spinner"></div>
+              <h2 className="loading-title">Loading Dashboard</h2>
+              <p className="loading-subtitle">Fetching latest alerts and data...</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
   }
 
+  // Error State (only show if no alerts and there's an error)
   if (error && alerts.length === 0) {
-    return <ErrorState error={error} onRetry={refreshAlerts} />;
+    return (
+      <div className="dashboard-container">
+        <div className="dashboard-content">
+          <div className="error-state">
+            <div className="error-content">
+              <div className="error-icon">⚠️</div>
+              <h2 className="error-title">Connection Error</h2>
+              <p className="error-subtitle">Unable to connect to the monitoring system</p>
+              <div className="error-details">
+                <p><strong>Error:</strong> {error}</p>
+              </div>
+              <button 
+                onClick={refreshAlerts}
+                className="error-retry-button"
+              >
+                Try Again
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -51,7 +80,6 @@ export default function DashboardPage() {
         <DashboardHeader 
           stats={stats}
           lastUpdateTime={lastUpdateTime}
-          handleRefresh={handleRefreshAll}
           unreadCount={unreadCount}
           isConnected={isConnected}
           loading={loading}
