@@ -1,19 +1,26 @@
 'use client';
 import React, { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
-import { User, LogOut, Settings, ChevronDown, Home, Upload, Video, BarChart3, Shield } from 'lucide-react';
+import { User, LogOut, Settings, ChevronDown, Home, Upload, Video, BarChart3, Shield, Menu, X } from 'lucide-react';
 
 const Navigation = ({ user, isAuthenticated, logout, isLoading }) => {
   const [showUserMenu, setShowUserMenu] = useState(false);
+  const [showMobileMenu, setShowMobileMenu] = useState(false);
   const menuRef = useRef(null);
   const buttonRef = useRef(null);
+  const mobileMenuRef = useRef(null);
 
-  // Close menu when clicking outside
+  // Close menus when clicking outside
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (menuRef.current && !menuRef.current.contains(event.target) && 
           buttonRef.current && !buttonRef.current.contains(event.target)) {
         setShowUserMenu(false);
+      }
+      
+      if (mobileMenuRef.current && !mobileMenuRef.current.contains(event.target) &&
+          !event.target.closest('.mobile-menu-button')) {
+        setShowMobileMenu(false);
       }
     };
 
@@ -21,16 +28,33 @@ const Navigation = ({ user, isAuthenticated, logout, isLoading }) => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  // Close mobile menu when window is resized to desktop
+  useEffect(() => {
+    const handleResize = () => {
+      if (window.innerWidth > 768) {
+        setShowMobileMenu(false);
+      }
+    };
+
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
   const handleLogout = () => {
     logout();
     setShowUserMenu(false);
+    setShowMobileMenu(false);
+  };
+
+  const handleMobileLinkClick = () => {
+    setShowMobileMenu(false);
   };
 
   // Dynamic navigation items based on user role
   const getNavItems = () => {
     const baseItems = [
       { 
-        href: user?.role === 'admin' ? '/dashboard' : '/userdashboard', // Fixed: Changed from '/admin/dashboard' to '/dashboard' for admin
+        href: user?.role === 'admin' ? '/dashboard' : '/userdashboard',
         icon: Home, 
         label: 'Dashboard' 
       },
@@ -51,7 +75,6 @@ const Navigation = ({ user, isAuthenticated, logout, isLoading }) => {
       }
     ];
 
-    // Add admin-only items if user is admin
     if (user?.role === 'admin') {
       baseItems.push(
         { href: '/admin/users', icon: User, label: 'User Management' },
@@ -93,8 +116,8 @@ const Navigation = ({ user, isAuthenticated, logout, isLoading }) => {
             </Link>
           </div>
 
-          {/* Navigation Links and User Menu */}
-          <div className="nav-content">
+          {/* Desktop Navigation */}
+          <div className="nav-content desktop-nav">
             {isAuthenticated ? (
               <>
                 {/* Navigation Links */}
@@ -133,7 +156,7 @@ const Navigation = ({ user, isAuthenticated, logout, isLoading }) => {
                     />
                   </button>
 
-                  {/* Dropdown Menu */}
+                  {/* Desktop Dropdown Menu */}
                   {showUserMenu && (
                     <div ref={menuRef} className="dropdown-menu">
                       <div className="dropdown-header">
@@ -192,7 +215,99 @@ const Navigation = ({ user, isAuthenticated, logout, isLoading }) => {
               </div>
             )}
           </div>
+
+          {/* Mobile Navigation */}
+          <div className="mobile-nav">
+            {isAuthenticated ? (
+              <>
+                {/* Mobile Hamburger Button */}
+                <button
+                  className="mobile-menu-button"
+                  onClick={() => setShowMobileMenu(!showMobileMenu)}
+                  aria-label="Toggle mobile menu"
+                >
+                  {showMobileMenu ? <X size={24} /> : <Menu size={24} />}
+                </button>
+
+                {/* Mobile User Avatar */}
+                <div className="mobile-user-avatar">
+                  <User size={20} />
+                </div>
+              </>
+            ) : (
+              <Link href="/auth" className="mobile-auth-button">
+                <User size={20} />
+              </Link>
+            )}
+          </div>
         </div>
+
+        {/* Mobile Menu Overlay */}
+        {showMobileMenu && (
+          <div className="mobile-menu-overlay">
+            <div ref={mobileMenuRef} className="mobile-menu">
+              {/* Mobile User Info */}
+              <div className="mobile-user-section">
+                <div className="mobile-user-header">
+                  <div className="mobile-user-avatar-large">
+                    <User size={24} />
+                  </div>
+                  <div className="mobile-user-details">
+                    <h3 className="mobile-user-name">{user?.username || 'User'}</h3>
+                    {user?.email && (
+                      <p className="mobile-user-email">{user.email}</p>
+                    )}
+                    {user?.role && (
+                      <span className={`user-badge ${user.role === 'admin' ? 'admin' : 'user'}`}>
+                        {user.role === 'admin' && <Shield size={12} />}
+                        {user.role || 'User'}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Mobile Navigation Links */}
+              <div className="mobile-nav-links">
+                <h4 className="mobile-nav-section-title">Navigation</h4>
+                {navItems.map((item) => (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    className="mobile-nav-link"
+                    onClick={handleMobileLinkClick}
+                  >
+                    <item.icon size={20} />
+                    <span>{item.label}</span>
+                  </Link>
+                ))}
+              </div>
+
+              {/* Mobile Menu Actions */}
+              <div className="mobile-menu-actions">
+                <h4 className="mobile-nav-section-title">Account</h4>
+                <button
+                  onClick={() => {
+                    setShowMobileMenu(false);
+                    window.location.href = '/profile';
+                  }}
+                  className="mobile-nav-link"
+                >
+                  <Settings size={20} />
+                  Profile Settings
+                </button>
+                
+                <button
+                  onClick={handleLogout}
+                  className="mobile-nav-link logout"
+                >
+                  <LogOut size={20} />
+                  Sign Out
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </nav>
 
       <style jsx>{`
@@ -262,6 +377,10 @@ const Navigation = ({ user, isAuthenticated, logout, isLoading }) => {
           display: flex;
           align-items: center;
           gap: 2rem;
+        }
+
+        .mobile-nav {
+          display: none;
         }
 
         .nav-links {
@@ -532,24 +651,197 @@ const Navigation = ({ user, isAuthenticated, logout, isLoading }) => {
           100% { transform: rotate(360deg); }
         }
 
-        /* Mobile Responsive Styles */
+        /* Mobile Styles */
+        .mobile-menu-button {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          width: 44px;
+          height: 44px;
+          background: linear-gradient(135deg, #f8fafc, #f1f5f9);
+          border: 2px solid #e2e8f0;
+          border-radius: 12px;
+          cursor: pointer;
+          color: #374151;
+          transition: all 0.3s ease;
+          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+        }
+
+        .mobile-menu-button:hover {
+          background: linear-gradient(135deg, #3b82f6, #2563eb);
+          color: white;
+          border-color: #3b82f6;
+          box-shadow: 0 4px 12px rgba(59, 130, 246, 0.25);
+          transform: translateY(-1px);
+        }
+
+        .mobile-user-avatar {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          width: 40px;
+          height: 40px;
+          background: linear-gradient(135deg, #3b82f6, #2563eb);
+          color: white;
+          border-radius: 50%;
+          margin-left: 0.75rem;
+        }
+
+        .mobile-auth-button {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          width: 44px;
+          height: 44px;
+          background: linear-gradient(135deg, #10b981, #059669);
+          color: white;
+          border-radius: 12px;
+          text-decoration: none;
+          transition: all 0.3s ease;
+          box-shadow: 0 2px 8px rgba(16, 185, 129, 0.25);
+        }
+
+        .mobile-auth-button:hover {
+          background: linear-gradient(135deg, #059669, #047857);
+          box-shadow: 0 4px 12px rgba(16, 185, 129, 0.35);
+          transform: translateY(-1px);
+        }
+
+        .mobile-menu-overlay {
+          position: fixed;
+          top: 70px;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          background: rgba(0, 0, 0, 0.5);
+          backdrop-filter: blur(4px);
+          z-index: 999;
+          animation: fadeIn 0.3s ease;
+        }
+
+        .mobile-menu {
+          background: white;
+          height: 100%;
+          width: 100%;
+          max-width: 400px;
+          margin-left: auto;
+          box-shadow: -4px 0 20px rgba(0, 0, 0, 0.15);
+          overflow-y: auto;
+          animation: slideInRight 0.3s ease;
+        }
+
+        @keyframes fadeIn {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+
+        @keyframes slideInRight {
+          from { transform: translateX(100%); }
+          to { transform: translateX(0); }
+        }
+
+        .mobile-user-section {
+          padding: 2rem;
+          background: linear-gradient(135deg, #f8fafc, #f1f5f9);
+          border-bottom: 1px solid #e5e7eb;
+        }
+
+        .mobile-user-header {
+          display: flex;
+          align-items: center;
+          gap: 1rem;
+        }
+
+        .mobile-user-avatar-large {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          width: 60px;
+          height: 60px;
+          background: linear-gradient(135deg, #3b82f6, #2563eb);
+          color: white;
+          border-radius: 50%;
+        }
+
+        .mobile-user-details {
+          flex: 1;
+        }
+
+        .mobile-user-name {
+          margin: 0 0 0.5rem 0;
+          font-size: 1.25rem;
+          font-weight: 600;
+          color: #111827;
+        }
+
+        .mobile-user-email {
+          margin: 0 0 0.75rem 0;
+          font-size: 0.9rem;
+          color: #6b7280;
+        }
+
+        .mobile-nav-links,
+        .mobile-menu-actions {
+          padding: 1.5rem;
+        }
+
+        .mobile-nav-section-title {
+          margin: 0 0 1rem 0;
+          font-size: 0.875rem;
+          font-weight: 600;
+          color: #6b7280;
+          text-transform: uppercase;
+          letter-spacing: 0.5px;
+        }
+
+        .mobile-nav-link {
+          display: flex;
+          align-items: center;
+          gap: 1rem;
+          width: 100%;
+          padding: 1rem;
+          margin-bottom: 0.5rem;
+          background: transparent;
+          border: none;
+          color: #374151;
+          text-decoration: none;
+          font-size: 1rem;
+          font-weight: 500;
+          border-radius: 12px;
+          transition: all 0.2s ease;
+          cursor: pointer;
+        }
+
+        .mobile-nav-link:hover {
+          background: #f3f4f6;
+          color: #111827;
+          transform: translateX(8px);
+        }
+
+        .mobile-nav-link.logout {
+          color: #dc2626;
+          margin-top: 0.5rem;
+        }
+
+        .mobile-nav-link.logout:hover {
+          background: #fef2f2;
+          color: #b91c1c;
+        }
+
+        /* Mobile Responsive Breakpoints */
         @media (max-width: 768px) {
-          .navigation {
-            height: auto;
-            min-height: 60px;
+          .desktop-nav {
+            display: none;
+          }
+
+          .mobile-nav {
+            display: flex;
+            align-items: center;
           }
 
           .nav-container {
-            padding: 0.75rem 1rem;
-            height: auto;
-            min-height: 60px;
-            gap: 0.5rem;
-            align-items: center;
-            justify-content: space-between;
-          }
-
-          .nav-logo {
-            flex: 1;
+            padding: 0 1rem;
+            height: 60px;
           }
 
           .logo-icon {
@@ -557,56 +849,18 @@ const Navigation = ({ user, isAuthenticated, logout, isLoading }) => {
           }
 
           .logo-text {
-            font-size: 1.2rem;
+            font-size: 1.25rem;
           }
 
-          .nav-content {
-            gap: 0.5rem;
-            flex: 0 0 auto;
-          }
-
-          .nav-links {
-            display: none;
-          }
-
-          .user-menu-button {
-            padding: 0.5rem 0.75rem;
-            gap: 0.5rem;
-            min-width: auto;
-          }
-
-          .user-info {
-            display: none;
-          }
-
-          .chevron {
-            display: none;
-          }
-
-          .user-avatar {
-            width: 28px;
-            height: 28px;
-          }
-
-          .dropdown-menu {
-            min-width: 200px;
-            right: -10px;
-          }
-
-          .dropdown-header {
-            padding: 1rem;
-          }
-
-          /* Hide auth links on mobile */
-          .auth-links {
-            display: none;
+          .mobile-menu-overlay {
+            top: 60px;
           }
         }
 
         @media (max-width: 480px) {
           .nav-container {
-            padding: 0.5rem;
-            min-height: 50px;
+            padding: 0 0.75rem;
+            height: 55px;
           }
 
           .logo-icon {
@@ -614,58 +868,71 @@ const Navigation = ({ user, isAuthenticated, logout, isLoading }) => {
           }
 
           .logo-text {
-            font-size: 1rem;
+            font-size: 1.125rem;
           }
 
-          .user-menu-button {
-            padding: 0.4rem 0.6rem;
+          .mobile-menu-button,
+          .mobile-auth-button {
+            width: 40px;
+            height: 40px;
           }
 
-          .user-avatar {
-            width: 24px;
-            height: 24px;
+          .mobile-user-avatar {
+            width: 36px;
+            height: 36px;
           }
 
-          .dropdown-menu {
-            min-width: 180px;
-            right: -5px;
+          .mobile-menu-overlay {
+            top: 55px;
+          }
+
+          .mobile-user-section {
+            padding: 1.5rem;
+          }
+
+          .mobile-user-avatar-large {
+            width: 50px;
+            height: 50px;
+          }
+
+          .mobile-user-name {
+            font-size: 1.125rem;
+          }
+
+          .mobile-nav-links,
+          .mobile-menu-actions {
+            padding: 1rem;
           }
         }
 
         @media (max-width: 360px) {
-          .nav-container {
-            padding: 0.5rem;
-            min-height: 45px;
-          }
-
           .logo-text {
             display: none;
           }
 
-          .logo-icon {
-            font-size: 1.5rem;
+          .nav-container {
+            padding: 0 0.5rem;
           }
 
-          .dropdown-menu {
-            min-width: 160px;
-            right: 0;
+          .mobile-menu {
+            max-width: 100%;
           }
 
-          .dropdown-header {
-            padding: 0.75rem;
+          .mobile-user-section {
+            padding: 1rem;
           }
 
-          .dropdown-user-avatar {
-            width: 32px;
-            height: 32px;
+          .mobile-user-avatar-large {
+            width: 45px;
+            height: 45px;
           }
 
-          .dropdown-user-name {
-            font-size: 0.9rem;
+          .mobile-user-name {
+            font-size: 1rem;
           }
 
-          .dropdown-user-email {
-            font-size: 0.75rem;
+          .mobile-user-email {
+            font-size: 0.8rem;
           }
         }
       `}</style>
