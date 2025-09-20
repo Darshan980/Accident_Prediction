@@ -5,8 +5,6 @@ import AlertFilters from './components/AlertFilters';
 import AlertCard from './components/AlertCard';
 import AlertModal from './components/AlertModal';
 import EmptyState from './components/EmptyState';
-import LoadingState from './components/LoadingState';
-import ErrorState from './components/ErrorState';
 import { useAlerts } from './hooks/useAlerts';
 import { useDashboardData } from './hooks/useDashboardData';
 import './styles/dashboard.css';
