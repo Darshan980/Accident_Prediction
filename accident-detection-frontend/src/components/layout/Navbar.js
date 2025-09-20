@@ -532,25 +532,151 @@ const Navigation = ({ user, isAuthenticated, logout, isLoading }) => {
           100% { transform: rotate(360deg); }
         }
 
+        /* Mobile Responsive Styles */
         @media (max-width: 768px) {
+          .navigation {
+            height: auto;
+            min-height: 60px;
+          }
+
           .nav-container {
-            padding: 0 1rem;
+            padding: 0.75rem 1rem;
+            height: auto;
+            min-height: 60px;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+          }
+
+          .nav-logo {
+            flex: 1;
+          }
+
+          .logo-icon {
+            font-size: 1.5rem;
+          }
+
+          .logo-text {
+            font-size: 1.2rem;
+          }
+
+          .nav-content {
+            gap: 1rem;
           }
 
           .nav-links {
             display: none;
           }
 
+          .user-menu-button {
+            padding: 0.5rem 0.75rem;
+            gap: 0.5rem;
+            min-width: auto;
+          }
+
           .user-info {
             display: none;
           }
 
+          .chevron {
+            display: none;
+          }
+
+          .user-avatar {
+            width: 28px;
+            height: 28px;
+          }
+
           .dropdown-menu {
-            min-width: 240px;
+            min-width: 200px;
+            right: -10px;
+          }
+
+          .dropdown-header {
+            padding: 1rem;
+          }
+
+          .auth-links {
+            gap: 0.5rem;
+          }
+
+          .auth-link {
+            padding: 0.5rem 0.75rem;
+            font-size: 0.9rem;
+          }
+
+          .auth-link span {
+            display: none;
+          }
+        }
+
+        @media (max-width: 480px) {
+          .nav-container {
+            padding: 0.5rem;
+            min-height: 50px;
+          }
+
+          .logo-icon {
+            font-size: 1.25rem;
+          }
+
+          .logo-text {
+            font-size: 1rem;
+          }
+
+          .user-menu-button {
+            padding: 0.4rem 0.6rem;
+          }
+
+          .user-avatar {
+            width: 24px;
+            height: 24px;
+          }
+
+          .dropdown-menu {
+            min-width: 180px;
+            right: -5px;
+          }
+
+          .auth-link {
+            padding: 0.4rem 0.6rem;
+            font-size: 0.85rem;
+          }
+        }
+
+        @media (max-width: 360px) {
+          .nav-container {
+            padding: 0.5rem;
+            min-height: 45px;
           }
 
           .logo-text {
             display: none;
+          }
+
+          .logo-icon {
+            font-size: 1.5rem;
+          }
+
+          .dropdown-menu {
+            min-width: 160px;
+            right: 0;
+          }
+
+          .dropdown-header {
+            padding: 0.75rem;
+          }
+
+          .dropdown-user-avatar {
+            width: 32px;
+            height: 32px;
+          }
+
+          .dropdown-user-name {
+            font-size: 0.9rem;
+          }
+
+          .dropdown-user-email {
+            font-size: 0.75rem;
           }
         }
       `}</style>
