@@ -8,7 +8,7 @@ export const useDashboardData = (alerts) => {
 
   // Get API configuration
   const getApiConfig = () => {
-    const baseURL = process.env.NEXT_PUBLIC_API_BASE_URL || 'https://accident-prediction-7i4e.onrender.com';
+    const baseURL = process.env.NEXT_PUBLIC_API_URL || 'https://accident-prediction-7i4e.onrender.com';
     const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
     
     return {
