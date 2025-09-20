@@ -135,11 +135,12 @@ const RegisterForm = ({ onSwitchToLogin }) => {
     <div style={{
       backgroundColor: 'rgba(255, 255, 255, 0.95)',
       borderRadius: '16px',
-      padding: '3rem',
+      padding: window.innerWidth <= 768 ? '1.5rem' : '3rem',
       width: '100%',
-      maxWidth: '450px',
+      maxWidth: window.innerWidth <= 768 ? '100%' : '450px',
       boxShadow: '0 20px 40px rgba(0, 0, 0, 0.1)',
-      backdropFilter: 'blur(10px)'
+      backdropFilter: 'blur(10px)',
+      boxSizing: 'border-box'
     }}>
       <style>{`
         @keyframes spin {
@@ -162,14 +163,17 @@ const RegisterForm = ({ onSwitchToLogin }) => {
           <UserPlus size={32} color="white" />
         </div>
         <h1 style={{
-          fontSize: '1.8rem',
+          fontSize: window.innerWidth <= 768 ? '1.5rem' : '1.8rem',
           fontWeight: 'bold',
           color: '#333',
           marginBottom: '0.5rem'
         }}>
           Create Account
         </h1>
-        <p style={{ color: '#666', fontSize: '0.9rem' }}>
+        <p style={{ 
+          color: '#666', 
+          fontSize: window.innerWidth <= 768 ? '0.8rem' : '0.9rem'
+        }}>
           Join the accident detection system
         </p>
       </div>
@@ -178,15 +182,16 @@ const RegisterForm = ({ onSwitchToLogin }) => {
         <div style={{
           backgroundColor: '#fee',
           borderLeft: '4px solid #dc3545',
-          padding: '1rem',
+          padding: window.innerWidth <= 768 ? '0.75rem' : '1rem',
           borderRadius: '8px',
           marginBottom: '1.5rem',
           display: 'flex',
           alignItems: 'center',
-          gap: '0.75rem'
+          gap: '0.75rem',
+          fontSize: window.innerWidth <= 768 ? '0.8rem' : '0.9rem'
         }}>
           <AlertCircle size={20} color="#dc3545" />
-          <span style={{ color: '#dc3545', fontSize: '0.9rem' }}>
+          <span style={{ color: '#dc3545' }}>
             {error}
           </span>
         </div>
@@ -196,15 +201,16 @@ const RegisterForm = ({ onSwitchToLogin }) => {
         <div style={{
           backgroundColor: '#d4edda',
           borderLeft: '4px solid #28a745',
-          padding: '1rem',
+          padding: window.innerWidth <= 768 ? '0.75rem' : '1rem',
           borderRadius: '8px',
           marginBottom: '1.5rem',
           display: 'flex',
           alignItems: 'center',
-          gap: '0.75rem'
+          gap: '0.75rem',
+          fontSize: window.innerWidth <= 768 ? '0.8rem' : '0.9rem'
         }}>
           <CheckCircle size={20} color="#28a745" />
-          <span style={{ color: '#28a745', fontSize: '0.9rem' }}>
+          <span style={{ color: '#28a745' }}>
             {success}
           </span>
         </div>
@@ -218,7 +224,7 @@ const RegisterForm = ({ onSwitchToLogin }) => {
             fontWeight: '500',
             color: '#333',
             marginBottom: '0.5rem',
-            fontSize: '0.9rem'
+            fontSize: window.innerWidth <= 768 ? '0.8rem' : '0.9rem'
           }}>
             Username *
           </label>
@@ -241,10 +247,10 @@ const RegisterForm = ({ onSwitchToLogin }) => {
               required
               style={{
                 width: '100%',
-                padding: '0.875rem 1rem 0.875rem 3rem',
+                padding: window.innerWidth <= 768 ? '0.75rem 1rem 0.75rem 3rem' : '0.875rem 1rem 0.875rem 3rem',
                 border: `2px solid ${validationErrors.username ? '#dc3545' : '#e1e5e9'}`,
                 borderRadius: '8px',
-                fontSize: '1rem',
+                fontSize: window.innerWidth <= 768 ? '0.9rem' : '1rem',
                 transition: 'border-color 0.2s ease',
                 outline: 'none',
                 backgroundColor: '#fff',
@@ -254,7 +260,7 @@ const RegisterForm = ({ onSwitchToLogin }) => {
             />
           </div>
           {validationErrors.username && (
-            <p style={{ color: '#dc3545', fontSize: '0.8rem', marginTop: '0.25rem' }}>
+            <p style={{ color: '#dc3545', fontSize: window.innerWidth <= 768 ? '0.7rem' : '0.8rem', marginTop: '0.25rem' }}>
               {validationErrors.username}
             </p>
           )}
@@ -267,7 +273,7 @@ const RegisterForm = ({ onSwitchToLogin }) => {
             fontWeight: '500',
             color: '#333',
             marginBottom: '0.5rem',
-            fontSize: '0.9rem'
+            fontSize: window.innerWidth <= 768 ? '0.8rem' : '0.9rem'
           }}>
             Email Address *
           </label>
@@ -290,10 +296,10 @@ const RegisterForm = ({ onSwitchToLogin }) => {
               required
               style={{
                 width: '100%',
-                padding: '0.875rem 1rem 0.875rem 3rem',
+                padding: window.innerWidth <= 768 ? '0.75rem 1rem 0.75rem 3rem' : '0.875rem 1rem 0.875rem 3rem',
                 border: `2px solid ${validationErrors.email ? '#dc3545' : '#e1e5e9'}`,
                 borderRadius: '8px',
-                fontSize: '1rem',
+                fontSize: window.innerWidth <= 768 ? '0.9rem' : '1rem',
                 transition: 'border-color 0.2s ease',
                 outline: 'none',
                 backgroundColor: '#fff',
@@ -303,7 +309,7 @@ const RegisterForm = ({ onSwitchToLogin }) => {
             />
           </div>
           {validationErrors.email && (
-            <p style={{ color: '#dc3545', fontSize: '0.8rem', marginTop: '0.25rem' }}>
+            <p style={{ color: '#dc3545', fontSize: window.innerWidth <= 768 ? '0.7rem' : '0.8rem', marginTop: '0.25rem' }}>
               {validationErrors.email}
             </p>
           )}
@@ -316,7 +322,7 @@ const RegisterForm = ({ onSwitchToLogin }) => {
             fontWeight: '500',
             color: '#333',
             marginBottom: '0.5rem',
-            fontSize: '0.9rem'
+            fontSize: window.innerWidth <= 768 ? '0.8rem' : '0.9rem'
           }}>
             Department *
           </label>
@@ -339,10 +345,10 @@ const RegisterForm = ({ onSwitchToLogin }) => {
               required
               style={{
                 width: '100%',
-                padding: '0.875rem 1rem 0.875rem 3rem',
+                padding: window.innerWidth <= 768 ? '0.75rem 1rem 0.75rem 3rem' : '0.875rem 1rem 0.875rem 3rem',
                 border: `2px solid ${validationErrors.department ? '#dc3545' : '#e1e5e9'}`,
                 borderRadius: '8px',
-                fontSize: '1rem',
+                fontSize: window.innerWidth <= 768 ? '0.9rem' : '1rem',
                 transition: 'border-color 0.2s ease',
                 outline: 'none',
                 backgroundColor: '#fff',
@@ -357,7 +363,7 @@ const RegisterForm = ({ onSwitchToLogin }) => {
             </select>
           </div>
           {validationErrors.department && (
-            <p style={{ color: '#dc3545', fontSize: '0.8rem', marginTop: '0.25rem' }}>
+            <p style={{ color: '#dc3545', fontSize: window.innerWidth <= 768 ? '0.7rem' : '0.8rem', marginTop: '0.25rem' }}>
               {validationErrors.department}
             </p>
           )}
@@ -370,7 +376,7 @@ const RegisterForm = ({ onSwitchToLogin }) => {
             fontWeight: '500',
             color: '#333',
             marginBottom: '0.5rem',
-            fontSize: '0.9rem'
+            fontSize: window.innerWidth <= 768 ? '0.8rem' : '0.9rem'
           }}>
             Password *
           </label>
@@ -393,10 +399,10 @@ const RegisterForm = ({ onSwitchToLogin }) => {
               required
               style={{
                 width: '100%',
-                padding: '0.875rem 3rem 0.875rem 3rem',
+                padding: window.innerWidth <= 768 ? '0.75rem 3rem 0.75rem 3rem' : '0.875rem 3rem 0.875rem 3rem',
                 border: `2px solid ${validationErrors.password ? '#dc3545' : '#e1e5e9'}`,
                 borderRadius: '8px',
-                fontSize: '1rem',
+                fontSize: window.innerWidth <= 768 ? '0.9rem' : '1rem',
                 outline: 'none',
                 backgroundColor: '#fff',
                 boxSizing: 'border-box',
@@ -423,7 +429,7 @@ const RegisterForm = ({ onSwitchToLogin }) => {
             </button>
           </div>
           {validationErrors.password && (
-            <p style={{ color: '#dc3545', fontSize: '0.8rem', marginTop: '0.25rem' }}>
+            <p style={{ color: '#dc3545', fontSize: window.innerWidth <= 768 ? '0.7rem' : '0.8rem', marginTop: '0.25rem' }}>
               {validationErrors.password}
             </p>
           )}
@@ -436,7 +442,7 @@ const RegisterForm = ({ onSwitchToLogin }) => {
             fontWeight: '500',
             color: '#333',
             marginBottom: '0.5rem',
-            fontSize: '0.9rem'
+            fontSize: window.innerWidth <= 768 ? '0.8rem' : '0.9rem'
           }}>
             Confirm Password *
           </label>
@@ -459,10 +465,10 @@ const RegisterForm = ({ onSwitchToLogin }) => {
               required
               style={{
                 width: '100%',
-                padding: '0.875rem 3rem 0.875rem 3rem',
+                padding: window.innerWidth <= 768 ? '0.75rem 3rem 0.75rem 3rem' : '0.875rem 3rem 0.875rem 3rem',
                 border: `2px solid ${validationErrors.confirmPassword ? '#dc3545' : '#e1e5e9'}`,
                 borderRadius: '8px',
-                fontSize: '1rem',
+                fontSize: window.innerWidth <= 768 ? '0.9rem' : '1rem',
                 outline: 'none',
                 backgroundColor: '#fff',
                 boxSizing: 'border-box',
@@ -489,7 +495,7 @@ const RegisterForm = ({ onSwitchToLogin }) => {
             </button>
           </div>
           {validationErrors.confirmPassword && (
-            <p style={{ color: '#dc3545', fontSize: '0.8rem', marginTop: '0.25rem' }}>
+            <p style={{ color: '#dc3545', fontSize: window.innerWidth <= 768 ? '0.7rem' : '0.8rem', marginTop: '0.25rem' }}>
               {validationErrors.confirmPassword}
             </p>
           )}
@@ -500,12 +506,12 @@ const RegisterForm = ({ onSwitchToLogin }) => {
           disabled={isLoading}
           style={{
             width: '100%',
-            padding: '1rem',
+            padding: window.innerWidth <= 768 ? '0.875rem' : '1rem',
             backgroundColor: '#28a745',
             color: 'white',
             border: 'none',
             borderRadius: '8px',
-            fontSize: '1rem',
+            fontSize: window.innerWidth <= 768 ? '0.9rem' : '1rem',
             fontWeight: '600',
             cursor: isLoading ? 'not-allowed' : 'pointer',
             opacity: isLoading ? 0.7 : 1,
@@ -513,7 +519,8 @@ const RegisterForm = ({ onSwitchToLogin }) => {
             alignItems: 'center',
             justifyContent: 'center',
             gap: '0.5rem',
-            transition: 'all 0.3s ease'
+            transition: 'all 0.3s ease',
+            boxSizing: 'border-box'
           }}
         >
           {isLoading ? (
@@ -544,7 +551,10 @@ const RegisterForm = ({ onSwitchToLogin }) => {
           paddingTop: '1.5rem',
           borderTop: '1px solid #e1e5e9'
         }}>
-          <p style={{ color: '#666', fontSize: '0.9rem' }}>
+          <p style={{ 
+            color: '#666', 
+            fontSize: window.innerWidth <= 768 ? '0.8rem' : '0.9rem'
+          }}>
             Already have an account?{' '}
             <button
               onClick={onSwitchToLogin}
@@ -555,7 +565,7 @@ const RegisterForm = ({ onSwitchToLogin }) => {
                 cursor: 'pointer',
                 textDecoration: 'underline',
                 fontWeight: '500',
-                fontSize: '0.9rem'
+                fontSize: window.innerWidth <= 768 ? '0.8rem' : '0.9rem'
               }}
             >
               Sign in here
