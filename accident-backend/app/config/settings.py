@@ -57,7 +57,7 @@ def get_cors_origins() -> List[str]:
             
             # Your main deployments
             "https://accident-prediction-xi.vercel.app",
-            "https://accident-prediction-1-mpm0.onrender.com",
+            "https://accident-prediction-7i4e.onrender.com",
         ]
     
     # Add frontend URL from environment
