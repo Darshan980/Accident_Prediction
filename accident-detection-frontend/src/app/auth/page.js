@@ -78,12 +78,7 @@ export default function AuthPage() {
             </div>
           </div>
           
-          <div className={styles.testimonial}>
-            <blockquote>
-              Reduced our fleet accidents by 78% and saved over $2M in insurance costs within the first year.
-            </blockquote>
-            <cite>— Sarah Johnson, Fleet Operations Manager</cite>
-          </div>
+
         </div>
       </div>
 
