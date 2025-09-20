@@ -31,10 +31,11 @@ async def dashboard_health():
             "endpoints_available": [
                 "/api/dashboard/user/alerts", 
                 "/api/dashboard/user/stats",
+                "/api/dashboard/user/alerts/{alert_id}/read",
                 "/api/dashboard/ws/alerts"
             ],
             "version": "2.5.1",
-            "features": ["user_specific_data", "department_filtering", "personal_analytics"],
+            "features": ["user_specific_data", "department_filtering", "personal_analytics", "mark_as_read"],
             "authentication": "fixed"
         }
     except Exception as e:
@@ -165,6 +166,211 @@ async def get_user_alerts(
                 "error": f"Critical error: {str(e2)}",
                 "original_error": str(e)
             }
+
+@router.put("/user/alerts/{alert_id}/read")
+async def mark_alert_as_read(
+    alert_id: int,
+    db: Session = Depends(get_db),
+    current_user: Union[User, any] = Depends(get_current_user_or_admin)
+):
+    """Mark a specific alert as read for the current user"""
+    try:
+        user_info = get_current_user_info(current_user)
+        logger.info(f"Marking alert {alert_id} as read for {user_info['user_type']} {user_info['username']}")
+        
+        # Find the alert belonging to this user
+        alert_query = db.query(AccidentLog).filter(
+            and_(
+                AccidentLog.id == alert_id,
+                or_(
+                    AccidentLog.user_id == user_info['id'],
+                    AccidentLog.created_by == user_info['username']
+                )
+            )
+        )
+        
+        alert = alert_query.first()
+        if not alert:
+            logger.warning(f"Alert {alert_id} not found for user {user_info['username']}")
+            return {
+                "success": False,
+                "error": "Alert not found or access denied",
+                "alert_id": alert_id,
+                "user_info": user_info
+            }
+        
+        # Mark as read by updating status
+        alert.status = "acknowledged"
+        db.commit()
+        
+        logger.info(f"Alert {alert_id} marked as read successfully for user {user_info['username']}")
+        
+        # Send WebSocket update to connected clients
+        if alert_connections:
+            update_message = {
+                "type": "update_alert",
+                "data": {
+                    "id": alert.id,
+                    "read": True,
+                    "status": "acknowledged"
+                },
+                "timestamp": datetime.now().isoformat()
+            }
+            
+            # Send to all connected WebSocket clients
+            disconnected_clients = []
+            for client_id, websocket in alert_connections.items():
+                try:
+                    await websocket.send_text(json.dumps(update_message))
+                    logger.info(f"Sent read status update to WebSocket client {client_id}")
+                except Exception as ws_error:
+                    logger.error(f"Failed to send WebSocket update to {client_id}: {ws_error}")
+                    disconnected_clients.append(client_id)
+            
+            # Clean up disconnected clients
+            for client_id in disconnected_clients:
+                if client_id in alert_connections:
+                    del alert_connections[client_id]
+        
+        return {
+            "success": True,
+            "message": f"Alert {alert_id} marked as read",
+            "alert": {
+                "id": alert.id,
+                "read": True,
+                "status": "acknowledged",
+                "updated_at": datetime.now().isoformat()
+            },
+            "user_info": user_info
+        }
+        
+    except Exception as e:
+        logger.error(f"Error marking alert {alert_id} as read: {str(e)}")
+        db.rollback()
+        return {
+            "success": False,
+            "error": str(e),
+            "alert_id": alert_id
+        }
+
+@router.patch("/user/alerts/{alert_id}")
+async def update_alert_status(
+    alert_id: int,
+    request_data: dict,
+    db: Session = Depends(get_db),
+    current_user: Union[User, any] = Depends(get_current_user_or_admin)
+):
+    """Alternative endpoint to update alert status (PATCH method)"""
+    try:
+        user_info = get_current_user_info(current_user)
+        logger.info(f"Updating alert {alert_id} for {user_info['user_type']} {user_info['username']}")
+        
+        # Find the alert belonging to this user
+        alert_query = db.query(AccidentLog).filter(
+            and_(
+                AccidentLog.id == alert_id,
+                or_(
+                    AccidentLog.user_id == user_info['id'],
+                    AccidentLog.created_by == user_info['username']
+                )
+            )
+        )
+        
+        alert = alert_query.first()
+        if not alert:
+            return {
+                "success": False,
+                "error": "Alert not found or access denied",
+                "alert_id": alert_id
+            }
+        
+        # Update status if provided
+        if "read" in request_data and request_data["read"]:
+            alert.status = "acknowledged"
+            db.commit()
+            logger.info(f"Alert {alert_id} status updated via PATCH")
+            
+            return {
+                "success": True,
+                "message": f"Alert {alert_id} updated",
+                "alert": {
+                    "id": alert.id,
+                    "read": True,
+                    "status": "acknowledged"
+                }
+            }
+        
+        return {
+            "success": False,
+            "error": "No valid update data provided",
+            "alert_id": alert_id
+        }
+        
+    except Exception as e:
+        logger.error(f"Error updating alert {alert_id}: {str(e)}")
+        db.rollback()
+        return {
+            "success": False,
+            "error": str(e),
+            "alert_id": alert_id
+        }
+
+@router.patch("/user/alerts/mark-all-read")
+async def mark_all_alerts_read(
+    db: Session = Depends(get_db),
+    current_user: Union[User, any] = Depends(get_current_user_or_admin)
+):
+    """Mark all alerts as read for the current user"""
+    try:
+        user_info = get_current_user_info(current_user)
+        logger.info(f"Marking all alerts as read for {user_info['user_type']} {user_info['username']}")
+        
+        # Update all user's alerts to acknowledged status
+        user_filters = []
+        try:
+            user_filters.append(AccidentLog.user_id == user_info['id'])
+        except:
+            pass
+        
+        try:
+            user_filters.append(AccidentLog.created_by == user_info['username'])
+        except:
+            pass
+        
+        if user_filters:
+            updated_count = db.query(AccidentLog).filter(
+                and_(
+                    AccidentLog.accident_detected == True,
+                    AccidentLog.status != "acknowledged",
+                    or_(*user_filters)
+                )
+            ).update({"status": "acknowledged"}, synchronize_session=False)
+            
+            db.commit()
+            
+            logger.info(f"Marked {updated_count} alerts as read for user {user_info['username']}")
+            
+            return {
+                "success": True,
+                "message": f"Marked {updated_count} alerts as read",
+                "updated_count": updated_count,
+                "user_info": user_info
+            }
+        else:
+            return {
+                "success": False,
+                "error": "No user filtering available",
+                "updated_count": 0
+            }
+            
+    except Exception as e:
+        logger.error(f"Error marking all alerts as read: {str(e)}")
+        db.rollback()
+        return {
+            "success": False,
+            "error": str(e),
+            "updated_count": 0
+        }
 
 @router.get("/user/stats")
 async def get_user_stats(
