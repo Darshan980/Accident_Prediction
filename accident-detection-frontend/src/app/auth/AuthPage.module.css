@@ -1,11 +1,11 @@
 .authPage {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
+  display: flex;
   min-height: 100vh;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
 }
 
 .authBranding {
+  flex: 1;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -13,6 +13,7 @@
   color: white;
   position: relative;
   overflow: hidden;
+  min-height: 500px;
 }
 
 .authBranding::before {
@@ -44,19 +45,22 @@
 }
 
 .brandTitle {
-  font-size: 2.5rem;
-  font-weight: 700;
+  font-size: 2.8rem;
+  font-weight: 800;
   margin: 0 0 0.5rem 0;
-  background: linear-gradient(45deg, #fff, #e2e8f0);
+  background: linear-gradient(45deg, #fff, #f0f4ff);
   background-clip: text;
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
+  text-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
 }
 
 .brandSubtitle {
-  font-size: 1.1rem;
-  opacity: 0.9;
-  margin: 0 0 2rem 0;
+  font-size: 1.2rem;
+  opacity: 0.95;
+  margin: 0 0 3rem 0;
+  font-weight: 300;
+  letter-spacing: 0.5px;
 }
 
 .featuresList {
@@ -66,9 +70,20 @@
 .featureItem {
   display: flex;
   align-items: center;
-  justify-content: center;
-  margin-bottom: 1rem;
+  justify-content: flex-start;
+  margin-bottom: 1.5rem;
   font-size: 1.1rem;
+  padding: 0.75rem 1rem;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  transition: transform 0.3s ease, background 0.3s ease;
+}
+
+.featureItem:hover {
+  transform: translateX(5px);
+  background: rgba(255, 255, 255, 0.15);
 }
 
 .featureIcon {
@@ -77,29 +92,45 @@
 }
 
 .testimonial {
-  background: rgba(255, 255, 255, 0.1);
-  padding: 1.5rem;
-  border-radius: 12px;
-  backdrop-filter: blur(10px);
+  background: rgba(255, 255, 255, 0.15);
+  padding: 2rem;
+  border-radius: 16px;
+  backdrop-filter: blur(15px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
 }
 
 .testimonial blockquote {
   font-style: italic;
-  margin: 0 0 0.5rem 0;
-  font-size: 1.1rem;
+  margin: 0 0 1rem 0;
+  font-size: 1.2rem;
+  line-height: 1.6;
+  position: relative;
+}
+
+.testimonial blockquote::before {
+  content: '"';
+  font-size: 3rem;
+  position: absolute;
+  left: -1rem;
+  top: -0.5rem;
+  opacity: 0.3;
 }
 
 .testimonial cite {
-  font-size: 0.9rem;
-  opacity: 0.8;
+  font-size: 1rem;
+  opacity: 0.85;
+  font-weight: 500;
 }
 
 .authForms {
+  flex: 1;
   background: white;
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 2rem;
+  min-height: 500px;
 }
 
 .formContainer {
@@ -249,19 +280,42 @@
 }
 
 /* Mobile Responsive */
-@media (max-width: 768px) {
+@media (max-width: 1024px) {
   .authPage {
-    grid-template-columns: 1fr;
-    grid-template-rows: auto 1fr;
+    flex-direction: column;
   }
 
   .authBranding {
-    padding: 2rem 1rem;
+    min-height: 300px;
+    padding: 2rem;
+  }
+
+  .authForms {
     min-height: auto;
+    padding: 2rem;
+  }
+
+  .brandTitle {
+    font-size: 2.2rem;
+  }
+
+  .featureItem {
+    justify-content: center;
+  }
+}
+
+@media (max-width: 768px) {
+  .authBranding {
+    padding: 2rem 1rem;
+    min-height: 250px;
+  }
+
+  .authForms {
+    padding: 1.5rem 1rem;
   }
 
   .brandingContent {
-    max-width: none;
+    max-width: 100%;
   }
 
   .logoIcon {
@@ -272,31 +326,141 @@
     font-size: 2rem;
   }
 
-  .featuresList,
+  .brandSubtitle {
+    font-size: 1rem;
+    margin-bottom: 2rem;
+  }
+
+  .featuresList {
+    margin-bottom: 2rem;
+  }
+
+  .featureItem {
+    font-size: 1rem;
+    padding: 0.5rem 0.75rem;
+    margin-bottom: 1rem;
+  }
+
   .testimonial {
-    display: none;
+    padding: 1.5rem;
+  }
+
+  .testimonial blockquote {
+    font-size: 1.1rem;
+  }
+
+  .helpLinks {
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  .formContainer {
+    max-width: 100%;
+  }
+}
+
+@media (max-width: 480px) {
+  .authBranding {
+    padding: 1.5rem 1rem;
+    min-height: 200px;
   }
 
   .authForms {
     padding: 1rem;
   }
 
-  .helpLinks {
-    flex-direction: column;
-    gap: 0.5rem;
+  .logoSection {
+    margin-bottom: 2rem;
   }
-}
 
-@media (max-width: 480px) {
+  .logoIcon {
+    font-size: 2.5rem;
+  }
+
+  .brandTitle {
+    font-size: 1.75rem;
+  }
+
+  .brandSubtitle {
+    font-size: 0.95rem;
+  }
+
+  .featuresList {
+    margin-bottom: 1.5rem;
+  }
+
+  .featureItem {
+    font-size: 0.95rem;
+    padding: 0.5rem;
+    margin-bottom: 0.75rem;
+  }
+
+  .testimonial {
+    padding: 1rem;
+    margin-top: 1rem;
+  }
+
+  .testimonial blockquote {
+    font-size: 1rem;
+  }
+
   .formHeader {
     margin-bottom: 1.5rem;
   }
 
   .formTitle {
-    font-size: 1.75rem;
+    font-size: 1.5rem;
+  }
+
+  .formDescription {
+    font-size: 0.9rem;
   }
 
   .modeToggle {
     margin-bottom: 1.5rem;
+  }
+
+  .toggleBtn {
+    padding: 0.6rem 0.8rem;
+    font-size: 0.9rem;
+  }
+}
+
+@media (max-width: 360px) {
+  .authPage {
+    min-height: 100vh;
+  }
+
+  .authBranding {
+    min-height: 180px;
+    padding: 1rem;
+  }
+
+  .brandTitle {
+    font-size: 1.5rem;
+  }
+
+  .brandSubtitle {
+    font-size: 0.9rem;
+  }
+
+  .featureItem {
+    font-size: 0.9rem;
+    flex-direction: column;
+    text-align: center;
+    padding: 0.75rem 0.5rem;
+  }
+
+  .featureIcon {
+    margin-right: 0;
+    margin-bottom: 0.25rem;
+  }
+
+  .testimonial {
+    display: none;
+  }
+
+  .formTitle {
+    font-size: 1.4rem;
   }
 }
