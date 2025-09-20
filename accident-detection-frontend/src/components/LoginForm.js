@@ -68,11 +68,12 @@ const LoginForm = ({ isAdmin = false, onSwitchToRegister }) => {
     <div style={{
       backgroundColor: 'rgba(255, 255, 255, 0.95)',
       borderRadius: '16px',
-      padding: '3rem',
+      padding: window.innerWidth <= 768 ? '1.5rem' : '3rem',
       width: '100%',
-      maxWidth: '400px',
+      maxWidth: window.innerWidth <= 768 ? '100%' : '400px',
       boxShadow: '0 20px 40px rgba(0, 0, 0, 0.1)',
-      backdropFilter: 'blur(10px)'
+      backdropFilter: 'blur(10px)',
+      boxSizing: 'border-box'
     }}>
       <style>{`
         @keyframes spin {
@@ -95,19 +96,22 @@ const LoginForm = ({ isAdmin = false, onSwitchToRegister }) => {
           {isAdmin ? <Shield size={32} color="white" /> : <LogIn size={32} color="white" />}
         </div>
         <h1 style={{
-          fontSize: '1.8rem',
+          fontSize: window.innerWidth <= 768 ? '1.5rem' : '1.8rem',
           fontWeight: 'bold',
           color: '#333',
           marginBottom: '0.5rem'
         }}>
           {isAdmin ? 'Admin Portal' : 'Welcome Back'}
         </h1>
-        <p style={{ color: '#666', fontSize: '0.9rem' }}>
+        <p style={{ 
+          color: '#666', 
+          fontSize: window.innerWidth <= 768 ? '0.8rem' : '0.9rem'
+        }}>
           {isAdmin ? 'Sign in to access admin dashboard' : 'Sign in to access accident detection system'}
         </p>
         <div style={{ 
           color: '#999', 
-          fontSize: '0.8rem', 
+          fontSize: window.innerWidth <= 768 ? '0.7rem' : '0.8rem', 
           marginTop: '0.5rem',
           display: 'flex',
           flexDirection: 'column',
@@ -131,15 +135,16 @@ const LoginForm = ({ isAdmin = false, onSwitchToRegister }) => {
         <div style={{
           backgroundColor: '#fee',
           borderLeft: '4px solid #dc3545',
-          padding: '1rem',
+          padding: window.innerWidth <= 768 ? '0.75rem' : '1rem',
           borderRadius: '8px',
           marginBottom: '1.5rem',
           display: 'flex',
           alignItems: 'center',
-          gap: '0.75rem'
+          gap: '0.75rem',
+          fontSize: window.innerWidth <= 768 ? '0.8rem' : '0.9rem'
         }}>
           <AlertCircle size={20} color="#dc3545" />
-          <span style={{ color: '#dc3545', fontSize: '0.9rem' }}>
+          <span style={{ color: '#dc3545' }}>
             {error}
           </span>
         </div>
@@ -152,7 +157,7 @@ const LoginForm = ({ isAdmin = false, onSwitchToRegister }) => {
             fontWeight: '500',
             color: '#333',
             marginBottom: '0.5rem',
-            fontSize: '0.9rem'
+            fontSize: window.innerWidth <= 768 ? '0.8rem' : '0.9rem'
           }}>
             Username
           </label>
@@ -175,10 +180,10 @@ const LoginForm = ({ isAdmin = false, onSwitchToRegister }) => {
               required
               style={{
                 width: '100%',
-                padding: '0.875rem 1rem 0.875rem 3rem',
+                padding: window.innerWidth <= 768 ? '0.75rem 1rem 0.75rem 3rem' : '0.875rem 1rem 0.875rem 3rem',
                 border: '2px solid #e1e5e9',
                 borderRadius: '8px',
-                fontSize: '1rem',
+                fontSize: window.innerWidth <= 768 ? '0.9rem' : '1rem',
                 transition: 'border-color 0.2s ease',
                 outline: 'none',
                 backgroundColor: '#fff',
@@ -195,7 +200,7 @@ const LoginForm = ({ isAdmin = false, onSwitchToRegister }) => {
             fontWeight: '500',
             color: '#333',
             marginBottom: '0.5rem',
-            fontSize: '0.9rem'
+            fontSize: window.innerWidth <= 768 ? '0.8rem' : '0.9rem'
           }}>
             Password
           </label>
@@ -218,10 +223,10 @@ const LoginForm = ({ isAdmin = false, onSwitchToRegister }) => {
               required
               style={{
                 width: '100%',
-                padding: '0.875rem 3rem 0.875rem 3rem',
+                padding: window.innerWidth <= 768 ? '0.75rem 3rem 0.75rem 3rem' : '0.875rem 3rem 0.875rem 3rem',
                 border: '2px solid #e1e5e9',
                 borderRadius: '8px',
-                fontSize: '1rem',
+                fontSize: window.innerWidth <= 768 ? '0.9rem' : '1rem',
                 outline: 'none',
                 backgroundColor: '#fff',
                 boxSizing: 'border-box',
@@ -254,12 +259,12 @@ const LoginForm = ({ isAdmin = false, onSwitchToRegister }) => {
           disabled={isLoading}
           style={{
             width: '100%',
-            padding: '1rem',
+            padding: window.innerWidth <= 768 ? '0.875rem' : '1rem',
             backgroundColor: isAdmin ? '#dc3545' : '#007bff',
             color: 'white',
             border: 'none',
             borderRadius: '8px',
-            fontSize: '1rem',
+            fontSize: window.innerWidth <= 768 ? '0.9rem' : '1rem',
             fontWeight: '600',
             cursor: isLoading ? 'not-allowed' : 'pointer',
             opacity: isLoading ? 0.7 : 1,
@@ -267,7 +272,8 @@ const LoginForm = ({ isAdmin = false, onSwitchToRegister }) => {
             alignItems: 'center',
             justifyContent: 'center',
             gap: '0.5rem',
-            transition: 'all 0.3s ease'
+            transition: 'all 0.3s ease',
+            boxSizing: 'border-box'
           }}
         >
           {isLoading ? (
@@ -298,7 +304,10 @@ const LoginForm = ({ isAdmin = false, onSwitchToRegister }) => {
           paddingTop: '1.5rem',
           borderTop: '1px solid #e1e5e9'
         }}>
-          <p style={{ color: '#666', fontSize: '0.9rem' }}>
+          <p style={{ 
+            color: '#666', 
+            fontSize: window.innerWidth <= 768 ? '0.8rem' : '0.9rem'
+          }}>
             Don&apos;t have an account?{' '}
             <button
               onClick={onSwitchToRegister}
@@ -309,7 +318,7 @@ const LoginForm = ({ isAdmin = false, onSwitchToRegister }) => {
                 cursor: 'pointer',
                 textDecoration: 'underline',
                 fontWeight: '500',
-                fontSize: '0.9rem'
+                fontSize: window.innerWidth <= 768 ? '0.8rem' : '0.9rem'
               }}
             >
               Sign up here
@@ -325,7 +334,10 @@ const LoginForm = ({ isAdmin = false, onSwitchToRegister }) => {
           paddingTop: '1.5rem',
           borderTop: '1px solid #e1e5e9'
         }}>
-          <p style={{ color: '#666', fontSize: '0.9rem' }}>
+          <p style={{ 
+            color: '#666', 
+            fontSize: window.innerWidth <= 768 ? '0.8rem' : '0.9rem'
+          }}>
             Not an admin?{' '}
             <a
               href="/auth"
@@ -333,7 +345,7 @@ const LoginForm = ({ isAdmin = false, onSwitchToRegister }) => {
                 color: '#007bff',
                 textDecoration: 'underline',
                 fontWeight: '500',
-                fontSize: '0.9rem'
+                fontSize: window.innerWidth <= 768 ? '0.8rem' : '0.9rem'
               }}
             >
               User login
