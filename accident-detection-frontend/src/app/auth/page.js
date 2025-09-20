@@ -54,31 +54,35 @@ export default function AuthPage() {
       <div className={styles.authBranding}>
         <div className={styles.brandingContent}>
           <div className={styles.logoSection}>
-            <div className={styles.logoIcon}>🚗</div>
-            <h1 className={styles.brandTitle}>AccidentGuard</h1>
-            <p className={styles.brandSubtitle}>AI-Powered Accident Prevention System</p>
+            <div className={styles.logoIcon}>🛡️</div>
+            <h1 className={styles.brandTitle}>SafeGuard AI</h1>
+            <p className={styles.brandSubtitle}>Intelligent Vehicle Safety & Accident Prevention</p>
           </div>
           
           <div className={styles.featuresList}>
             <div className={styles.featureItem}>
               <span className={styles.featureIcon}>⚡</span>
-              <span>Real-time Detection</span>
+              <span>Real-time Threat Detection</span>
             </div>
             <div className={styles.featureItem}>
-              <span className={styles.featureIcon}>🛡️</span>
-              <span>Advanced Safety Analytics</span>
+              <span className={styles.featureIcon}>🎯</span>
+              <span>Predictive Risk Analysis</span>
             </div>
             <div className={styles.featureItem}>
-              <span className={styles.featureIcon}>📊</span>
-              <span>Comprehensive Reports</span>
+              <span className={styles.featureIcon}>📈</span>
+              <span>Smart Fleet Analytics</span>
+            </div>
+            <div className={styles.featureItem}>
+              <span className={styles.featureIcon}>🔔</span>
+              <span>Instant Alert System</span>
             </div>
           </div>
           
           <div className={styles.testimonial}>
             <blockquote>
-              "Reduced accidents by 65% in our fleet operations"
+              Reduced our fleet accidents by 78% and saved over $2M in insurance costs within the first year.
             </blockquote>
-            <cite>- Transport Manager</cite>
+            <cite>— Sarah Johnson, Fleet Operations Manager</cite>
           </div>
         </div>
       </div>
@@ -89,14 +93,14 @@ export default function AuthPage() {
           {/* Header */}
           <div className={styles.formHeader}>
             <h2 className={styles.formTitle}>
-              {isAdmin ? 'Admin Access' : isLogin ? 'Welcome Back' : 'Create Account'}
+              {isAdmin ? '🔐 Admin Portal' : isLogin ? 'Welcome Back!' : 'Join SafeGuard AI'}
             </h2>
             <p className={styles.formDescription}>
               {isAdmin 
-                ? 'Administrative portal access'
+                ? 'Secure administrative access to manage your safety systems'
                 : isLogin 
-                ? 'Sign in to your account to continue' 
-                : 'Join us to get started with accident prevention'
+                ? 'Access your dashboard to monitor vehicle safety and analytics' 
+                : 'Start protecting your fleet with AI-powered accident prevention'
               }
             </p>
           </div>
@@ -105,13 +109,13 @@ export default function AuthPage() {
           {isAdmin && (
             <div className={styles.adminNotice}>
               <div className={styles.adminNoticeContent}>
-                <span className={styles.adminIcon}>👨‍💼</span>
+                <span className={styles.adminIcon}>🔒</span>
                 <div>
-                  <strong>Admin Login Mode</strong>
-                  <p>Enhanced security access required</p>
+                  <strong>Administrator Access</strong>
+                  <p>Enhanced security protocols active</p>
                 </div>
               </div>
-              <a href="/auth" className={styles.backLink}>← Regular Login</a>
+              <a href="/auth" className={styles.backLink}>← Back to Login</a>
             </div>
           )}
 
@@ -156,8 +160,9 @@ export default function AuthPage() {
             )}
             
             <div className={styles.helpLinks}>
-              <a href="/forgot-password">Forgot Password?</a>
-              <a href="/help">Need Help?</a>
+              <a href="/forgot-password">Reset Password</a>
+              <a href="/support">Contact Support</a>
+              <a href="/demo">Request Demo</a>
             </div>
           </div>
         </div>
