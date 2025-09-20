@@ -308,14 +308,32 @@
   .authBranding {
     padding: 2rem 1rem;
     min-height: 250px;
+    justify-content: center;
+    align-items: center;
   }
 
   .authForms {
     padding: 1.5rem 1rem;
+    justify-content: center;
+    align-items: center;
   }
 
   .brandingContent {
     max-width: 100%;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .formContainer {
+    max-width: 100%;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
   }
 
   .logoIcon {
@@ -329,10 +347,13 @@
   .brandSubtitle {
     font-size: 1rem;
     margin-bottom: 2rem;
+    text-align: center;
   }
 
   .featuresList {
     margin-bottom: 2rem;
+    width: 100%;
+    max-width: 400px;
   }
 
   .featureItem {
@@ -343,6 +364,9 @@
 
   .testimonial {
     padding: 1.5rem;
+    width: 100%;
+    max-width: 400px;
+    text-align: center;
   }
 
   .testimonial blockquote {
@@ -354,8 +378,24 @@
     gap: 1rem;
   }
 
-  .formContainer {
-    max-width: 100%;
+  .formHeader {
+    text-align: center;
+    width: 100%;
+  }
+
+  .modeToggle {
+    width: 100%;
+    max-width: 400px;
+  }
+
+  .formWrapper {
+    width: 100%;
+    max-width: 400px;
+  }
+
+  .formFooter {
+    width: 100%;
+    max-width: 400px;
   }
 }
 
@@ -363,14 +403,33 @@
   .authBranding {
     padding: 1.5rem 1rem;
     min-height: 200px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
   }
 
   .authForms {
     padding: 1rem;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+  }
+
+  .brandingContent {
+    width: 100%;
+    max-width: 320px;
+    margin: 0 auto;
+  }
+
+  .formContainer {
+    width: 100%;
+    max-width: 320px;
+    margin: 0 auto;
   }
 
   .logoSection {
     margin-bottom: 2rem;
+    text-align: center;
   }
 
   .logoIcon {
@@ -387,6 +446,7 @@
 
   .featuresList {
     margin-bottom: 1.5rem;
+    width: 100%;
   }
 
   .featureItem {
@@ -398,6 +458,7 @@
   .testimonial {
     padding: 1rem;
     margin-top: 1rem;
+    text-align: center;
   }
 
   .testimonial blockquote {
@@ -406,6 +467,7 @@
 
   .formHeader {
     margin-bottom: 1.5rem;
+    text-align: center;
   }
 
   .formTitle {
@@ -418,11 +480,22 @@
 
   .modeToggle {
     margin-bottom: 1.5rem;
+    width: 100%;
   }
 
   .toggleBtn {
     padding: 0.6rem 0.8rem;
     font-size: 0.9rem;
+  }
+
+  .adminNotice {
+    margin: 0 auto 1.5rem auto;
+    width: 100%;
+  }
+
+  .formFooter {
+    width: 100%;
+    text-align: center;
   }
 }
 
@@ -434,6 +507,28 @@
   .authBranding {
     min-height: 180px;
     padding: 1rem;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+  }
+
+  .authForms {
+    padding: 1rem;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+  }
+
+  .brandingContent {
+    width: 100%;
+    max-width: 280px;
+    margin: 0 auto;
+  }
+
+  .formContainer {
+    width: 100%;
+    max-width: 280px;
+    margin: 0 auto;
   }
 
   .brandTitle {
@@ -462,5 +557,22 @@
 
   .formTitle {
     font-size: 1.4rem;
+  }
+
+  .formDescription {
+    font-size: 0.85rem;
+  }
+
+  .toggleBtn {
+    padding: 0.5rem 0.6rem;
+    font-size: 0.85rem;
+  }
+
+  .helpLinks {
+    gap: 0.75rem;
+  }
+
+  .helpLinks a {
+    font-size: 0.85rem;
   }
 }
