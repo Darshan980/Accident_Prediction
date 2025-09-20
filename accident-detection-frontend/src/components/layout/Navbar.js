@@ -543,12 +543,13 @@ const Navigation = ({ user, isAuthenticated, logout, isLoading }) => {
             padding: 0.75rem 1rem;
             height: auto;
             min-height: 60px;
-            flex-wrap: wrap;
             gap: 0.5rem;
+            align-items: center;
+            justify-content: space-between;
           }
 
           .nav-logo {
-            flex: 1;
+            flex: 0 0 auto;
           }
 
           .logo-icon {
@@ -560,7 +561,8 @@ const Navigation = ({ user, isAuthenticated, logout, isLoading }) => {
           }
 
           .nav-content {
-            gap: 1rem;
+            gap: 0.5rem;
+            flex: 0 0 auto;
           }
 
           .nav-links {
@@ -596,12 +598,14 @@ const Navigation = ({ user, isAuthenticated, logout, isLoading }) => {
           }
 
           .auth-links {
-            gap: 0.5rem;
+            gap: 0.25rem;
+            flex-shrink: 0;
           }
 
           .auth-link {
-            padding: 0.5rem 0.75rem;
-            font-size: 0.9rem;
+            padding: 0.4rem 0.6rem;
+            font-size: 0.8rem;
+            white-space: nowrap;
           }
 
           .auth-link span {
@@ -624,7 +628,7 @@ const Navigation = ({ user, isAuthenticated, logout, isLoading }) => {
           }
 
           .user-menu-button {
-            padding: 0.4rem 0.6rem;
+            padding: 0.35rem 0.5rem;
           }
 
           .user-avatar {
@@ -637,15 +641,20 @@ const Navigation = ({ user, isAuthenticated, logout, isLoading }) => {
             right: -5px;
           }
 
+          .auth-links {
+            gap: 0.2rem;
+          }
+
           .auth-link {
-            padding: 0.4rem 0.6rem;
-            font-size: 0.85rem;
+            padding: 0.35rem 0.5rem;
+            font-size: 0.75rem;
+            min-width: auto;
           }
         }
 
         @media (max-width: 360px) {
           .nav-container {
-            padding: 0.5rem;
+            padding: 0.4rem;
             min-height: 45px;
           }
 
@@ -654,7 +663,7 @@ const Navigation = ({ user, isAuthenticated, logout, isLoading }) => {
           }
 
           .logo-icon {
-            font-size: 1.5rem;
+            font-size: 1.2rem;
           }
 
           .dropdown-menu {
@@ -677,6 +686,25 @@ const Navigation = ({ user, isAuthenticated, logout, isLoading }) => {
 
           .dropdown-user-email {
             font-size: 0.75rem;
+          }
+
+          .auth-links {
+            gap: 0.15rem;
+          }
+
+          .auth-link {
+            padding: 0.3rem 0.4rem;
+            font-size: 0.7rem;
+            border-radius: 6px;
+          }
+
+          .user-menu-button {
+            padding: 0.3rem 0.4rem;
+          }
+
+          .user-avatar {
+            width: 22px;
+            height: 22px;
           }
         }
       `}</style>
