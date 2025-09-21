@@ -1,4 +1,4 @@
-// utils/fileUtils.js
+// app/upload/utils/fileUtils.js
 import { ACCEPTED_FILE_TYPES, MAX_FILE_SIZE } from './constants'
 
 export const formatFileSize = (bytes) => {
