@@ -86,3 +86,105 @@ export const useUserResults = (user, isAuthenticated, searchParams) => {
               id: item.id || generateId(),
               timestamp: item.timestamp,
               source: item.source === 'live' ? 'live' : 'upload',
+              type: item.result.accident_detected ? 'accident' : 'safe'
+            })
+          }
+        }
+      })
+
+      // Remove duplicates and sort by timestamp (newest first)
+      const uniqueResults = removeDuplicateResults(userResults)
+      uniqueResults.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
+
+      setResults(uniqueResults)
+      setLoading(false)
+
+    } catch (error) {
+      console.error('Error loading user results:', error)
+      setError('Failed to load your results. Please try again.')
+      setLoading(false)
+    }
+  }
+
+  const applyFilters = () => {
+    let filtered = [...results]
+
+    // Apply type filter
+    switch (filter) {
+      case 'accidents':
+        filtered = filtered.filter(r => r.accident_detected === true)
+        break
+      case 'safe':
+        filtered = filtered.filter(r => r.accident_detected === false)
+        break
+      case 'upload':
+        filtered = filtered.filter(r => r.source === 'upload')
+        break
+      case 'live':
+        filtered = filtered.filter(r => r.source === 'live')
+        break
+      default:
+        // 'all' - no filter
+        break
+    }
+
+    // Apply search filter
+    filtered = filterResultsBySearch(filtered, searchTerm)
+
+    setFilteredResults(filtered)
+  }
+
+  const handleDownloadReport = (result) => {
+    try {
+      const report = generateReport(result, user)
+      const filename = `analysis_report_${result.id || Date.now()}.json`
+      downloadReport(report, filename)
+    } catch (error) {
+      console.error('Error downloading report:', error)
+      // You could add a toast notification here
+    }
+  }
+
+  // Utility functions
+  const generateId = () => {
+    return Date.now().toString(36) + Math.random().toString(36).substr(2)
+  }
+
+  const removeDuplicateResults = (results) => {
+    const seen = new Map()
+    
+    return results.filter(result => {
+      const key = `${result.filename || 'live'}-${result.timestamp}`
+      const existingResult = seen.get(key)
+      
+      if (!existingResult) {
+        seen.set(key, result)
+        return true
+      }
+      
+      // If timestamps are very close (within 5 seconds), consider them duplicates
+      const timeDiff = Math.abs(new Date(result.timestamp) - new Date(existingResult.timestamp))
+      if (timeDiff < 5000) {
+        return false
+      }
+      
+      seen.set(key, result)
+      return true
+    })
+  }
+
+  return {
+    results,
+    filteredResults,
+    loading,
+    error,
+    filter,
+    setFilter,
+    searchTerm,
+    setSearchTerm,
+    selectedResult,
+    setSelectedResult,
+    handleDownloadReport,
+    loadUserResults // Expose for manual refresh if needed
+  }
+}
