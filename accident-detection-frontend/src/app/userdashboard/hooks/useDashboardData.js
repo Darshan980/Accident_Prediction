@@ -20,6 +20,17 @@ export const useDashboardData = (alerts) => {
     };
   };
 
+  // Get read alerts from localStorage
+  const getReadAlertsFromStorage = useCallback(() => {
+    try {
+      const readAlerts = localStorage.getItem('readAlerts');
+      return readAlerts ? JSON.parse(readAlerts) : [];
+    } catch (err) {
+      console.error('Failed to load read alerts from localStorage:', err);
+      return [];
+    }
+  }, []);
+
   // Fetch stats from your FastAPI backend
   const fetchServerStats = useCallback(async () => {
     try {
@@ -67,7 +78,7 @@ export const useDashboardData = (alerts) => {
     }
   }, []);
 
-  // Calculate client-side stats from alerts
+  // Calculate client-side stats from alerts (FIXED)
   const clientStats = useMemo(() => {
     if (!alerts || alerts.length === 0) {
       return {
@@ -80,12 +91,20 @@ export const useDashboardData = (alerts) => {
 
     const now = new Date();
     const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+    
+    // Get read alert IDs from localStorage
+    const readAlertIds = getReadAlertsFromStorage();
 
     const last24hAlerts = alerts.filter(alert => 
       new Date(alert.timestamp) >= oneDayAgo
     );
 
-    const unreadAlerts = alerts.filter(a => !a.read);
+    // FIXED: Check both alert.read AND localStorage read status
+    const unreadAlerts = alerts.filter(alert => {
+      const isReadInAlert = alert.read === true;
+      const isReadInStorage = readAlertIds.includes(alert.id);
+      return !isReadInAlert && !isReadInStorage;
+    });
 
     return {
       total_alerts: alerts.length,
@@ -93,16 +112,17 @@ export const useDashboardData = (alerts) => {
       last_24h_detections: last24hAlerts.length,
       user_accuracy: "N/A" // This would come from server
     };
-  }, [alerts]);
+  }, [alerts, getReadAlertsFromStorage]);
 
-  // Combine server stats with client stats (server takes priority)
+  // Combine server stats with client stats (server takes priority, but always use client counts for accuracy)
   const stats = useMemo(() => {
     if (serverStats) {
       return {
-        ...clientStats,
         ...serverStats,
-        // Always use client-side unread count as it's more up-to-date
-        unread_alerts: clientStats.unread_alerts
+        // Always use client-side counts as they include live detection logs
+        total_alerts: clientStats.total_alerts,
+        unread_alerts: clientStats.unread_alerts,
+        last_24h_detections: clientStats.last_24h_detections
       };
     }
     return clientStats;
@@ -138,7 +158,7 @@ export const useDashboardData = (alerts) => {
     console.log('Dashboard refreshed at:', new Date().toLocaleTimeString());
   }, [fetchServerStats]);
 
-  // Performance metrics (calculated from alerts)
+  // Performance metrics (calculated from alerts) - FIXED confidence calculation
   const performanceMetrics = useMemo(() => {
     if (!alerts || alerts.length === 0) {
       return {
@@ -149,12 +169,30 @@ export const useDashboardData = (alerts) => {
       };
     }
 
-    const highConfidenceAlerts = alerts.filter(a => a.confidence && a.confidence > 0.8).length;
-    const mediumConfidenceAlerts = alerts.filter(a => a.confidence && a.confidence > 0.6 && a.confidence <= 0.8).length;
-    const lowConfidenceAlerts = alerts.filter(a => a.confidence && a.confidence <= 0.6).length;
+    // FIXED: Handle confidence as either percentage (90.0) or decimal (0.9)
+    const normalizeConfidence = (confidence) => {
+      if (!confidence) return 0;
+      const numConfidence = typeof confidence === 'string' ? parseFloat(confidence) : confidence;
+      return numConfidence > 1 ? numConfidence / 100 : numConfidence;
+    };
+
+    const highConfidenceAlerts = alerts.filter(a => {
+      const conf = normalizeConfidence(a.confidence);
+      return conf > 0.8;
+    }).length;
+    
+    const mediumConfidenceAlerts = alerts.filter(a => {
+      const conf = normalizeConfidence(a.confidence);
+      return conf > 0.6 && conf <= 0.8;
+    }).length;
+    
+    const lowConfidenceAlerts = alerts.filter(a => {
+      const conf = normalizeConfidence(a.confidence);
+      return conf > 0 && conf <= 0.6;
+    }).length;
 
     const avgConfidence = alerts.length > 0 
-      ? (alerts.reduce((sum, alert) => sum + (alert.confidence || 0), 0) / alerts.length * 100).toFixed(1) + '%'
+      ? (alerts.reduce((sum, alert) => sum + normalizeConfidence(alert.confidence), 0) / alerts.length * 100).toFixed(1) + '%'
       : '0%';
 
     return {
