@@ -1,0 +1,119 @@
+/* app/live/styles/CameraSwitchButton.module.css */
+
+.switchButton {
+  position: absolute;
+  bottom: 15px;
+  right: 15px;
+  background-color: rgba(0, 0, 0, 0.8);
+  color: white;
+  border: none;
+  border-radius: 25px;
+  padding: 10px 16px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.3s ease;
+  backdrop-filter: blur(10px);
+  z-index: 10;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.switchButton:hover:not(.switching) {
+  background-color: rgba(0, 0, 0, 0.9);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+
+.switchButton:active:not(.switching) {
+  transform: translateY(0);
+}
+
+.switching {
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+.cameraIcon {
+  font-size: 1.1rem;
+  line-height: 1;
+}
+
+.buttonText {
+  font-size: 0.85rem;
+  white-space: nowrap;
+}
+
+.spinner {
+  animation: spin 1s linear infinite;
+  font-size: 1rem;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Mobile Responsiveness */
+@media (max-width: 768px) {
+  .switchButton {
+    bottom: 12px;
+    right: 12px;
+    padding: 8px 14px;
+    border-radius: 20px;
+  }
+  
+  .buttonText {
+    font-size: 0.8rem;
+  }
+  
+  .cameraIcon {
+    font-size: 1rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .switchButton {
+    bottom: 10px;
+    right: 10px;
+    padding: 6px 12px;
+    border-radius: 18px;
+  }
+  
+  .buttonText {
+    display: none; /* Hide text on very small screens */
+  }
+  
+  .cameraIcon {
+    font-size: 1.2rem;
+  }
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+  .switchButton {
+    background-color: #000;
+    border: 2px solid #fff;
+  }
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+  .switchButton {
+    transition: none;
+  }
+  
+  .switchButton:hover {
+    transform: none;
+  }
+  
+  .spinner {
+    animation: none;
+  }
+}
