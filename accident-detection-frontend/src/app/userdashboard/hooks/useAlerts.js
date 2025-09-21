@@ -118,6 +118,15 @@ export const useAlerts = (useRealTime = true) => {
 
   // Initialize data
   useEffect(() => {
+    // Load read alerts from localStorage on startup
+    try {
+      const storedReadAlerts = JSON.parse(localStorage.getItem('readAlerts') || '[]');
+      const readAlertsSet = new Set(storedReadAlerts);
+      setReadAlerts(readAlertsSet);
+    } catch (err) {
+      console.error('Failed to load read alerts from localStorage:', err);
+    }
+    
     fetchAlerts();
     
     // 🚨 NEW: Listen for localStorage changes (when live detection adds new logs)
@@ -292,11 +301,22 @@ export const useAlerts = (useRealTime = true) => {
     };
   }, [useRealTime, fetchAlerts]);
 
-  // Mark alert as read (with API call to your backend)
+  // Mark alert as read (with localStorage persistence for live detection logs)
   const markAlertAsRead = useCallback(async (alertId) => {
     const newReadAlerts = new Set(readAlerts);
     newReadAlerts.add(alertId);
     setReadAlerts(newReadAlerts);
+    
+    // Save to localStorage for persistence
+    try {
+      const readAlertsArray = JSON.parse(localStorage.getItem('readAlerts') || '[]');
+      if (!readAlertsArray.includes(alertId)) {
+        readAlertsArray.push(alertId);
+        localStorage.setItem('readAlerts', JSON.stringify(readAlertsArray));
+      }
+    } catch (err) {
+      console.error('Failed to save read status to localStorage:', err);
+    }
     
     // Optimistically update local state
     setAlerts(prev => prev.map(alert => 
@@ -334,13 +354,32 @@ export const useAlerts = (useRealTime = true) => {
             ? { ...alert, read: false }
             : alert
         ));
+        
+        // Also revert localStorage
+        try {
+          const readAlertsArray = JSON.parse(localStorage.getItem('readAlerts') || '[]');
+          const updatedArray = readAlertsArray.filter(id => id !== alertId);
+          localStorage.setItem('readAlerts', JSON.stringify(updatedArray));
+        } catch (storageErr) {
+          console.error('Failed to revert localStorage read status:', storageErr);
+        }
       }
     }
   }, [readAlerts, useRealTime, alerts]);
 
-  // Check if alert is read
+  // Check if alert is read (check both React state and localStorage)
   const isAlertRead = useCallback((alert) => {
-    return alert.read || readAlerts.has(alert.id);
+    if (alert.read) return true;
+    if (readAlerts.has(alert.id)) return true;
+    
+    // Also check localStorage for persistence
+    try {
+      const storedReadAlerts = JSON.parse(localStorage.getItem('readAlerts') || '[]');
+      return storedReadAlerts.includes(alert.id);
+    } catch (err) {
+      console.error('Failed to check localStorage read status:', err);
+      return false;
+    }
   }, [readAlerts]);
 
   // Filter alerts based on current filter
@@ -351,8 +390,20 @@ export const useAlerts = (useRealTime = true) => {
     return true;
   });
 
-  // Calculate unread count
-  const unreadCount = alerts.filter(alert => !alert.read && !readAlerts.has(alert.id)).length;
+  // Calculate unread count (check both React state and localStorage)
+  const unreadCount = alerts.filter(alert => {
+    if (alert.read) return false;
+    if (readAlerts.has(alert.id)) return false;
+    
+    // Also check localStorage
+    try {
+      const storedReadAlerts = JSON.parse(localStorage.getItem('readAlerts') || '[]');
+      return !storedReadAlerts.includes(alert.id);
+    } catch (err) {
+      console.error('Failed to check localStorage for unread count:', err);
+      return !readAlerts.has(alert.id);
+    }
+  }).length;
 
   // Add new alert (for manual additions)
   const addAlert = useCallback(async (newAlert) => {
