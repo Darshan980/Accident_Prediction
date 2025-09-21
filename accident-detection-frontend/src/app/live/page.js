@@ -1,4 +1,4 @@
-// app/live/page.js - Truly Simplified Live Detection
+// app/live/page.js - Live Detection with Dashboard Logging
 'use client';
 import React, { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
@@ -55,6 +55,33 @@ const LiveDetection = () => {
         const data = JSON.parse(event.data);
         if (data.accident_detected !== undefined) {
           setDetection(data);
+          
+          // Save accidents to dashboard
+          if (data.accident_detected) {
+            const logEntry = {
+              id: Date.now(),
+              timestamp: new Date().toISOString(),
+              severity: data.confidence > 0.8 ? 'critical' : data.confidence > 0.6 ? 'high' : 'medium',
+              title: 'Live Accident Detection',
+              description: `Camera detected potential accident with ${(data.confidence * 100).toFixed(1)}% confidence`,
+              source: 'Live Detection Camera',
+              confidence: (data.confidence * 100).toFixed(1),
+              status: 'active',
+              location: 'Camera Feed',
+              type: 'accident',
+              read: false
+            };
+            
+            try {
+              const existingLogs = JSON.parse(localStorage.getItem('accidentDashboardLogs') || '[]');
+              const updatedLogs = [logEntry, ...existingLogs.slice(0, 49)];
+              localStorage.setItem('accidentDashboardLogs', JSON.stringify(updatedLogs));
+              console.log('Accident logged to dashboard');
+            } catch (err) {
+              console.error('Failed to log accident:', err);
+            }
+          }
+          
           setResults(prev => [{
             id: Date.now(),
             type: data.accident_detected ? 'Accident' : 'Normal',
@@ -178,6 +205,7 @@ const LiveDetection = () => {
             </div>
             <div style={styles.confidence}>
               {(detection.confidence * 100).toFixed(1)}% confidence
+              {detection.accident_detected && <span style={styles.loggedBadge}>📊 Logged</span>}
             </div>
           </div>
         </div>
@@ -193,6 +221,7 @@ const LiveDetection = () => {
               <span>{result.type}</span>
               <span>{result.confidence}%</span>
               <span style={styles.time}>{result.time}</span>
+              {result.type === 'Accident' && <span style={styles.miniLogBadge}>📊</span>}
             </div>
           ))}
         </div>
@@ -225,6 +254,7 @@ const LiveDetection = () => {
       <div style={styles.nav}>
         <Link href="/results" style={styles.navBtn}>📊 Results</Link>
         <Link href="/notification" style={styles.navBtn}>🔔 Alerts</Link>
+        <Link href="/dashboard" style={styles.navBtn}>📋 Dashboard</Link>
         <Link href="/" style={styles.navBtn}>← Home</Link>
       </div>
     </div>
@@ -346,7 +376,17 @@ const styles = {
   },
 
   confidence: {
-    opacity: 0.9
+    opacity: 0.9,
+    display: 'flex',
+    alignItems: 'center',
+    gap: '0.5rem'
+  },
+
+  loggedBadge: {
+    background: 'rgba(255,255,255,0.2)',
+    padding: '0.2rem 0.4rem',
+    borderRadius: '4px',
+    fontSize: '0.7rem'
   },
 
   resultsBox: {
@@ -373,6 +413,11 @@ const styles = {
   time: {
     opacity: 0.7,
     fontSize: '0.8rem'
+  },
+
+  miniLogBadge: {
+    fontSize: '0.7rem',
+    opacity: 0.7
   },
 
   error: {
