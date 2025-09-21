@@ -1,10 +1,12 @@
-// Updated NavLinks.js with mobile hamburger menu
+// Updated NavLinks.js with mobile hamburger menu including user profile
 import React, { useState } from 'react';
 import Link from 'next/link';
-import { Menu, X } from 'lucide-react';
+import { Menu, X, User, Settings, LogOut, Shield } from 'lucide-react';
 import { getNavItems } from '../../../utils/navigation';
+import { useAuth } from '../../../contexts/AuthContext';
 
 const NavLinks = ({ user }) => {
+  const { logout } = useAuth();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const navItems = getNavItems(user);
 
@@ -14,6 +16,11 @@ const NavLinks = ({ user }) => {
 
   const closeMobileMenu = () => {
     setIsMobileMenuOpen(false);
+  };
+
+  const handleLogout = () => {
+    logout();
+    closeMobileMenu();
   };
 
   return (
@@ -118,40 +125,110 @@ const NavLinks = ({ user }) => {
             }}
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Mobile Menu Header */}
+            {/* Mobile Menu Header with User Profile */}
             <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
               marginBottom: '2rem',
-              paddingBottom: '1rem',
+              paddingBottom: '1.5rem',
               borderBottom: '1px solid #e5e7eb'
             }}>
-              <h3 style={{
-                margin: 0,
-                fontSize: '1.2rem',
-                fontWeight: '600',
-                color: '#111827'
+              {/* Header with close button */}
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                marginBottom: user ? '1.5rem' : '0'
               }}>
-                Navigation
-              </h3>
-              <button
-                onClick={closeMobileMenu}
-                style={{
+                <h3 style={{
+                  margin: 0,
+                  fontSize: '1.2rem',
+                  fontWeight: '600',
+                  color: '#111827'
+                }}>
+                  {user ? 'Menu' : 'Navigation'}
+                </h3>
+                <button
+                  onClick={closeMobileMenu}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    width: '32px',
+                    height: '32px',
+                    background: 'transparent',
+                    border: '1px solid #e5e7eb',
+                    borderRadius: '6px',
+                    cursor: 'pointer',
+                    color: '#6b7280'
+                  }}
+                >
+                  <X size={16} />
+                </button>
+              </div>
+
+              {/* User Profile Section (only show if user is logged in) */}
+              {user && (
+                <div style={{
                   display: 'flex',
                   alignItems: 'center',
-                  justifyContent: 'center',
-                  width: '32px',
-                  height: '32px',
-                  background: 'transparent',
-                  border: '1px solid #e5e7eb',
-                  borderRadius: '6px',
-                  cursor: 'pointer',
-                  color: '#6b7280'
-                }}
-              >
-                <X size={16} />
-              </button>
+                  gap: '1rem',
+                  padding: '1rem',
+                  background: 'linear-gradient(135deg, #f8fafc, #f1f5f9)',
+                  borderRadius: '12px',
+                  marginBottom: '1rem'
+                }}>
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    width: '48px',
+                    height: '48px',
+                    background: 'linear-gradient(135deg, #3b82f6, #2563eb)',
+                    color: 'white',
+                    borderRadius: '50%',
+                    flexShrink: 0
+                  }}>
+                    <User size={22} />
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <p style={{
+                      margin: '0 0 0.25rem 0',
+                      fontWeight: '600',
+                      color: '#111827',
+                      fontSize: '1rem'
+                    }}>
+                      {user.username}
+                    </p>
+                    {user.email && (
+                      <p style={{
+                        margin: '0 0 0.5rem 0',
+                        fontSize: '0.85rem',
+                        color: '#6b7280'
+                      }}>
+                        {user.email}
+                      </p>
+                    )}
+                    {user.role && (
+                      <span style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '0.25rem',
+                        fontSize: '0.75rem',
+                        fontWeight: '500',
+                        padding: '0.25rem 0.5rem',
+                        borderRadius: '6px',
+                        textTransform: 'uppercase',
+                        background: user.role === 'admin' 
+                          ? 'linear-gradient(135deg, #dc2626, #b91c1c)'
+                          : '#e5e7eb',
+                        color: user.role === 'admin' ? 'white' : '#374151'
+                      }}>
+                        {user.role === 'admin' && <Shield size={12} />}
+                        {user.role}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Mobile Menu Items */}
@@ -170,7 +247,7 @@ const NavLinks = ({ user }) => {
                     textDecoration: 'none',
                     fontWeight: '500',
                     fontSize: '1rem',
-                    borderBottom: index < navItems.length - 1 ? '1px solid #f3f4f6' : 'none',
+                    borderBottom: (index < navItems.length - 1 || user) ? '1px solid #f3f4f6' : 'none',
                     transition: 'all 0.2s ease'
                   }}
                   onMouseOver={(e) => {
@@ -197,6 +274,97 @@ const NavLinks = ({ user }) => {
                   <span>{item.label}</span>
                 </Link>
               ))}
+
+              {/* User Profile Actions (only show if user is logged in) */}
+              {user && (
+                <>
+                  <button
+                    onClick={() => {
+                      closeMobileMenu();
+                      window.location.href = '/profile';
+                    }}
+                    style={{
+                      width: '100%',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '1rem',
+                      padding: '1rem 0',
+                      background: 'transparent',
+                      border: 'none',
+                      cursor: 'pointer',
+                      color: '#374151',
+                      fontSize: '1rem',
+                      fontWeight: '500',
+                      borderBottom: '1px solid #f3f4f6',
+                      transition: 'all 0.2s ease',
+                      textAlign: 'left'
+                    }}
+                    onMouseOver={(e) => {
+                      e.currentTarget.style.color = '#3b82f6';
+                      e.currentTarget.style.paddingLeft = '0.5rem';
+                    }}
+                    onMouseOut={(e) => {
+                      e.currentTarget.style.color = '#374151';
+                      e.currentTarget.style.paddingLeft = '0';
+                    }}
+                  >
+                    <div style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      width: '40px',
+                      height: '40px',
+                      background: 'rgba(59, 130, 246, 0.1)',
+                      borderRadius: '8px',
+                      flexShrink: 0
+                    }}>
+                      <Settings size={18} />
+                    </div>
+                    <span>Profile Settings</span>
+                  </button>
+                  
+                  <button
+                    onClick={handleLogout}
+                    style={{
+                      width: '100%',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '1rem',
+                      padding: '1rem 0',
+                      background: 'transparent',
+                      border: 'none',
+                      cursor: 'pointer',
+                      color: '#dc2626',
+                      fontSize: '1rem',
+                      fontWeight: '500',
+                      transition: 'all 0.2s ease',
+                      textAlign: 'left'
+                    }}
+                    onMouseOver={(e) => {
+                      e.currentTarget.style.color = '#b91c1c';
+                      e.currentTarget.style.paddingLeft = '0.5rem';
+                    }}
+                    onMouseOut={(e) => {
+                      e.currentTarget.style.color = '#dc2626';
+                      e.currentTarget.style.paddingLeft = '0';
+                    }}
+                  >
+                    <div style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      width: '40px',
+                      height: '40px',
+                      background: 'rgba(220, 38, 38, 0.1)',
+                      borderRadius: '8px',
+                      flexShrink: 0
+                    }}>
+                      <LogOut size={18} />
+                    </div>
+                    <span>Sign Out</span>
+                  </button>
+                </>
+              )}
             </div>
           </div>
         </div>
