@@ -4,62 +4,19 @@ const ModalNotification = ({ modal, onAcknowledge, onDismiss, alertSettings }) =
   if (!modal.show) return null;
 
   return (
-    <div style={{
-      position: 'fixed',
-      top: 0,
-      left: 0,
-      right: 0,
-      bottom: 0,
-      backgroundColor: 'rgba(0,0,0,0.7)',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      zIndex: 9999,
-      backdropFilter: 'blur(4px)'
-    }}>
-      <div 
-        className="modal-pulse"
-        style={{
-          backgroundColor: modal.severity === 'high' ? '#dc3545' : '#ff6b35',
-          color: 'white',
-          padding: '40px',
-          borderRadius: '16px',
-          maxWidth: '600px',
-          width: '90%',
-          textAlign: 'center',
-          boxShadow: '0 20px 40px rgba(0,0,0,0.3)',
-          position: 'relative'
-        }}
-      >
-        <div style={{ fontSize: '4rem', marginBottom: '20px' }}>⚠️</div>
+    <div className="mobile-modal-overlay">
+      <div className="mobile-modal">
+        <div className="mobile-modal-icon">⚠️</div>
         
-        <h2 style={{ 
-          margin: '0 0 16px 0', 
-          fontSize: '2rem', 
-          fontWeight: 'bold',
-          textShadow: '2px 2px 4px rgba(0,0,0,0.3)'
-        }}>
-          {modal.title}
-        </h2>
+        <h2>{modal.title}</h2>
         
-        <div style={{ 
-          margin: '0 0 24px 0', 
-          fontSize: '1.2rem',
-          opacity: 0.9,
-          whiteSpace: 'pre-line'
-        }}>
+        <div className="mobile-modal-message">
           {modal.message}
         </div>
 
         {/* Additional details if available */}
         {modal.data && (
-          <div style={{
-            backgroundColor: 'rgba(255,255,255,0.1)',
-            padding: '16px',
-            borderRadius: '8px',
-            marginBottom: '20px',
-            fontSize: '0.95rem'
-          }}>
+          <div className="mobile-modal-details">
             {modal.data.predicted_class && (
               <div>Prediction: {modal.data.predicted_class}</div>
             )}
@@ -78,40 +35,22 @@ const ModalNotification = ({ modal, onAcknowledge, onDismiss, alertSettings }) =
         <div style={{ 
           fontSize: '0.9rem', 
           opacity: 0.8, 
-          marginBottom: '24px' 
+          marginBottom: '20px' 
         }}>
           Time: {modal.timestamp?.toLocaleTimeString()}
         </div>
         
-        <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
+        <div className="mobile-modal-buttons">
           <button
             onClick={() => onAcknowledge(modal.alertId)}
-            style={{
-              backgroundColor: 'rgba(255,255,255,0.2)',
-              color: 'white',
-              border: '2px solid rgba(255,255,255,0.3)',
-              padding: '12px 24px',
-              borderRadius: '8px',
-              cursor: 'pointer',
-              fontSize: '1rem',
-              fontWeight: 'bold',
-              backdropFilter: 'blur(10px)'
-            }}
+            className="mobile-modal-button"
           >
             ACKNOWLEDGE
           </button>
           
           <button
             onClick={onDismiss}
-            style={{
-              backgroundColor: 'rgba(255,255,255,0.1)',
-              color: 'white',
-              border: '2px solid rgba(255,255,255,0.2)',
-              padding: '12px 24px',
-              borderRadius: '8px',
-              cursor: 'pointer',
-              fontSize: '1rem'
-            }}
+            className="mobile-modal-button"
           >
             DISMISS
           </button>
