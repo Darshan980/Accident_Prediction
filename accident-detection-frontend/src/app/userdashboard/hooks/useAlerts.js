@@ -24,58 +24,128 @@ export const useAlerts = (useRealTime = true) => {
     };
   };
 
-  // Fetch alerts from your FastAPI backend
-  const fetchAlerts = useCallback(async () => {
-    if (!useRealTime) {
-      const demoAlerts = getDemoAlerts();
-      setAlerts(demoAlerts);
-      return;
+  // 🚨 NEW: Load live detection logs from localStorage
+  const loadLiveDetectionLogs = useCallback(() => {
+    try {
+      const savedLogs = localStorage.getItem('accidentDashboardLogs');
+      if (savedLogs) {
+        const parsedLogs = JSON.parse(savedLogs);
+        console.log(`📋 Loaded ${parsedLogs.length} live detection logs from localStorage`);
+        return parsedLogs;
+      }
+    } catch (err) {
+      console.error('❌ Failed to load live detection logs:', err);
     }
+    return [];
+  }, []);
 
+  // Fetch alerts from your FastAPI backend + merge with live detection logs
+  const fetchAlerts = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
       
-      const { baseURL, headers } = getApiConfig();
-      const response = await fetch(`${baseURL}/api/dashboard/user/alerts?limit=50&offset=0`, {
-        method: 'GET',
-        headers,
-      });
-
-      if (!response.ok) {
-        if (response.status === 401) {
-          throw new Error('Authentication required. Please login.');
-        }
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const data = await response.json();
+      let serverAlerts = [];
       
-      if (data.success) {
-        setAlerts(data.alerts || []);
-        setIsConnected(true);
-        console.log(`Loaded ${data.alerts?.length || 0} alerts from ${data.source || 'unknown'} source`);
-      } else {
-        throw new Error(data.error || 'Failed to fetch alerts');
+      if (useRealTime) {
+        // Try to fetch from server
+        try {
+          const { baseURL, headers } = getApiConfig();
+          const response = await fetch(`${baseURL}/api/dashboard/user/alerts?limit=50&offset=0`, {
+            method: 'GET',
+            headers,
+          });
+
+          if (response.ok) {
+            const data = await response.json();
+            if (data.success) {
+              serverAlerts = data.alerts || [];
+              setIsConnected(true);
+              console.log(`📡 Loaded ${serverAlerts.length} alerts from server`);
+            }
+          } else if (response.status === 401) {
+            throw new Error('Authentication required. Please login.');
+          }
+        } catch (serverErr) {
+          console.warn('⚠️ Server alerts failed, using demo data:', serverErr.message);
+          setError(serverErr.message);
+          setIsConnected(false);
+        }
       }
+      
+      // Load live detection logs from localStorage
+      const liveDetectionLogs = loadLiveDetectionLogs();
+      
+      // If no server alerts, use demo alerts
+      if (serverAlerts.length === 0 && !useRealTime) {
+        serverAlerts = getDemoAlerts();
+        console.log(`🎭 Using ${serverAlerts.length} demo alerts`);
+      }
+      
+      // 🎯 MERGE: Combine server alerts + live detection logs
+      const allAlerts = [...liveDetectionLogs, ...serverAlerts];
+      
+      // Remove duplicates by ID and sort by timestamp (newest first)
+      const uniqueAlerts = allAlerts
+        .filter((alert, index, arr) => 
+          arr.findIndex(a => a.id === alert.id) === index
+        )
+        .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+      
+      setAlerts(uniqueAlerts);
+      console.log(`✅ Total dashboard alerts: ${uniqueAlerts.length} (${liveDetectionLogs.length} from live + ${serverAlerts.length} from server/demo)`);
       
     } catch (err) {
-      console.error('Failed to fetch alerts:', err);
+      console.error('❌ Failed to fetch alerts:', err);
       setError(err.message);
       setIsConnected(false);
       
-      // Fallback to demo data on error
+      // Fallback: Just show live detection logs + demo data
+      const liveDetectionLogs = loadLiveDetectionLogs();
       const demoAlerts = getDemoAlerts();
-      setAlerts(demoAlerts);
+      const fallbackAlerts = [...liveDetectionLogs, ...demoAlerts]
+        .filter((alert, index, arr) => 
+          arr.findIndex(a => a.id === alert.id) === index
+        )
+        .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+      
+      setAlerts(fallbackAlerts);
+      console.log(`🔄 Fallback: ${fallbackAlerts.length} alerts (${liveDetectionLogs.length} live + ${demoAlerts.length} demo)`);
     } finally {
       setLoading(false);
     }
-  }, [useRealTime]);
+  }, [useRealTime, loadLiveDetectionLogs]);
 
   // Initialize data
   useEffect(() => {
     fetchAlerts();
-  }, [fetchAlerts]);
+    
+    // 🚨 NEW: Listen for localStorage changes (when live detection adds new logs)
+    const handleStorageChange = (e) => {
+      if (e.key === 'accidentDashboardLogs') {
+        console.log('📡 Live detection added new log, refreshing dashboard...');
+        fetchAlerts();
+      }
+    };
+    
+    window.addEventListener('storage', handleStorageChange);
+    
+    // Also check every 10 seconds for new logs (in case storage event doesn't fire)
+    const pollInterval = setInterval(() => {
+      const currentLogCount = loadLiveDetectionLogs().length;
+      const currentLiveAlerts = alerts.filter(alert => alert.source === 'Live Detection Camera');
+      
+      if (currentLogCount !== currentLiveAlerts.length) {
+        console.log('🔄 New live detection logs found, refreshing...');
+        fetchAlerts();
+      }
+    }, 10000);
+    
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      clearInterval(pollInterval);
+    };
+  }, [fetchAlerts, loadLiveDetectionLogs, alerts]);
 
   // Set up WebSocket connection for real-time updates
   useEffect(() => {
@@ -122,7 +192,13 @@ export const useAlerts = (useRealTime = true) => {
                 
               case 'new_alert':
                 if (data.data) {
-                  setAlerts(prev => [data.data, ...prev]);
+                  setAlerts(prev => {
+                    // Make sure we don't duplicate live detection logs
+                    const exists = prev.find(alert => alert.id === data.data.id);
+                    if (exists) return prev;
+                    
+                    return [data.data, ...prev];
+                  });
                   console.log('New alert received:', data.data);
                 }
                 break;
@@ -229,8 +305,9 @@ export const useAlerts = (useRealTime = true) => {
         : alert
     ));
 
-    // Update server if using real-time
-    if (useRealTime) {
+    // Update server if using real-time (but not for live detection logs)
+    const alert = alerts.find(a => a.id === alertId);
+    if (useRealTime && alert && alert.source !== 'Live Detection Camera') {
       try {
         const { baseURL, headers } = getApiConfig();
         const response = await fetch(`${baseURL}/api/dashboard/user/alerts/${alertId}/read`, {
@@ -259,7 +336,7 @@ export const useAlerts = (useRealTime = true) => {
         ));
       }
     }
-  }, [readAlerts, useRealTime]);
+  }, [readAlerts, useRealTime, alerts]);
 
   // Check if alert is read
   const isAlertRead = useCallback((alert) => {
@@ -269,7 +346,8 @@ export const useAlerts = (useRealTime = true) => {
   // Filter alerts based on current filter
   const filteredAlerts = alerts.filter(alert => {
     if (filter === 'unread') return !alert.read && !readAlerts.has(alert.id);
-    if (filter === 'high_priority') return alert.severity === 'high';
+    if (filter === 'high_priority') return alert.severity === 'high' || alert.severity === 'critical';
+    if (filter === 'live_detection') return alert.source === 'Live Detection Camera';
     return true;
   });
 
@@ -347,6 +425,17 @@ export const useAlerts = (useRealTime = true) => {
     fetchAlerts();
   }, [fetchAlerts]);
 
+  // 🚨 NEW: Clear all live detection logs
+  const clearLiveDetectionLogs = useCallback(() => {
+    try {
+      localStorage.removeItem('accidentDashboardLogs');
+      setAlerts(prev => prev.filter(alert => alert.source !== 'Live Detection Camera'));
+      console.log('✅ Cleared all live detection logs');
+    } catch (err) {
+      console.error('❌ Failed to clear live detection logs:', err);
+    }
+  }, []);
+
   return {
     alerts,
     filteredAlerts,
@@ -362,9 +451,9 @@ export const useAlerts = (useRealTime = true) => {
     removeAlert,
     markAllAsRead,
     refreshAlerts,
+    clearLiveDetectionLogs, // 🚨 NEW: Function to clear live logs
     loading,
     error,
     isConnected
   };
 };
-
