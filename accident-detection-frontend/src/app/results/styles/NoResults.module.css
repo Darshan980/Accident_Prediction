@@ -1,0 +1,209 @@
+/* result/styles/NoResults.module.css */
+.noResults {
+  text-align: center;
+  background: white;
+  padding: 60px 20px;
+  border-radius: 16px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+  margin-bottom: 32px;
+}
+
+.noResultsIcon {
+  font-size: 64px;
+  margin-bottom: 24px;
+}
+
+.noResultsTitle {
+  font-size: 24px;
+  font-weight: 700;
+  color: #1f2937;
+  margin: 0 0 16px 0;
+}
+
+.noResultsText {
+  font-size: 16px;
+  color: #6b7280;
+  margin: 0 0 32px 0;
+  line-height: 1.6;
+  max-width: 500px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.noResultsActions {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 20px;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.btnPrimary {
+  background: #3b82f6;
+  color: white;
+}
+
+.btnPrimary:hover {
+  background: #2563eb;
+  transform: translateY(-1px);
+}
+
+.btnSuccess {
+  background: #10b981;
+  color: white;
+}
+
+.btnSuccess:hover {
+  background: #059669;
+  transform: translateY(-1px);
+}
+
+@media (max-width: 640px) {
+  .noResults {
+    padding: 40px 16px;
+  }
+
+  .noResultsIcon {
+    font-size: 48px;
+    margin-bottom: 20px;
+  }
+
+  .noResultsTitle {
+    font-size: 20px;
+  }
+
+  .noResultsText {
+    font-size: 14px;
+    margin-bottom: 24px;
+  }
+
+  .noResultsActions {
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .btn {
+    width: 100%;
+    max-width: 200px;
+  }
+}
+
+/* result/styles/QuickActions.module.css */
+.quickActions {
+  background: white;
+  border-radius: 16px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+  padding: 24px;
+  margin-top: 32px;
+}
+
+.quickActionsContent {
+  display: flex;
+  gap: 16px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 16px 24px;
+  border: none;
+  border-radius: 12px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-decoration: none;
+  white-space: nowrap;
+  min-height: 56px;
+}
+
+.btnLg {
+  padding: 18px 28px;
+  font-size: 16px;
+}
+
+.btnPrimary {
+  background: #3b82f6;
+  color: white;
+}
+
+.btnPrimary:hover {
+  background: #2563eb;
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(59, 130, 246, 0.3);
+}
+
+.btnSuccess {
+  background: #10b981;
+  color: white;
+}
+
+.btnSuccess:hover {
+  background: #059669;
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(16, 185, 129, 0.3);
+}
+
+.btnWarning {
+  background: #f59e0b;
+  color: white;
+}
+
+.btnWarning:hover {
+  background: #d97706;
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(245, 158, 11, 0.3);
+}
+
+@media (max-width: 768px) {
+  .quickActions {
+    padding: 20px 16px;
+    margin-top: 24px;
+  }
+
+  .quickActionsContent {
+    gap: 12px;
+  }
+
+  .btn {
+    padding: 14px 20px;
+    font-size: 15px;
+    flex: 1;
+    min-width: 140px;
+  }
+
+  .btnLg {
+    padding: 14px 20px;
+  }
+}
+
+@media (max-width: 640px) {
+  .quickActionsContent {
+    flex-direction: column;
+  }
+
+  .btn {
+    width: 100%;
+    min-width: auto;
+  }
+}
+
