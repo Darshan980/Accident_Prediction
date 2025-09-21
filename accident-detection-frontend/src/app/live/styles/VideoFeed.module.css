@@ -122,6 +122,71 @@
   font-size: 0.8rem;
 }
 
+.cameraInfo {
+  position: absolute;
+  top: 60px;
+  right: 15px;
+  background-color: rgba(0, 0, 0, 0.7);
+  color: white;
+  padding: 6px 12px;
+  border-radius: 15px;
+  font-size: 0.8rem;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  backdrop-filter: blur(10px);
+}
+
+.cameraInfoIcon {
+  font-size: 0.9rem;
+}
+
+.cameraInfoText {
+  font-weight: 500;
+}
+
+.switchingText {
+  color: #007bff;
+  font-size: 0.9rem;
+  margin-top: 10px;
+  font-weight: 500;
+}
+
+.switchingOverlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 20;
+  backdrop-filter: blur(2px);
+}
+
+.switchingContent {
+  background-color: rgba(255, 255, 255, 0.95);
+  padding: 20px 30px;
+  border-radius: 12px;
+  text-align: center;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+}
+
+.switchingSpinner {
+  font-size: 2rem;
+  animation: spin 1s linear infinite;
+  margin-bottom: 10px;
+}
+
+.switchingText {
+  color: #333;
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 0;
+}
+
 /* Mobile Responsiveness */
 @media (max-width: 768px) {
   .videoContainer {
@@ -152,6 +217,13 @@
     font-size: 0.8rem;
   }
   
+  .cameraInfo {
+    top: 50px;
+    right: 10px;
+    padding: 5px 10px;
+    font-size: 0.75rem;
+  }
+  
   .detectionOverlay {
     top: 10px;
     left: 10px;
@@ -164,6 +236,18 @@
     left: 10px;
     padding: 6px 10px;
     font-size: 0.7rem;
+  }
+  
+  .switchingContent {
+    padding: 15px 25px;
+  }
+  
+  .switchingSpinner {
+    font-size: 1.5rem;
+  }
+  
+  .switchingText {
+    font-size: 0.9rem;
   }
 }
 
@@ -190,6 +274,31 @@
   
   .placeholderText {
     font-size: 0.8rem;
+  }
+  
+  .cameraInfo {
+    top: 45px;
+    right: 8px;
+    padding: 4px 8px;
+    font-size: 0.7rem;
+  }
+  
+  .cameraInfoText {
+    display: none; /* Hide text on very small screens */
+  }
+  
+  .switchingContent {
+    padding: 12px 20px;
+    border-radius: 8px;
+  }
+  
+  .switchingSpinner {
+    font-size: 1.3rem;
+    margin-bottom: 8px;
+  }
+  
+  .switchingText {
+    font-size: 0.85rem;
   }
 }
 
