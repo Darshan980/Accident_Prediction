@@ -56,6 +56,26 @@ const LiveDetection = () => {
         if (data.accident_detected !== undefined) {
           setDetection(data);
           
+          // Capture image when accident is detected
+          let imageData = null;
+          if (data.accident_detected && videoRef.current) {
+            try {
+              const canvas = document.createElement('canvas');
+              const ctx = canvas.getContext('2d');
+              
+              // Use full video resolution for saved image
+              canvas.width = videoRef.current.videoWidth || 640;
+              canvas.height = videoRef.current.videoHeight || 480;
+              
+              ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
+              imageData = canvas.toDataURL('image/jpeg', 0.9); // Higher quality for saving
+              
+              console.log('Image captured for accident detection');
+            } catch (err) {
+              console.error('Failed to capture image:', err);
+            }
+          }
+          
           // Save to dashboard (for accidents only)
           if (data.accident_detected) {
             const dashboardEntry = {
@@ -69,14 +89,16 @@ const LiveDetection = () => {
               status: 'active',
               location: 'Camera Feed',
               type: 'accident',
-              read: false
+              read: false,
+              image: imageData, // Add captured image
+              hasImage: !!imageData
             };
             
             try {
               const existingDashboardLogs = JSON.parse(localStorage.getItem('accidentDashboardLogs') || '[]');
               const updatedDashboardLogs = [dashboardEntry, ...existingDashboardLogs.slice(0, 49)];
               localStorage.setItem('accidentDashboardLogs', JSON.stringify(updatedDashboardLogs));
-              console.log('Accident logged to dashboard');
+              console.log('Accident logged to dashboard with image');
             } catch (err) {
               console.error('Failed to log to dashboard:', err);
             }
@@ -102,7 +124,9 @@ const LiveDetection = () => {
             location: 'Live Detection Camera',
             time_of_day: new Date().toLocaleTimeString(),
             notes: `Live detection - Frame ${frameCount + 1}`,
-            frame_id: frameCount + 1
+            frame_id: frameCount + 1,
+            image: data.accident_detected ? imageData : null, // Only save images for accidents
+            hasImage: data.accident_detected ? !!imageData : false
           };
           
           try {
@@ -119,7 +143,8 @@ const LiveDetection = () => {
             id: Date.now(),
             type: data.accident_detected ? 'Accident' : 'Normal',
             confidence: Math.round(data.confidence * 100),
-            time: new Date().toLocaleTimeString()
+            time: new Date().toLocaleTimeString(),
+            hasImage: data.accident_detected ? !!imageData : false
           }, ...prev.slice(0, 4)]);
         }
       };
