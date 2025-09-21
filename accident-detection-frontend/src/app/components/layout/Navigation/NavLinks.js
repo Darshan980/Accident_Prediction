@@ -1,44 +1,281 @@
-import React from 'react';
+// Updated NavLinks.js with mobile hamburger menu
+import React, { useState } from 'react';
 import Link from 'next/link';
+import { Menu, X } from 'lucide-react';
 import { getNavItems } from '../../../utils/navigation';
 
 const NavLinks = ({ user }) => {
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const navItems = getNavItems(user);
 
+  const toggleMobileMenu = () => {
+    setIsMobileMenuOpen(!isMobileMenuOpen);
+  };
+
+  const closeMobileMenu = () => {
+    setIsMobileMenuOpen(false);
+  };
+
   return (
-    <div className="nav-links" style={{ display: 'flex', gap: '0.5rem' }}>
-      {navItems.map((item) => (
-        <Link
-          key={item.href}
-          href={item.href}
+    <>
+      {/* Desktop Navigation */}
+      <div className="nav-links desktop-nav" style={{ display: 'flex', gap: '0.5rem' }}>
+        {navItems.map((item) => (
+          <Link
+            key={item.href}
+            href={item.href}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.5rem',
+              padding: '0.75rem 1rem',
+              color: '#374151',
+              textDecoration: 'none',
+              fontWeight: '500',
+              borderRadius: '8px',
+              transition: 'all 0.2s ease',
+              position: 'relative'
+            }}
+            onMouseOver={(e) => {
+              e.currentTarget.style.background = 'rgba(59, 130, 246, 0.1)';
+              e.currentTarget.style.color = '#3b82f6';
+              e.currentTarget.style.transform = 'translateY(-1px)';
+            }}
+            onMouseOut={(e) => {
+              e.currentTarget.style.background = 'transparent';
+              e.currentTarget.style.color = '#374151';
+              e.currentTarget.style.transform = 'translateY(0)';
+            }}
+          >
+            <item.icon size={18} />
+            <span>{item.label}</span>
+          </Link>
+        ))}
+      </div>
+
+      {/* Mobile Hamburger Button */}
+      <button
+        className="mobile-menu-button"
+        onClick={toggleMobileMenu}
+        style={{
+          display: 'none',
+          alignItems: 'center',
+          justifyContent: 'center',
+          width: '40px',
+          height: '40px',
+          background: 'transparent',
+          border: '2px solid #e2e8f0',
+          borderRadius: '8px',
+          cursor: 'pointer',
+          color: '#374151',
+          transition: 'all 0.2s ease'
+        }}
+        onMouseOver={(e) => {
+          e.currentTarget.style.background = '#f3f4f6';
+          e.currentTarget.style.borderColor = '#3b82f6';
+          e.currentTarget.style.color = '#3b82f6';
+        }}
+        onMouseOut={(e) => {
+          e.currentTarget.style.background = 'transparent';
+          e.currentTarget.style.borderColor = '#e2e8f0';
+          e.currentTarget.style.color = '#374151';
+        }}
+      >
+        {isMobileMenuOpen ? <X size={20} /> : <Menu size={20} />}
+      </button>
+
+      {/* Mobile Navigation Menu */}
+      {isMobileMenuOpen && (
+        <div 
+          className="mobile-nav-overlay"
           style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '0.5rem',
-            padding: '0.75rem 1rem',
-            color: '#374151',
-            textDecoration: 'none',
-            fontWeight: '500',
-            borderRadius: '8px',
-            transition: 'all 0.2s ease',
-            position: 'relative'
+            position: 'fixed',
+            top: '0',
+            left: '0',
+            right: '0',
+            bottom: '0',
+            background: 'rgba(0, 0, 0, 0.5)',
+            zIndex: 9999,
+            display: 'none'
           }}
-          onMouseOver={(e) => {
-            e.currentTarget.style.background = 'rgba(59, 130, 246, 0.1)';
-            e.currentTarget.style.color = '#3b82f6';
-            e.currentTarget.style.transform = 'translateY(-1px)';
-          }}
-          onMouseOut={(e) => {
-            e.currentTarget.style.background = 'transparent';
-            e.currentTarget.style.color = '#374151';
-            e.currentTarget.style.transform = 'translateY(0)';
-          }}
+          onClick={closeMobileMenu}
         >
-          <item.icon size={18} />
-          <span>{item.label}</span>
-        </Link>
-      ))}
-    </div>
+          <div 
+            className="mobile-nav-menu"
+            style={{
+              position: 'fixed',
+              top: '0',
+              right: '0',
+              height: '100vh',
+              width: '280px',
+              maxWidth: '80vw',
+              background: 'white',
+              boxShadow: '-4px 0 20px rgba(0, 0, 0, 0.15)',
+              padding: '2rem 1.5rem',
+              transform: 'translateX(0)',
+              transition: 'transform 0.3s ease',
+              overflowY: 'auto'
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Mobile Menu Header */}
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              marginBottom: '2rem',
+              paddingBottom: '1rem',
+              borderBottom: '1px solid #e5e7eb'
+            }}>
+              <h3 style={{
+                margin: 0,
+                fontSize: '1.2rem',
+                fontWeight: '600',
+                color: '#111827'
+              }}>
+                Navigation
+              </h3>
+              <button
+                onClick={closeMobileMenu}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  width: '32px',
+                  height: '32px',
+                  background: 'transparent',
+                  border: '1px solid #e5e7eb',
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                  color: '#6b7280'
+                }}
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            {/* Mobile Menu Items */}
+            <div className="mobile-nav-items">
+              {navItems.map((item, index) => (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  onClick={closeMobileMenu}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '1rem',
+                    padding: '1rem 0',
+                    color: '#374151',
+                    textDecoration: 'none',
+                    fontWeight: '500',
+                    fontSize: '1rem',
+                    borderBottom: index < navItems.length - 1 ? '1px solid #f3f4f6' : 'none',
+                    transition: 'all 0.2s ease'
+                  }}
+                  onMouseOver={(e) => {
+                    e.currentTarget.style.color = '#3b82f6';
+                    e.currentTarget.style.paddingLeft = '0.5rem';
+                  }}
+                  onMouseOut={(e) => {
+                    e.currentTarget.style.color = '#374151';
+                    e.currentTarget.style.paddingLeft = '0';
+                  }}
+                >
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    width: '40px',
+                    height: '40px',
+                    background: 'rgba(59, 130, 246, 0.1)',
+                    borderRadius: '8px',
+                    flexShrink: 0
+                  }}>
+                    <item.icon size={18} />
+                  </div>
+                  <span>{item.label}</span>
+                </Link>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* CSS Styles */}
+      <style jsx>{`
+        /* Desktop styles - default */
+        .desktop-nav {
+          display: flex;
+        }
+        
+        .mobile-menu-button {
+          display: none;
+        }
+        
+        .mobile-nav-overlay {
+          display: none;
+        }
+
+        /* Tablet and Mobile styles */
+        @media (max-width: 1024px) {
+          .desktop-nav {
+            display: none !important;
+          }
+          
+          .mobile-menu-button {
+            display: flex !important;
+          }
+          
+          .mobile-nav-overlay {
+            display: block !important;
+          }
+        }
+
+        /* Extra small screens */
+        @media (max-width: 480px) {
+          .mobile-nav-menu {
+            width: 100vw !important;
+            max-width: 100vw !important;
+          }
+        }
+
+        /* Animation for mobile menu */
+        @keyframes slideInRight {
+          from {
+            transform: translateX(100%);
+          }
+          to {
+            transform: translateX(0);
+          }
+        }
+
+        .mobile-nav-menu {
+          animation: slideInRight 0.3s ease-out;
+        }
+
+        /* Smooth transitions */
+        .mobile-nav-items a {
+          transition: all 0.2s ease;
+        }
+
+        .mobile-nav-items a:hover {
+          transform: translateX(4px);
+        }
+
+        /* Focus styles for accessibility */
+        .mobile-menu-button:focus {
+          outline: 2px solid #3b82f6;
+          outline-offset: 2px;
+        }
+
+        .mobile-nav-items a:focus {
+          outline: 2px solid #3b82f6;
+          outline-offset: 2px;
+          border-radius: 4px;
+        }
+      `}</style>
+    </>
   );
 };
 
