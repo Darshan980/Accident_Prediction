@@ -1,0 +1,254 @@
+/* app/live/styles/DetectionPanel.module.css */
+
+.panelContainer {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.statusCard {
+  border-radius: 12px;
+  padding: 25px;
+  text-align: center;
+  min-height: 200px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  transition: all 0.3s ease;
+}
+
+.statusCard.accident {
+  background-color: #fff5f5;
+  border: 2px solid #dc3545;
+}
+
+.statusCard.normal {
+  background-color: #f0fff4;
+  border: 2px solid #28a745;
+}
+
+.statusCard.inactive {
+  background-color: #f8f9fa;
+  border: 2px solid #e9ecef;
+}
+
+.statusIcon {
+  font-size: 3.5rem;
+  margin-bottom: 15px;
+}
+
+.statusTitle {
+  font-size: 1.3rem;
+  font-weight: bold;
+  margin-bottom: 15px;
+}
+
+.statusTitle.accidentText {
+  color: #dc3545;
+}
+
+.statusTitle.normalText {
+  color: #28a745;
+}
+
+.confidence {
+  font-size: 1.1rem;
+  color: #666;
+  margin-bottom: 10px;
+}
+
+.frameInfo {
+  font-size: 0.9rem;
+  color: #999;
+}
+
+.resultsCard {
+  background-color: #fff;
+  border: 1px solid #e9ecef;
+  border-radius: 12px;
+  padding: 20px;
+}
+
+.resultsTitle {
+  margin: 0 0 15px 0;
+  color: #495057;
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+.resultsList {
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.noResults {
+  color: #6c757d;
+  text-align: center;
+  padding: 30px 0;
+  font-style: italic;
+}
+
+.resultItem {
+  padding: 12px;
+  margin-bottom: 8px;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  transition: transform 0.2s ease;
+}
+
+.resultItem:hover {
+  transform: translateX(2px);
+}
+
+.resultItem.resultAccident {
+  background-color: #ffe6e6;
+  border: 1px solid #ffb3b3;
+}
+
+.resultItem.resultNormal {
+  background-color: #e6ffe6;
+  border: 1px solid #b3ffb3;
+}
+
+.resultHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.resultType {
+  font-weight: bold;
+}
+
+.resultItem.resultAccident .resultType {
+  color: #dc3545;
+}
+
+.resultItem.resultNormal .resultType {
+  color: #28a745;
+}
+
+.resultConfidence {
+  font-size: 0.8rem;
+  color: #666;
+  font-weight: 600;
+}
+
+.resultTimestamp {
+  color: #666;
+  font-size: 0.8rem;
+}
+
+/* Mobile Responsiveness */
+@media (max-width: 768px) {
+  .panelContainer {
+    gap: 15px;
+  }
+  
+  .statusCard {
+    padding: 20px;
+    min-height: 160px;
+  }
+  
+  .statusIcon {
+    font-size: 3rem;
+    margin-bottom: 10px;
+  }
+  
+  .statusTitle {
+    font-size: 1.1rem;
+    margin-bottom: 10px;
+  }
+  
+  .confidence {
+    font-size: 1rem;
+    margin-bottom: 8px;
+  }
+  
+  .resultsCard {
+    padding: 15px;
+  }
+  
+  .resultsTitle {
+    font-size: 1rem;
+    margin-bottom: 12px;
+  }
+  
+  .resultsList {
+    max-height: 250px;
+  }
+  
+  .noResults {
+    padding: 20px 0;
+  }
+}
+
+@media (max-width: 480px) {
+  .statusCard {
+    padding: 15px;
+    min-height: 140px;
+  }
+  
+  .statusIcon {
+    font-size: 2.5rem;
+    margin-bottom: 8px;
+  }
+  
+  .statusTitle {
+    font-size: 1rem;
+    margin-bottom: 8px;
+  }
+  
+  .confidence {
+    font-size: 0.9rem;
+    margin-bottom: 6px;
+  }
+  
+  .frameInfo {
+    font-size: 0.8rem;
+  }
+  
+  .resultsCard {
+    padding: 12px;
+  }
+  
+  .resultsTitle {
+    font-size: 0.95rem;
+    margin-bottom: 10px;
+  }
+  
+  .resultsList {
+    max-height: 200px;
+  }
+  
+  .resultItem {
+    padding: 10px;
+    margin-bottom: 6px;
+    font-size: 0.85rem;
+  }
+  
+  .noResults {
+    padding: 15px 0;
+    font-size: 0.9rem;
+  }
+}
+
+/* Custom scrollbar for results list */
+.resultsList::-webkit-scrollbar {
+  width: 6px;
+}
+
+.resultsList::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 3px;
+}
+
+.resultsList::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 3px;
+}
+
+.resultsList::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
+}
