@@ -11,29 +11,18 @@ const AlertStatistics = ({ statistics }) => {
   ];
 
   return (
-    <div style={{
-      backgroundColor: 'white',
-      borderRadius: '12px',
-      padding: '20px',
-      marginTop: '20px',
-      boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
-    }}>
-      <h3 style={{ marginBottom: '20px', textAlign: 'center' }}>Alert Statistics</h3>
-      <div style={{ 
-        display: 'grid', 
-        gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', 
-        gap: '16px' 
-      }}>
+    <div className="mobile-statistics">
+      <h3>Alert Statistics</h3>
+      <div className="mobile-stats-grid">
         {statItems.map((item, index) => (
-          <div key={index} style={{ textAlign: 'center' }}>
-            <div style={{ 
-              fontSize: '2rem', 
-              fontWeight: 'bold', 
-              color: item.color 
-            }}>
+          <div key={index} className="mobile-stat-item">
+            <div 
+              className="mobile-stat-value"
+              style={{ color: item.color }}
+            >
               {item.value}
             </div>
-            <div style={{ color: '#666' }}>{item.label}</div>
+            <div className="mobile-stat-label">{item.label}</div>
           </div>
         ))}
       </div>
