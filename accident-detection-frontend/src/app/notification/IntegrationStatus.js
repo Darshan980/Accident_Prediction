@@ -23,52 +23,22 @@ const IntegrationStatus = () => {
   ];
 
   return (
-    <div style={{
-      backgroundColor: '#e8f4fd',
-      padding: '20px',
-      borderRadius: '8px',
-      border: '1px solid #b3d9ff',
-      marginTop: '20px',
-      textAlign: 'center'
-    }}>
-      <h4 style={{ marginBottom: '12px', color: '#0056b3' }}>🔗 Integration Status</h4>
-      <div style={{ 
-        display: 'grid', 
-        gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', 
-        gap: '12px' 
-      }}>
+    <div className="mobile-integration">
+      <h4>🔗 Integration Status</h4>
+      <div className="mobile-integration-grid">
         {integrations.map((integration, index) => (
           <div
             key={index}
-            style={{
-              backgroundColor: 'white',
-              padding: '12px',
-              borderRadius: '6px',
-              border: '1px solid #b3d9ff'
-            }}
+            className="mobile-integration-item"
           >
-            <div style={{ 
-              fontWeight: 'bold', 
-              color: '#0056b3', 
-              marginBottom: '4px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '6px'
-            }}>
+            <div className="mobile-integration-header">
               <span>{integration.icon}</span>
               {integration.title}
               {integration.status === 'active' && (
-                <div style={{
-                  width: '8px',
-                  height: '8px',
-                  backgroundColor: '#28a745',
-                  borderRadius: '50%',
-                  marginLeft: '4px'
-                }} />
+                <div className="mobile-status-indicator" />
               )}
             </div>
-            <div style={{ fontSize: '0.9rem', color: '#666' }}>
+            <div className="mobile-integration-description">
               {integration.description}
             </div>
           </div>
