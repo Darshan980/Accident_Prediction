@@ -65,7 +65,7 @@ const LiveDetection = () => {
               title: 'Live Accident Detection',
               description: `Camera detected potential accident with ${(data.confidence * 100).toFixed(1)}% confidence`,
               source: 'Live Detection Camera',
-              confidence: (data.confidence * 100).toFixed(1),
+              confidence: data.confidence.toFixed(1),
               status: 'active',
               location: 'Camera Feed',
               type: 'accident',
