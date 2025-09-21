@@ -1,5 +1,6 @@
-// app/live/components/VideoFeed.js
+// app/live/components/VideoFeed.js - Updated with camera switch
 import React from 'react';
+import CameraSwitchButton from './CameraSwitchButton';
 import styles from '../styles/VideoFeed.module.css';
 
 const VideoFeed = ({ 
@@ -7,7 +8,12 @@ const VideoFeed = ({
   isDetectionActive, 
   isLoading, 
   currentDetection, 
-  frameCount 
+  frameCount,
+  // New camera switch props
+  hasMultipleCameras,
+  isSwitchingCamera,
+  onSwitchCamera,
+  currentCameraInfo
 }) => {
   return (
     <div className={styles.videoContainer}>
@@ -26,6 +32,11 @@ const VideoFeed = ({
           <p className={styles.placeholderText}>
             {isLoading ? 'Starting detection...' : 'Click Start Detection to begin monitoring'}
           </p>
+          {isSwitchingCamera && (
+            <p className={styles.switchingText}>
+              🔄 Switching camera...
+            </p>
+          )}
         </div>
       )}
       
@@ -34,6 +45,14 @@ const VideoFeed = ({
         <div className={styles.liveStatus}>
           <div className={styles.pulseDot}></div>
           LIVE
+        </div>
+      )}
+
+      {/* Current Camera Info */}
+      {isDetectionActive && hasMultipleCameras && (
+        <div className={styles.cameraInfo}>
+          <span className={styles.cameraInfoIcon}>{currentCameraInfo.icon}</span>
+          <span className={styles.cameraInfoText}>{currentCameraInfo.name}</span>
         </div>
       )}
 
@@ -56,6 +75,25 @@ const VideoFeed = ({
       {isDetectionActive && (
         <div className={styles.frameCounter}>
           Frames: {frameCount}
+        </div>
+      )}
+
+      {/* Camera Switch Button */}
+      <CameraSwitchButton
+        onSwitchCamera={onSwitchCamera}
+        hasMultipleCameras={hasMultipleCameras}
+        isSwitchingCamera={isSwitchingCamera}
+        isDetectionActive={isDetectionActive}
+        currentCameraInfo={currentCameraInfo}
+      />
+
+      {/* Camera switching overlay */}
+      {isSwitchingCamera && isDetectionActive && (
+        <div className={styles.switchingOverlay}>
+          <div className={styles.switchingContent}>
+            <div className={styles.switchingSpinner}>🔄</div>
+            <div className={styles.switchingText}>Switching Camera...</div>
+          </div>
         </div>
       )}
     </div>
