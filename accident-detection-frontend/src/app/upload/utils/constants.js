@@ -1,4 +1,4 @@
-// utils/constants.js
+//utils/constants.js
 export const ACCEPTED_FILE_TYPES = {
   'image/jpeg': '.jpg',
   'image/png': '.png', 
@@ -19,12 +19,4 @@ export const API_STATUS = {
   READY: 'ready',
   OFFLINE: 'offline',
   MODEL_NOT_LOADED: 'model_not_loaded'
-}
-
-export const UPLOAD_STATUS = {
-  IDLE: 'idle',
-  UPLOADING: 'uploading',
-  ANALYZING: 'analyzing',
-  COMPLETED: 'completed',
-  ERROR: 'error'
 }
