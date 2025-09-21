@@ -2,7 +2,7 @@
 
 import React from 'react'
 import { useSearchParams } from 'next/navigation'
-import { useAuth } from '../../contexts/AuthContext'
+import { useAuth } from '../contexts/AuthContext'
 import { ArrowLeft } from 'lucide-react'
 
 // Components
