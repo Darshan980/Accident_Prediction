@@ -3,40 +3,19 @@ import { formatAlertTime } from './alertHelpers';
 
 const AlertHistory = ({ alertHistory, onAcknowledge }) => {
   return (
-    <div style={{
-      backgroundColor: 'white',
-      borderRadius: '12px',
-      padding: '24px',
-      boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
-    }}>
-      <h2 style={{ 
-        fontSize: '1.5rem', 
-        marginBottom: '20px',
-        display: 'flex',
-        alignItems: 'center',
-        gap: '8px'
-      }}>
-        <span style={{ fontSize: '1.2rem' }}>📋</span>
+    <div className="mobile-history">
+      <h2>
+        <span>📋</span>
         Alert History
-        <span style={{ 
-          backgroundColor: '#0070f3',
-          color: 'white',
-          padding: '2px 8px',
-          borderRadius: '12px',
-          fontSize: '0.8rem'
-        }}>
+        <span className="mobile-history-count">
           {alertHistory.length}
         </span>
       </h2>
 
-      <div style={{ maxHeight: '600px', overflowY: 'auto' }}>
+      <div className="mobile-history-list">
         {alertHistory.length === 0 ? (
-          <div style={{ 
-            textAlign: 'center', 
-            padding: '40px 20px',
-            color: '#666'
-          }}>
-            <div style={{ fontSize: '3rem', opacity: 0.3, marginBottom: '16px' }}>🔔</div>
+          <div className="mobile-history-empty">
+            <div className="mobile-history-empty-icon">🔔</div>
             <h3>No Alerts Yet</h3>
             <p>Real accident detection alerts from live camera and uploads will appear here</p>
           </div>
@@ -44,48 +23,32 @@ const AlertHistory = ({ alertHistory, onAcknowledge }) => {
           alertHistory.map((alert) => (
             <div
               key={alert.id}
-              style={{
-                border: `2px solid ${alert.acknowledged ? '#28a745' : '#dc3545'}`,
-                borderRadius: '8px',
-                padding: '16px',
-                marginBottom: '12px',
-                backgroundColor: alert.acknowledged ? '#f8fff9' : '#fff5f5'
-              }}
+              className={`mobile-alert-item ${alert.acknowledged ? 'acknowledged' : 'active'}`}
             >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
+              <div className="mobile-alert-header">
                 <span style={{ fontSize: '1rem' }}>
                   {alert.acknowledged ? '✅' : '⚠️'}
                 </span>
-                <div style={{ flex: 1 }}>
+                <div className="mobile-alert-status">
                   <strong style={{ color: alert.acknowledged ? '#28a745' : '#dc3545' }}>
                     {alert.acknowledged ? 'Alert Acknowledged' : 'ACTIVE ALERT'}
                   </strong>
-                  <div style={{ fontSize: '0.9rem', color: '#666' }}>
+                  <div className="mobile-alert-timestamp">
                     {formatAlertTime(alert.timestamp)}
                   </div>
                 </div>
-                <div style={{
-                  backgroundColor: alert.severity === 'high' ? '#dc3545' : '#ffc107',
-                  color: alert.severity === 'high' ? 'white' : '#212529',
-                  padding: '4px 8px',
-                  borderRadius: '4px',
-                  fontSize: '0.7rem',
-                  fontWeight: 'bold'
-                }}>
+                <div className={`mobile-severity-badge ${alert.severity}`}>
                   {alert.severity.toUpperCase()}
                 </div>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', fontSize: '0.9rem', marginBottom: '8px' }}>
+              <div className="mobile-alert-details">
                 <div>
                   <strong>Source:</strong> {alert.source}
                 </div>
                 <div>
                   <strong>Confidence:</strong> {(alert.confidence * 100).toFixed(1)}%
                 </div>
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', fontSize: '0.9rem', marginBottom: '8px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                   <span style={{ fontSize: '0.8rem' }}>📍</span>
                   {alert.location}
@@ -98,14 +61,7 @@ const AlertHistory = ({ alertHistory, onAcknowledge }) => {
               </div>
 
               {(alert.frame_id || alert.filename || alert.processing_time) && (
-                <div style={{ 
-                  fontSize: '0.8rem', 
-                  color: '#666',
-                  backgroundColor: '#f8f9fa',
-                  padding: '8px',
-                  borderRadius: '4px',
-                  marginBottom: '8px'
-                }}>
+                <div className="mobile-alert-meta">
                   {alert.frame_id && <div>Frame ID: {alert.frame_id}</div>}
                   {alert.filename && <div>File: {alert.filename}</div>}
                   {alert.processing_time && <div>Processing Time: {alert.processing_time}s</div>}
@@ -114,13 +70,7 @@ const AlertHistory = ({ alertHistory, onAcknowledge }) => {
               )}
 
               {alert.acknowledgedAt && (
-                <div style={{
-                  marginTop: '8px',
-                  paddingTop: '8px',
-                  borderTop: '1px solid #e0e0e0',
-                  fontSize: '0.8rem',
-                  color: '#666'
-                }}>
+                <div className="mobile-acknowledged-time">
                   Acknowledged: {formatAlertTime(alert.acknowledgedAt)}
                 </div>
               )}
@@ -128,16 +78,7 @@ const AlertHistory = ({ alertHistory, onAcknowledge }) => {
               {!alert.acknowledged && (
                 <button
                   onClick={() => onAcknowledge(alert.id)}
-                  style={{
-                    marginTop: '12px',
-                    backgroundColor: '#28a745',
-                    color: 'white',
-                    border: 'none',
-                    padding: '6px 12px',
-                    borderRadius: '4px',
-                    cursor: 'pointer',
-                    fontSize: '0.8rem'
-                  }}
+                  className="mobile-acknowledge-button"
                 >
                   Acknowledge
                 </button>
