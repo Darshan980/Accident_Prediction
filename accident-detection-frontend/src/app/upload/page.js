@@ -2,12 +2,10 @@
 
 import React, { useEffect } from 'react'
 import { useAuth } from '../contexts/AuthContext'
-import { XCircle, Key, Server, User } from 'lucide-react'
+import { XCircle } from 'lucide-react'
 
 // Components
-import StatusCard from './components/StatusCard'
 import ErrorDisplay from './components/ErrorDisplay'
-import UserInfo from './components/UserInfo'
 import UploadArea from './components/UploadArea'
 import UploadProgress from './components/UploadProgress'
 import AnalysisResults from './components/AnalysisResults'
@@ -192,27 +190,11 @@ const UserUploadPage = () => {
         .btn-gray:hover {
           background-color: #374151;
         }
-        
-        .status-grid {
-          display: grid;
-          grid-template-columns: 1fr;
-          gap: 1.5rem;
-          margin-bottom: 2rem;
-        }
-        
-        @media (min-width: 768px) {
-          .status-grid {
-            grid-template-columns: 1fr 1fr;
-          }
-        }
       `}</style>
 
       <h1 className="page-title">
         🚗 Accident Detection Upload
       </h1>
-      
-      {/* User Info */}
-      {isAuthenticated && <UserInfo user={user} />}
 
       {/* Authentication Error */}
       {!isAuthenticated && (
@@ -244,25 +226,6 @@ const UserUploadPage = () => {
       {/* Only show upload interface if authenticated */}
       {isAuthenticated && (
         <>
-          {/* Status Cards */}
-          <div className="status-grid">
-            <StatusCard
-              title="Authentication"
-              status="success"
-              icon={Key}
-              message={`Logged in as ${user?.username || 'User'}`}
-              color="success"
-            />
-
-            <StatusCard
-              title="API Status"
-              status={apiStatus === API_STATUS.READY ? 'success' : 'warning'}
-              icon={Server}
-              message={apiStatus === API_STATUS.READY ? 'Ready for analysis' : 'Checking connection...'}
-              color={apiStatus === API_STATUS.READY ? 'success' : 'warning'}
-            />
-          </div>
-
           {/* Error Display */}
           <ErrorDisplay error={currentError} />
 
