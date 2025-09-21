@@ -114,11 +114,11 @@ const NavLinks = ({ user }) => {
               top: '0',
               right: '0',
               height: '100vh',
-              width: '280px',
-              maxWidth: '80vw',
+              width: '240px',
+              maxWidth: '75vw',
               background: 'white',
               boxShadow: '-4px 0 20px rgba(0, 0, 0, 0.15)',
-              padding: '2rem 1.5rem',
+              padding: '1rem 1rem',
               transform: 'translateX(0)',
               transition: 'transform 0.3s ease',
               overflowY: 'auto'
@@ -127,8 +127,8 @@ const NavLinks = ({ user }) => {
           >
             {/* Mobile Menu Header with User Profile */}
             <div style={{
-              marginBottom: '2rem',
-              paddingBottom: '1.5rem',
+              marginBottom: '1rem',
+              paddingBottom: '1rem',
               borderBottom: '1px solid #e5e7eb'
             }}>
               {/* Header with close button */}
@@ -136,11 +136,11 @@ const NavLinks = ({ user }) => {
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
-                marginBottom: user ? '1.5rem' : '0'
+                marginBottom: user ? '1rem' : '0'
               }}>
                 <h3 style={{
                   margin: 0,
-                  fontSize: '1.2rem',
+                  fontSize: '1.1rem',
                   fontWeight: '600',
                   color: '#111827'
                 }}>
@@ -152,8 +152,8 @@ const NavLinks = ({ user }) => {
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    width: '32px',
-                    height: '32px',
+                    width: '28px',
+                    height: '28px',
                     background: 'transparent',
                     border: '1px solid #e5e7eb',
                     borderRadius: '6px',
@@ -161,7 +161,7 @@ const NavLinks = ({ user }) => {
                     color: '#6b7280'
                   }}
                 >
-                  <X size={16} />
+                  <X size={14} />
                 </button>
               </div>
 
@@ -170,39 +170,45 @@ const NavLinks = ({ user }) => {
                 <div style={{
                   display: 'flex',
                   alignItems: 'center',
-                  gap: '1rem',
-                  padding: '1rem',
+                  gap: '0.75rem',
+                  padding: '0.75rem',
                   background: 'linear-gradient(135deg, #f8fafc, #f1f5f9)',
-                  borderRadius: '12px',
-                  marginBottom: '1rem'
+                  borderRadius: '10px',
+                  marginBottom: '0.5rem'
                 }}>
                   <div style={{
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    width: '48px',
-                    height: '48px',
+                    width: '40px',
+                    height: '40px',
                     background: 'linear-gradient(135deg, #3b82f6, #2563eb)',
                     color: 'white',
                     borderRadius: '50%',
                     flexShrink: 0
                   }}>
-                    <User size={22} />
+                    <User size={18} />
                   </div>
-                  <div style={{ flex: 1 }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
                     <p style={{
-                      margin: '0 0 0.25rem 0',
+                      margin: '0 0 0.2rem 0',
                       fontWeight: '600',
                       color: '#111827',
-                      fontSize: '1rem'
+                      fontSize: '0.9rem',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap'
                     }}>
                       {user.username}
                     </p>
                     {user.email && (
                       <p style={{
-                        margin: '0 0 0.5rem 0',
-                        fontSize: '0.85rem',
-                        color: '#6b7280'
+                        margin: '0 0 0.4rem 0',
+                        fontSize: '0.75rem',
+                        color: '#6b7280',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap'
                       }}>
                         {user.email}
                       </p>
@@ -211,18 +217,18 @@ const NavLinks = ({ user }) => {
                       <span style={{
                         display: 'inline-flex',
                         alignItems: 'center',
-                        gap: '0.25rem',
-                        fontSize: '0.75rem',
+                        gap: '0.2rem',
+                        fontSize: '0.7rem',
                         fontWeight: '500',
-                        padding: '0.25rem 0.5rem',
-                        borderRadius: '6px',
+                        padding: '0.2rem 0.4rem',
+                        borderRadius: '4px',
                         textTransform: 'uppercase',
                         background: user.role === 'admin' 
                           ? 'linear-gradient(135deg, #dc2626, #b91c1c)'
                           : '#e5e7eb',
                         color: user.role === 'admin' ? 'white' : '#374151'
                       }}>
-                        {user.role === 'admin' && <Shield size={12} />}
+                        {user.role === 'admin' && <Shield size={10} />}
                         {user.role}
                       </span>
                     )}
@@ -241,18 +247,18 @@ const NavLinks = ({ user }) => {
                   style={{
                     display: 'flex',
                     alignItems: 'center',
-                    gap: '1rem',
-                    padding: '1rem 0',
+                    gap: '0.75rem',
+                    padding: '0.75rem 0',
                     color: '#374151',
                     textDecoration: 'none',
                     fontWeight: '500',
-                    fontSize: '1rem',
+                    fontSize: '0.9rem',
                     borderBottom: (index < navItems.length - 1 || user) ? '1px solid #f3f4f6' : 'none',
                     transition: 'all 0.2s ease'
                   }}
                   onMouseOver={(e) => {
                     e.currentTarget.style.color = '#3b82f6';
-                    e.currentTarget.style.paddingLeft = '0.5rem';
+                    e.currentTarget.style.paddingLeft = '0.25rem';
                   }}
                   onMouseOut={(e) => {
                     e.currentTarget.style.color = '#374151';
@@ -263,13 +269,13 @@ const NavLinks = ({ user }) => {
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    width: '40px',
-                    height: '40px',
+                    width: '36px',
+                    height: '36px',
                     background: 'rgba(59, 130, 246, 0.1)',
                     borderRadius: '8px',
                     flexShrink: 0
                   }}>
-                    <item.icon size={18} />
+                    <item.icon size={16} />
                   </div>
                   <span>{item.label}</span>
                 </Link>
@@ -287,13 +293,13 @@ const NavLinks = ({ user }) => {
                       width: '100%',
                       display: 'flex',
                       alignItems: 'center',
-                      gap: '1rem',
-                      padding: '1rem 0',
+                      gap: '0.75rem',
+                      padding: '0.75rem 0',
                       background: 'transparent',
                       border: 'none',
                       cursor: 'pointer',
                       color: '#374151',
-                      fontSize: '1rem',
+                      fontSize: '0.9rem',
                       fontWeight: '500',
                       borderBottom: '1px solid #f3f4f6',
                       transition: 'all 0.2s ease',
@@ -301,7 +307,7 @@ const NavLinks = ({ user }) => {
                     }}
                     onMouseOver={(e) => {
                       e.currentTarget.style.color = '#3b82f6';
-                      e.currentTarget.style.paddingLeft = '0.5rem';
+                      e.currentTarget.style.paddingLeft = '0.25rem';
                     }}
                     onMouseOut={(e) => {
                       e.currentTarget.style.color = '#374151';
@@ -312,13 +318,13 @@ const NavLinks = ({ user }) => {
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      width: '40px',
-                      height: '40px',
+                      width: '36px',
+                      height: '36px',
                       background: 'rgba(59, 130, 246, 0.1)',
                       borderRadius: '8px',
                       flexShrink: 0
                     }}>
-                      <Settings size={18} />
+                      <Settings size={16} />
                     </div>
                     <span>Profile Settings</span>
                   </button>
@@ -329,20 +335,20 @@ const NavLinks = ({ user }) => {
                       width: '100%',
                       display: 'flex',
                       alignItems: 'center',
-                      gap: '1rem',
-                      padding: '1rem 0',
+                      gap: '0.75rem',
+                      padding: '0.75rem 0',
                       background: 'transparent',
                       border: 'none',
                       cursor: 'pointer',
                       color: '#dc2626',
-                      fontSize: '1rem',
+                      fontSize: '0.9rem',
                       fontWeight: '500',
                       transition: 'all 0.2s ease',
                       textAlign: 'left'
                     }}
                     onMouseOver={(e) => {
                       e.currentTarget.style.color = '#b91c1c';
-                      e.currentTarget.style.paddingLeft = '0.5rem';
+                      e.currentTarget.style.paddingLeft = '0.25rem';
                     }}
                     onMouseOut={(e) => {
                       e.currentTarget.style.color = '#dc2626';
@@ -353,13 +359,13 @@ const NavLinks = ({ user }) => {
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      width: '40px',
-                      height: '40px',
+                      width: '36px',
+                      height: '36px',
                       background: 'rgba(220, 38, 38, 0.1)',
                       borderRadius: '8px',
                       flexShrink: 0
                     }}>
-                      <LogOut size={18} />
+                      <LogOut size={16} />
                     </div>
                     <span>Sign Out</span>
                   </button>
@@ -403,8 +409,9 @@ const NavLinks = ({ user }) => {
         /* Extra small screens */
         @media (max-width: 480px) {
           .mobile-nav-menu {
-            width: 100vw !important;
-            max-width: 100vw !important;
+            width: 85vw !important;
+            max-width: 85vw !important;
+            padding: 0.75rem !important;
           }
         }
 
