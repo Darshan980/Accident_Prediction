@@ -11,7 +11,7 @@ import ModalNotification from './ModalNotification';
 import ActiveAlertBanner from './ActiveAlertBanner';
 import AlertStatistics from './AlertStatistics';
 import IntegrationStatus from './IntegrationStatus';
-import './animations.css';
+import './responsive-styles.css';
 
 const NotificationSystem = () => {
   const [isAlertsEnabled, setIsAlertsEnabled] = useState(true);
@@ -167,62 +167,21 @@ const NotificationSystem = () => {
   };
 
   return (
-    <div style={{ 
-      maxWidth: '1200px', 
-      margin: '0 auto', 
-      padding: '20px',
-      backgroundColor: '#f8f9fa',
-      minHeight: '100vh',
-      position: 'relative'
-    }}>
+    <div className="notification-container">
       
       {/* Header */}
-      <div style={{
-        backgroundColor: 'white',
-        borderRadius: '12px',
-        padding: '24px',
-        marginBottom: '24px',
-        boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
-      }}>
-        <h1 style={{ 
-          fontSize: '2.5rem', 
-          fontWeight: 'bold', 
-          color: '#333',
-          marginBottom: '8px',
-          textAlign: 'center'
-        }}>
-          Global Notification System
-        </h1>
-        <p style={{ 
-          color: '#666', 
-          textAlign: 'center',
-          fontSize: '1.1rem'
-        }}>
-          Real-time alerts from live detection and file uploads
-        </p>
+      <div className="notification-header">
+        <h1>Global Notification System</h1>
+        <p>Real-time alerts from live detection and file uploads</p>
       </div>
 
       {/* Debug Panel */}
-      <div style={{
-        backgroundColor: '#fff3cd',
-        border: '1px solid #ffeaa7',
-        borderRadius: '6px',
-        padding: '1rem',
-        marginBottom: '1rem'
-      }}>
-        <h4 style={{ color: '#856404', marginBottom: '0.5rem' }}>🔧 Debug Panel</h4>
-        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+      <div className="debug-panel">
+        <h4>🔧 Debug Panel</h4>
+        <div className="debug-buttons">
           <button
             onClick={debugAlertHistory}
-            style={{
-              backgroundColor: '#17a2b8',
-              color: 'white',
-              border: 'none',
-              padding: '6px 12px',
-              borderRadius: '4px',
-              cursor: 'pointer',
-              fontSize: '0.8rem'
-            }}
+            style={{ backgroundColor: '#17a2b8' }}
           >
             Debug History
           </button>
@@ -232,15 +191,7 @@ const NotificationSystem = () => {
               alert(`Current alert count: ${stats.total}\nCheck console for details`);
               console.log('Alert History State:', alertHistory);
             }}
-            style={{
-              backgroundColor: '#ffc107',
-              color: '#212529',
-              border: 'none',
-              padding: '6px 12px',
-              borderRadius: '4px',
-              cursor: 'pointer',
-              fontSize: '0.8rem'
-            }}
+            style={{ backgroundColor: '#ffc107', color: '#212529' }}
           >
             Check State ({alertHistory.length})
           </button>
@@ -266,7 +217,7 @@ const NotificationSystem = () => {
         showModal={!notificationModal.show}
       />
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+      <div className="mobile-grid">
         
         {/* Alert Controls */}
         <AlertControls
