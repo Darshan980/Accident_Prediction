@@ -1,10 +1,13 @@
+// app/live/page.js - Complete integrated component
 'use client';
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
-import { apiClient, getApiBaseUrl, getWebSocketUrl } from '../lib/api';
-import notificationService from '../lib/notificationService';
+import { apiClient, getApiBaseUrl, getWebSocketUrl } from '../../lib/api';
+import notificationService from '../../lib/notificationService';
 
-const CleanLiveDetection = () => {
+// Integrated Live Detection Component with Mobile Responsiveness
+const LiveDetection = () => {
+  // State management
   const [isDetectionActive, setIsDetectionActive] = useState(false);
   const [cameraPermission, setCameraPermission] = useState('not-requested');
   const [cameraError, setCameraError] = useState('');
@@ -18,6 +21,7 @@ const CleanLiveDetection = () => {
   const [alertsTriggered, setAlertsTriggered] = useState(0);
   const [frameCount, setFrameCount] = useState(0);
 
+  // Refs
   const videoRef = useRef(null);
   const streamRef = useRef(null);
   const wsRef = useRef(null);
@@ -28,6 +32,7 @@ const CleanLiveDetection = () => {
   const detectionActiveRef = useRef(false);
   const resultIdRef = useRef(0);
 
+  // Initialize component
   useEffect(() => {
     mountedRef.current = true;
     checkApiConnection();
@@ -154,13 +159,17 @@ const CleanLiveDetection = () => {
               setDetectionResults(prev => [newResult, ...prev.slice(0, 9)]);
               saveToResultsHistory(data);
               
-              const notification = notificationService.notifyLiveDetection(data);
-              
-              if (data.accident_detected) {
-                notificationService.playAlertSound('accident');
-                setAlertsTriggered(prev => prev + 1);
-              } else {
-                notificationService.playAlertSound('completion');
+              try {
+                notificationService.notifyLiveDetection(data);
+                
+                if (data.accident_detected) {
+                  notificationService.playAlertSound('accident');
+                  setAlertsTriggered(prev => prev + 1);
+                } else {
+                  notificationService.playAlertSound('completion');
+                }
+              } catch (error) {
+                console.error('Notification error:', error);
               }
             }
             
@@ -268,7 +277,8 @@ const CleanLiveDetection = () => {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { 
           width: { ideal: 640, min: 320 },
-          height: { ideal: 480, min: 240 }
+          height: { ideal: 480, min: 240 },
+          facingMode: 'environment' // Use back camera on mobile
         },
         audio: false
       });
@@ -317,7 +327,19 @@ const CleanLiveDetection = () => {
       }, 1000);
       
     } catch (error) {
-      setCameraError(error.message);
+      let errorMessage = 'Failed to access camera';
+      
+      if (error.name === 'NotAllowedError') {
+        errorMessage = 'Camera permission denied. Please allow camera access and try again.';
+      } else if (error.name === 'NotFoundError') {
+        errorMessage = 'No camera found. Please check your device.';
+      } else if (error.name === 'NotSupportedError') {
+        errorMessage = 'Camera not supported by your browser.';
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
+      setCameraError(errorMessage);
       setIsDetectionActive(false);
     } finally {
       setIsLoading(false);
@@ -357,80 +379,44 @@ const CleanLiveDetection = () => {
   };
 
   return (
-    <div style={{ padding: '20px', maxWidth: '1200px', margin: '0 auto' }}>
-      <h1 style={{ textAlign: 'center', marginBottom: '30px', fontSize: '2.2rem', color: '#2c3e50', fontWeight: '300' }}>
+    <div style={containerStyle}>
+      <h1 style={titleStyle}>
         Live Accident Detection
       </h1>
 
       {/* Connection Status */}
       {!apiConnected && (
-        <div style={{ 
-          backgroundColor: '#fee',
-          border: '1px solid #fcc',
-          borderRadius: '8px',
-          padding: '15px',
-          marginBottom: '20px',
-          textAlign: 'center'
-        }}>
-          <div style={{ color: '#c33', fontWeight: '500', marginBottom: '10px' }}>
+        <div style={connectionStatusStyle}>
+          <div style={statusMessageStyle}>
             ⚠️ Detection Service Unavailable
           </div>
-          <button
-            onClick={checkApiConnection}
-            style={{
-              backgroundColor: '#007bff',
-              color: 'white',
-              border: 'none',
-              padding: '8px 16px',
-              borderRadius: '4px',
-              cursor: 'pointer',
-              fontSize: '0.9rem'
-            }}
-          >
+          <button onClick={checkApiConnection} style={retryButtonStyle}>
             Retry Connection
           </button>
         </div>
       )}
 
       {/* Main Content */}
-      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '30px', marginBottom: '30px' }}>
+      <div style={mainContentStyle}>
         
         {/* Video Feed */}
-        <div style={{ 
-          backgroundColor: '#000', 
-          borderRadius: '12px', 
-          position: 'relative',
-          overflow: 'hidden',
-          minHeight: '400px',
-          boxShadow: '0 4px 6px rgba(0,0,0,0.1)'
-        }}>
+        <div style={videoContainerStyle}>
           <video
             ref={videoRef}
             autoPlay
             muted
             playsInline
             style={{
-              width: '100%',
-              height: '100%',
-              objectFit: 'cover',
+              ...videoStyle,
               display: isDetectionActive ? 'block' : 'none'
             }}
           />
           
           {!isDetectionActive && (
-            <div style={{ 
-              width: '100%', 
-              height: '400px', 
-              backgroundColor: '#1a1a1a',
-              color: '#fff',
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              justifyContent: 'center'
-            }}>
-              <div style={{ fontSize: '4rem', marginBottom: '1rem', opacity: 0.7 }}>📹</div>
-              <h3 style={{ margin: '0 0 1rem 0', fontWeight: '300' }}>Camera Preview</h3>
-              <p style={{ color: '#aaa', textAlign: 'center', margin: 0 }}>
+            <div style={placeholderStyle}>
+              <div style={placeholderIconStyle}>📹</div>
+              <h3 style={placeholderTitleStyle}>Camera Preview</h3>
+              <p style={placeholderTextStyle}>
                 {isLoading ? 'Starting detection...' : 'Click Start Detection to begin monitoring'}
               </p>
             </div>
@@ -438,21 +424,8 @@ const CleanLiveDetection = () => {
           
           {/* Live Status */}
           {isDetectionActive && (
-            <div style={{
-              position: 'absolute',
-              top: '15px',
-              right: '15px',
-              backgroundColor: '#28a745',
-              color: 'white',
-              padding: '8px 16px',
-              borderRadius: '20px',
-              fontSize: '0.9rem',
-              fontWeight: 'bold',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px'
-            }}>
-              <div style={{ width: '8px', height: '8px', backgroundColor: 'white', borderRadius: '50%', animation: 'pulse 1.5s infinite' }}></div>
+            <div style={liveStatusStyle}>
+              <div style={pulseDotStyle}></div>
               LIVE
             </div>
           )}
@@ -460,22 +433,15 @@ const CleanLiveDetection = () => {
           {/* Detection Result Overlay */}
           {currentDetection && isDetectionActive && (
             <div style={{
-              position: 'absolute',
-              top: '15px',
-              left: '15px',
+              ...detectionOverlayStyle,
               backgroundColor: currentDetection.accident_detected ? 
-                'rgba(220, 53, 69, 0.95)' : 'rgba(40, 167, 69, 0.95)',
-              color: 'white',
-              padding: '12px 16px',
-              borderRadius: '8px',
-              fontSize: '0.9rem',
-              fontWeight: 'bold'
+                'rgba(220, 53, 69, 0.95)' : 'rgba(40, 167, 69, 0.95)'
             }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+              <div style={detectionHeaderStyle}>
                 <span>{currentDetection.accident_detected ? '🚨' : '✅'}</span>
                 {currentDetection.accident_detected ? 'ACCIDENT DETECTED' : 'NORMAL TRAFFIC'}
               </div>
-              <div style={{ fontSize: '0.8rem', opacity: 0.9 }}>
+              <div style={confidenceTextStyle}>
                 Confidence: {(currentDetection.confidence * 100).toFixed(1)}%
               </div>
             </div>
@@ -483,66 +449,48 @@ const CleanLiveDetection = () => {
 
           {/* Frame Counter */}
           {isDetectionActive && (
-            <div style={{
-              position: 'absolute',
-              bottom: '15px',
-              left: '15px',
-              backgroundColor: 'rgba(0,0,0,0.7)',
-              color: 'white',
-              padding: '8px 12px',
-              borderRadius: '6px',
-              fontSize: '0.8rem'
-            }}>
+            <div style={frameCounterStyle}>
               Frames: {frameCount}
             </div>
           )}
         </div>
 
         {/* Detection Panel */}
-        <div>
+        <div style={panelContainerStyle}>
           {/* Current Detection Status */}
-          <div style={{ 
+          <div style={{
+            ...statusCardStyle,
             backgroundColor: currentDetection ? 
-              (currentDetection.accident_detected ? '#fff5f5' : '#f0fff4') : '#f8f9fa', 
-            border: `2px solid ${currentDetection ? 
-              (currentDetection.accident_detected ? '#dc3545' : '#28a745') : '#e9ecef'}`, 
-            borderRadius: '12px', 
-            padding: '25px',
-            marginBottom: '20px',
-            textAlign: 'center',
-            minHeight: '200px',
-            display: 'flex',
-            flexDirection: 'column',
-            justifyContent: 'center'
+              (currentDetection.accident_detected ? '#fff5f5' : '#f0fff4') : '#f8f9fa',
+            borderColor: currentDetection ? 
+              (currentDetection.accident_detected ? '#dc3545' : '#28a745') : '#e9ecef'
           }}>
             {currentDetection ? (
               <>
-                <div style={{ fontSize: '3.5rem', marginBottom: '15px' }}>
+                <div style={statusIconStyle}>
                   {currentDetection.accident_detected ? '🚨' : '✅'}
                 </div>
                 <div style={{
-                  fontSize: '1.3rem',
-                  fontWeight: 'bold',
-                  color: currentDetection.accident_detected ? '#dc3545' : '#28a745',
-                  marginBottom: '15px'
+                  ...statusTitleStyle,
+                  color: currentDetection.accident_detected ? '#dc3545' : '#28a745'
                 }}>
                   {currentDetection.accident_detected ? 'ACCIDENT DETECTED' : 'NORMAL TRAFFIC'}
                 </div>
-                <div style={{ fontSize: '1.1rem', color: '#666', marginBottom: '10px' }}>
+                <div style={confidenceStyle}>
                   Confidence: {(currentDetection.confidence * 100).toFixed(1)}%
                 </div>
-                <div style={{ fontSize: '0.9rem', color: '#999' }}>
+                <div style={frameInfoStyle}>
                   Frame: {currentDetection.frame_id}
                 </div>
               </>
             ) : (
               <>
-                <div style={{ fontSize: '3rem', marginBottom: '15px', opacity: 0.5 }}>🤖</div>
-                <div style={{ color: '#666', fontSize: '1.1rem' }}>
+                <div style={statusIconStyle}>🤖</div>
+                <div style={statusTitleStyle}>
                   {isDetectionActive ? 'Analyzing video feed...' : 'Detection inactive'}
                 </div>
                 {isDetectionActive && (
-                  <div style={{ fontSize: '0.9rem', color: '#999', marginTop: '10px' }}>
+                  <div style={frameInfoStyle}>
                     Frames processed: {frameCount}
                   </div>
                 )}
@@ -551,17 +499,12 @@ const CleanLiveDetection = () => {
           </div>
 
           {/* Recent Results */}
-          <div style={{ 
-            backgroundColor: '#fff', 
-            border: '1px solid #e9ecef', 
-            borderRadius: '12px', 
-            padding: '20px'
-          }}>
-            <h4 style={{ margin: '0 0 15px 0', color: '#495057' }}>Recent Results</h4>
+          <div style={resultsCardStyle}>
+            <h4 style={resultsTitleStyle}>Recent Results</h4>
             
-            <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
+            <div style={resultsListStyle}>
               {detectionResults.length === 0 ? (
-                <div style={{ color: '#6c757d', textAlign: 'center', padding: '30px 0' }}>
+                <div style={noResultsStyle}>
                   No results yet
                 </div>
               ) : (
@@ -569,31 +512,23 @@ const CleanLiveDetection = () => {
                   <div 
                     key={result.id} 
                     style={{
-                      padding: '12px',
-                      marginBottom: '8px',
-                      borderRadius: '8px',
+                      ...resultItemStyle,
                       backgroundColor: result.type === 'Accident' ? '#ffe6e6' : '#e6ffe6',
-                      border: `1px solid ${result.type === 'Accident' ? '#ffb3b3' : '#b3ffb3'}`,
-                      fontSize: '0.9rem'
+                      borderColor: result.type === 'Accident' ? '#ffb3b3' : '#b3ffb3'
                     }}
                   >
-                    <div style={{ 
-                      display: 'flex', 
-                      justifyContent: 'space-between', 
-                      alignItems: 'center',
-                      marginBottom: '4px'
-                    }}>
-                      <span style={{ 
-                        fontWeight: 'bold', 
-                        color: result.type === 'Accident' ? '#dc3545' : '#28a745' 
+                    <div style={resultHeaderStyle}>
+                      <span style={{
+                        ...resultTypeStyle,
+                        color: result.type === 'Accident' ? '#dc3545' : '#28a745'
                       }}>
                         {result.type === 'Accident' ? '🚨' : '✅'} {result.type}
                       </span>
-                      <span style={{ fontSize: '0.8rem', color: '#666' }}>
+                      <span style={resultConfidenceStyle}>
                         {result.confidence}%
                       </span>
                     </div>
-                    <div style={{ color: '#666', fontSize: '0.8rem' }}>
+                    <div style={resultTimestampStyle}>
                       {result.timestamp}
                     </div>
                   </div>
@@ -606,41 +541,20 @@ const CleanLiveDetection = () => {
 
       {/* Error Display */}
       {cameraError && (
-        <div style={{
-          backgroundColor: '#f8d7da',
-          color: '#721c24',
-          padding: '15px',
-          borderRadius: '8px',
-          border: '1px solid #f5c6cb',
-          marginBottom: '20px',
-          textAlign: 'center'
-        }}>
+        <div style={errorStyle}>
           <strong>⚠️ {cameraError}</strong>
         </div>
       )}
 
       {/* Control Buttons */}
-      <div style={{ 
-        display: 'flex', 
-        justifyContent: 'center', 
-        gap: '20px', 
-        flexWrap: 'wrap',
-        marginBottom: '30px' 
-      }}>
+      <div style={controlContainerStyle}>
         <button 
           onClick={startCamera}
           disabled={isDetectionActive || isLoading || !apiConnected}
-          style={{ 
-            backgroundColor: (isDetectionActive || isLoading || !apiConnected) ? '#6c757d' : '#28a745', 
-            color: 'white',
-            border: 'none',
-            fontSize: '1.1rem', 
-            padding: '15px 30px',
-            borderRadius: '8px',
-            cursor: (isDetectionActive || isLoading || !apiConnected) ? 'not-allowed' : 'pointer',
-            opacity: (isDetectionActive || isLoading || !apiConnected) ? 0.6 : 1,
-            fontWeight: '500',
-            transition: 'all 0.2s'
+          style={{
+            ...controlButtonStyle,
+            ...startButtonStyle,
+            ...(isDetectionActive || isLoading || !apiConnected ? disabledStyle : {})
           }}
         >
           {isLoading ? '🔄 Starting...' : (isDetectionActive ? '✅ Detection Active' : '🚀 Start Detection')}
@@ -649,17 +563,10 @@ const CleanLiveDetection = () => {
         <button 
           onClick={stopDetection}
           disabled={!isDetectionActive}
-          style={{ 
-            backgroundColor: !isDetectionActive ? '#6c757d' : '#dc3545', 
-            color: 'white',
-            border: 'none',
-            fontSize: '1.1rem', 
-            padding: '15px 30px',
-            borderRadius: '8px',
-            cursor: !isDetectionActive ? 'not-allowed' : 'pointer',
-            opacity: !isDetectionActive ? 0.6 : 1,
-            fontWeight: '500',
-            transition: 'all 0.2s'
+          style={{
+            ...controlButtonStyle,
+            ...stopButtonStyle,
+            ...(!isDetectionActive ? disabledStyle : {})
           }}
         >
           🛑 Stop Detection
@@ -668,26 +575,20 @@ const CleanLiveDetection = () => {
 
       {/* Summary Stats */}
       {(savedCount > 0 || alertsTriggered > 0) && (
-        <div style={{
-          display: 'flex',
-          justifyContent: 'center',
-          gap: '30px',
-          marginBottom: '30px',
-          flexWrap: 'wrap'
-        }}>
-          <div style={{ textAlign: 'center' }}>
-            <div style={{ fontSize: '2rem', color: '#007bff', fontWeight: 'bold' }}>
+        <div style={statsContainerStyle}>
+          <div style={statItemStyle}>
+            <div style={{...statValueStyle, color: '#007bff'}}>
               {savedCount}
             </div>
-            <div style={{ color: '#6c757d', fontSize: '0.9rem' }}>
+            <div style={statLabelStyle}>
               Results Saved
             </div>
           </div>
-          <div style={{ textAlign: 'center' }}>
-            <div style={{ fontSize: '2rem', color: '#dc3545', fontWeight: 'bold' }}>
+          <div style={statItemStyle}>
+            <div style={{...statValueStyle, color: '#dc3545'}}>
               {alertsTriggered}
             </div>
-            <div style={{ color: '#6c757d', fontSize: '0.9rem' }}>
+            <div style={statLabelStyle}>
               Alerts Triggered
             </div>
           </div>
@@ -695,66 +596,408 @@ const CleanLiveDetection = () => {
       )}
 
       {/* Navigation */}
-      <div style={{ display: 'flex', justifyContent: 'center', gap: '20px', flexWrap: 'wrap' }}>
-        <Link
-          href="/results"
-          style={{ 
-            backgroundColor: '#007bff', 
-            color: 'white',
-            border: 'none',
-            fontSize: '1rem', 
-            padding: '12px 24px',
-            borderRadius: '6px',
-            textDecoration: 'none',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            transition: 'all 0.2s'
-          }}
-        >
+      <div style={navContainerStyle}>
+        <Link href="/results" style={navButtonStyle}>
           📊 View All Results
         </Link>
 
-        <Link
-          href="/notification"
-          style={{ 
-            backgroundColor: alertsTriggered > 0 ? '#dc3545' : '#6c757d',
-            color: 'white',
-            border: 'none',
-            fontSize: '1rem', 
-            padding: '12px 24px',
-            borderRadius: '6px',
-            textDecoration: 'none',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            transition: 'all 0.2s'
+        <Link 
+          href="/notification" 
+          style={{
+            ...navButtonStyle,
+            backgroundColor: alertsTriggered > 0 ? '#dc3545' : '#6c757d'
           }}
         >
           🔔 Notifications
         </Link>
 
-        <Link href="/" style={{ 
-          color: '#6c757d', 
-          textDecoration: 'none',
-          fontSize: '1rem',
-          padding: '12px 24px',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '8px'
-        }}>
+        <Link href="/" style={homeLinkStyle}>
           ← Back to Home
         </Link>
       </div>
-
-      <style jsx>{`
-        @keyframes pulse {
-          0%, 100% { opacity: 1; }
-          50% { opacity: 0.5; }
-        }
-      `}</style>
     </div>
   );
 };
 
-export default CleanLiveDetection;
+// Styles with mobile responsiveness
+const containerStyle = {
+  padding: '20px',
+  maxWidth: '1200px',
+  margin: '0 auto',
+  minHeight: '100vh'
+};
+
+const titleStyle = {
+  textAlign: 'center',
+  marginBottom: '30px',
+  fontSize: '2.2rem',
+  color: '#2c3e50',
+  fontWeight: '300'
+};
+
+const connectionStatusStyle = {
+  backgroundColor: '#fee',
+  border: '1px solid #fcc',
+  borderRadius: '8px',
+  padding: '15px',
+  marginBottom: '20px',
+  textAlign: 'center'
+};
+
+const statusMessageStyle = {
+  color: '#c33',
+  fontWeight: '500',
+  marginBottom: '10px'
+};
+
+const retryButtonStyle = {
+  backgroundColor: '#007bff',
+  color: 'white',
+  border: 'none',
+  padding: '8px 16px',
+  borderRadius: '4px',
+  cursor: 'pointer',
+  fontSize: '0.9rem'
+};
+
+const mainContentStyle = {
+  display: 'grid',
+  gridTemplateColumns: '2fr 1fr',
+  gap: '30px',
+  marginBottom: '30px'
+};
+
+const videoContainerStyle = {
+  backgroundColor: '#000',
+  borderRadius: '12px',
+  position: 'relative',
+  overflow: 'hidden',
+  minHeight: '400px',
+  boxShadow: '0 4px 6px rgba(0,0,0,0.1)'
+};
+
+const videoStyle = {
+  width: '100%',
+  height: '100%',
+  objectFit: 'cover'
+};
+
+const placeholderStyle = {
+  width: '100%',
+  height: '400px',
+  backgroundColor: '#1a1a1a',
+  color: '#fff',
+  display: 'flex',
+  flexDirection: 'column',
+  alignItems: 'center',
+  justifyContent: 'center'
+};
+
+const placeholderIconStyle = {
+  fontSize: '4rem',
+  marginBottom: '1rem',
+  opacity: 0.7
+};
+
+const placeholderTitleStyle = {
+  margin: '0 0 1rem 0',
+  fontWeight: '300'
+};
+
+const placeholderTextStyle = {
+  color: '#aaa',
+  textAlign: 'center',
+  margin: 0
+};
+
+const liveStatusStyle = {
+  position: 'absolute',
+  top: '15px',
+  right: '15px',
+  backgroundColor: '#28a745',
+  color: 'white',
+  padding: '8px 16px',
+  borderRadius: '20px',
+  fontSize: '0.9rem',
+  fontWeight: 'bold',
+  display: 'flex',
+  alignItems: 'center',
+  gap: '8px'
+};
+
+const pulseDotStyle = {
+  width: '8px',
+  height: '8px',
+  backgroundColor: 'white',
+  borderRadius: '50%',
+  animation: 'pulse 1.5s infinite'
+};
+
+const detectionOverlayStyle = {
+  position: 'absolute',
+  top: '15px',
+  left: '15px',
+  color: 'white',
+  padding: '12px 16px',
+  borderRadius: '8px',
+  fontSize: '0.9rem',
+  fontWeight: 'bold'
+};
+
+const detectionHeaderStyle = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: '8px',
+  marginBottom: '4px'
+};
+
+const confidenceTextStyle = {
+  fontSize: '0.8rem',
+  opacity: 0.9
+};
+
+const frameCounterStyle = {
+  position: 'absolute',
+  bottom: '15px',
+  left: '15px',
+  backgroundColor: 'rgba(0,0,0,0.7)',
+  color: 'white',
+  padding: '8px 12px',
+  borderRadius: '6px',
+  fontSize: '0.8rem'
+};
+
+const panelContainerStyle = {
+  display: 'flex',
+  flexDirection: 'column',
+  gap: '20px'
+};
+
+const statusCardStyle = {
+  border: '2px solid',
+  borderRadius: '12px',
+  padding: '25px',
+  textAlign: 'center',
+  minHeight: '200px',
+  display: 'flex',
+  flexDirection: 'column',
+  justifyContent: 'center'
+};
+
+const statusIconStyle = {
+  fontSize: '3.5rem',
+  marginBottom: '15px'
+};
+
+const statusTitleStyle = {
+  fontSize: '1.3rem',
+  fontWeight: 'bold',
+  marginBottom: '15px'
+};
+
+const confidenceStyle = {
+  fontSize: '1.1rem',
+  color: '#666',
+  marginBottom: '10px'
+};
+
+const frameInfoStyle = {
+  fontSize: '0.9rem',
+  color: '#999'
+};
+
+const resultsCardStyle = {
+  backgroundColor: '#fff',
+  border: '1px solid #e9ecef',
+  borderRadius: '12px',
+  padding: '20px'
+};
+
+const resultsTitleStyle = {
+  margin: '0 0 15px 0',
+  color: '#495057'
+};
+
+const resultsListStyle = {
+  maxHeight: '300px',
+  overflowY: 'auto'
+};
+
+const noResultsStyle = {
+  color: '#6c757d',
+  textAlign: 'center',
+  padding: '30px 0'
+};
+
+const resultItemStyle = {
+  padding: '12px',
+  marginBottom: '8px',
+  borderRadius: '8px',
+  border: '1px solid',
+  fontSize: '0.9rem'
+};
+
+const resultHeaderStyle = {
+  display: 'flex',
+  justifyContent: 'space-between',
+  alignItems: 'center',
+  marginBottom: '4px'
+};
+
+const resultTypeStyle = {
+  fontWeight: 'bold'
+};
+
+const resultConfidenceStyle = {
+  fontSize: '0.8rem',
+  color: '#666'
+};
+
+const resultTimestampStyle = {
+  color: '#666',
+  fontSize: '0.8rem'
+};
+
+const errorStyle = {
+  backgroundColor: '#f8d7da',
+  color: '#721c24',
+  padding: '15px',
+  borderRadius: '8px',
+  border: '1px solid #f5c6cb',
+  marginBottom: '20px',
+  textAlign: 'center'
+};
+
+const controlContainerStyle = {
+  display: 'flex',
+  justifyContent: 'center',
+  gap: '20px',
+  flexWrap: 'wrap',
+  marginBottom: '30px'
+};
+
+const controlButtonStyle = {
+  border: 'none',
+  fontSize: '1.1rem',
+  padding: '15px 30px',
+  borderRadius: '8px',
+  cursor: 'pointer',
+  fontWeight: '500',
+  transition: 'all 0.2s'
+};
+
+const startButtonStyle = {
+  backgroundColor: '#28a745',
+  color: 'white'
+};
+
+const stopButtonStyle = {
+  backgroundColor: '#dc3545',
+  color: 'white'
+};
+
+const disabledStyle = {
+  backgroundColor: '#6c757d',
+  cursor: 'not-allowed',
+  opacity: 0.6
+};
+
+const statsContainerStyle = {
+  display: 'flex',
+  justifyContent: 'center',
+  gap: '30px',
+  marginBottom: '30px',
+  flexWrap: 'wrap'
+};
+
+const statItemStyle = {
+  textAlign: 'center'
+};
+
+const statValueStyle = {
+  fontSize: '2rem',
+  fontWeight: 'bold'
+};
+
+const statLabelStyle = {
+  color: '#6c757d',
+  fontSize: '0.9rem'
+};
+
+const navContainerStyle = {
+  display: 'flex',
+  justifyContent: 'center',
+  gap: '20px',
+  flexWrap: 'wrap'
+};
+
+const navButtonStyle = {
+  backgroundColor: '#007bff',
+  color: 'white',
+  border: 'none',
+  fontSize: '1rem',
+  padding: '12px 24px',
+  borderRadius: '6px',
+  textDecoration: 'none',
+  display: 'flex',
+  alignItems: 'center',
+  gap: '8px',
+  transition: 'all 0.2s'
+};
+
+const homeLinkStyle = {
+  color: '#6c757d',
+  textDecoration: 'none',
+  fontSize: '1rem',
+  padding: '12px 24px',
+  display: 'flex',
+  alignItems: 'center',
+  gap: '8px'
+};
+
+// Add responsive styles via media queries in CSS
+const responsiveStyles = `
+  <style>
+    @media (max-width: 768px) {
+      .main-content {
+        grid-template-columns: 1fr !important;
+        gap: 20px !important;
+      }
+      .title {
+        font-size: 1.8rem !important;
+      }
+      .video-container {
+        min-height: 300px !important;
+      }
+      .control-container {
+        flex-direction: column !important;
+        align-items: center !important;
+      }
+      .nav-container {
+        flex-direction: column !important;
+        align-items: center !important;
+      }
+    }
+    @media (max-width: 480px) {
+      .container {
+        padding: 10px !important;
+      }
+      .title {
+        font-size: 1.5rem !important;
+      }
+      .video-container {
+        min-height: 250px !important;
+      }
+      .status-card {
+        padding: 15px !important;
+        min-height: 140px !important;
+      }
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+  </style>
+`;
+
+export default LiveDetection;
