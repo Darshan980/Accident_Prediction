@@ -1,1003 +1,424 @@
-// app/live/page.js - Complete integrated component
+// app/live/page.js - Truly Simplified Live Detection
 'use client';
 import React, { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
-import { apiClient, getApiBaseUrl, getWebSocketUrl } from '../lib/api';
-import notificationService from '../lib/notificationService';
 
-// Integrated Live Detection Component with Mobile Responsiveness
 const LiveDetection = () => {
-  // State management
-  const [isDetectionActive, setIsDetectionActive] = useState(false);
-  const [cameraPermission, setCameraPermission] = useState('not-requested');
-  const [cameraError, setCameraError] = useState('');
-  const [wsConnected, setWsConnected] = useState(false);
-  const [apiConnected, setApiConnected] = useState(false);
-  const [currentDetection, setCurrentDetection] = useState(null);
-  const [detectionResults, setDetectionResults] = useState([]);
-  const [isLoading, setIsLoading] = useState(false);
-  const [videoReady, setVideoReady] = useState(false);
-  const [savedCount, setSavedCount] = useState(0);
-  const [alertsTriggered, setAlertsTriggered] = useState(0);
+  // Core state - only what we need
+  const [isActive, setIsActive] = useState(false);
+  const [error, setError] = useState('');
+  const [detection, setDetection] = useState(null);
+  const [results, setResults] = useState([]);
   const [frameCount, setFrameCount] = useState(0);
+  const [facingMode, setFacingMode] = useState('environment'); // back camera
+  const [switching, setSwitching] = useState(false);
 
   // Refs
   const videoRef = useRef(null);
   const streamRef = useRef(null);
   const wsRef = useRef(null);
   const intervalRef = useRef(null);
-  const frameCountRef = useRef(0);
-  const mountedRef = useRef(true);
-  const videoReadyRef = useRef(false);
-  const detectionActiveRef = useRef(false);
-  const resultIdRef = useRef(0);
 
-  // Initialize component
-  useEffect(() => {
-    mountedRef.current = true;
-    checkApiConnection();
-    initializeNotificationSystem();
-    
-    return () => {
-      mountedRef.current = false;
-      stopDetection();
-    };
-  }, []);
+  // Cleanup on unmount
+  useEffect(() => () => cleanup(), []);
 
-  const checkApiConnection = async () => {
+  const cleanup = () => {
+    if (intervalRef.current) clearInterval(intervalRef.current);
+    if (wsRef.current) wsRef.current.close();
+    if (streamRef.current) streamRef.current.getTracks().forEach(t => t.stop());
+  };
+
+  const startDetection = async () => {
     try {
-      const health = await apiClient.healthCheck();
+      setError('');
       
-      if (health.fallback) {
-        setApiConnected(false);
-        setCameraError('Cannot connect to backend server. Please ensure the backend is running.');
-      } else {
-        setApiConnected(true);
-        setCameraError('');
-      }
-    } catch (error) {
-      setApiConnected(false);
-      setCameraError(`Connection failed: ${error.message}`);
-    }
-  };
-
-  const initializeNotificationSystem = () => {
-    const checkForNotificationSystem = () => {
-      return window.GlobalNotificationSystem ? true : false;
-    };
-
-    if (!checkForNotificationSystem()) {
-      let attempts = 0;
-      const retryInterval = setInterval(() => {
-        attempts++;
-        if (checkForNotificationSystem() || attempts >= 10) {
-          clearInterval(retryInterval);
-        }
-      }, 1000);
-    }
-  };
-
-  const saveToResultsHistory = (data) => {
-    try {
-      const historyItem = {
-        id: `live-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-        timestamp: new Date().toISOString(),
-        filename: `live_frame_${data.frame_id || frameCountRef.current}.jpg`,
-        file_size: 0,
-        content_type: 'image/jpeg',
-        accident_detected: data.accident_detected,
-        confidence: data.confidence,
-        processing_time: data.processing_time || 0,
-        predicted_class: data.predicted_class || 'unknown',
-        threshold: 0.5,
-        frames_analyzed: 1,
-        avg_confidence: data.confidence,
-        analysis_type: 'live_detection',
-        location: 'Live Detection Camera',
-        time_of_day: new Date().toLocaleTimeString(),
-        notes: `Live detection - Frame ${data.frame_id || frameCountRef.current}`,
-        frame_id: data.frame_id || frameCountRef.current,
-        detection_source: 'live_camera'
-      };
-      
-      const existingHistory = JSON.parse(localStorage.getItem('detectionHistory') || '[]');
-      existingHistory.unshift(historyItem);
-      const trimmedHistory = existingHistory.slice(0, 100);
-      localStorage.setItem('detectionHistory', JSON.stringify(trimmedHistory));
-      
-      setSavedCount(prev => prev + 1);
-      return true;
-    } catch (error) {
-      return false;
-    }
-  };
-
-  const setupWebSocket = () => {
-    return new Promise((resolve, reject) => {
-      try {
-        const wsUrl = getWebSocketUrl() + '/api/live/ws';
-        const ws = new WebSocket(wsUrl);
-        wsRef.current = ws;
-
-        const timeout = setTimeout(() => {
-          if (ws.readyState === WebSocket.CONNECTING) {
-            ws.close();
-            reject(new Error('Connection timeout'));
-          }
-        }, 10000);
-
-        ws.onopen = () => {
-          clearTimeout(timeout);
-          setWsConnected(true);
-          resolve();
-        };
-
-        ws.onmessage = (event) => {
-          try {
-            const data = JSON.parse(event.data);
-            
-            if (data.type === 'connection_established' || data.type === 'ping' || data.type === 'pong') {
-              return;
-            }
-            
-            if (data.error) {
-              setCameraError(`Analysis error: ${data.error}`);
-              return;
-            }
-            
-            if (typeof data.accident_detected !== 'undefined') {
-              setCurrentDetection(data);
-              
-              const newResult = {
-                id: `result-${++resultIdRef.current}`,
-                timestamp: new Date().toLocaleTimeString(),
-                type: data.accident_detected ? 'Accident' : 'Normal',
-                confidence: Math.round(data.confidence * 100),
-                frameId: data.frame_id
-              };
-              
-              setDetectionResults(prev => [newResult, ...prev.slice(0, 9)]);
-              saveToResultsHistory(data);
-              
-              try {
-                notificationService.notifyLiveDetection(data);
-                
-                if (data.accident_detected) {
-                  notificationService.playAlertSound('accident');
-                  setAlertsTriggered(prev => prev + 1);
-                } else {
-                  notificationService.playAlertSound('completion');
-                }
-              } catch (error) {
-                console.error('Notification error:', error);
-              }
-            }
-            
-          } catch (error) {
-            console.error('Error parsing message:', error);
-          }
-        };
-
-        ws.onclose = () => {
-          clearTimeout(timeout);
-          setWsConnected(false);
-        };
-
-        ws.onerror = (error) => {
-          clearTimeout(timeout);
-          setWsConnected(false);
-          reject(error);
-        };
-
-      } catch (error) {
-        reject(error);
-      }
-    });
-  };
-
-  const captureFrame = () => {
-    if (!videoRef.current) return null;
-
-    const video = videoRef.current;
-
-    if (video.videoWidth === 0 || video.videoHeight === 0 || video.readyState < 2 || video.paused || video.ended) {
-      return null;
-    }
-
-    try {
-      const canvas = document.createElement('canvas');
-      const ctx = canvas.getContext('2d');
-      
-      canvas.width = 128;
-      canvas.height = 128;
-      
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-      
-      const dataURL = canvas.toDataURL('image/jpeg', 0.8);
-      const base64 = dataURL.split(',')[1];
-      
-      return base64 && base64.length > 0 ? base64 : null;
-      
-    } catch (error) {
-      return null;
-    }
-  };
-
-  const captureAndSendFrame = () => {
-    if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
-      return false;
-    }
-
-    const frame = captureFrame();
-    if (!frame) return false;
-
-    try {
-      frameCountRef.current++;
-      setFrameCount(frameCountRef.current);
-      
-      const payload = {
-        frame: frame,
-        timestamp: new Date().toISOString(),
-        frame_id: frameCountRef.current
-      };
-      
-      wsRef.current.send(JSON.stringify(payload));
-      return true;
-      
-    } catch (error) {
-      return false;
-    }
-  };
-
-  const startFrameProcessing = () => {
-    if (intervalRef.current) {
-      clearInterval(intervalRef.current);
-    }
-    
-    intervalRef.current = setInterval(() => {
-      if (!detectionActiveRef.current || !mountedRef.current || !videoReadyRef.current) {
-        return;
-      }
-      
-      captureAndSendFrame();
-    }, 2000);
-  };
-
-  const startCamera = async () => {
-    if (!apiConnected) {
-      setCameraError('Cannot connect to detection service');
-      return;
-    }
-
-    try {
-      setIsLoading(true);
-      setCameraError('');
-      setVideoReady(false);
-      
+      // Start camera
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { 
-          width: { ideal: 640, min: 320 },
-          height: { ideal: 480, min: 240 },
-          facingMode: 'environment' // Use back camera on mobile
-        },
+        video: { facingMode },
         audio: false
       });
       
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        streamRef.current = stream;
-        
-        await new Promise((resolve, reject) => {
-          const video = videoRef.current;
-          
-          const onLoad = async () => {
-            try {
-              await video.play();
-              
-              setTimeout(() => {
-                setVideoReady(true);
-                videoReadyRef.current = true;
-              }, 500);
-              
-              resolve();
-            } catch (playError) {
-              reject(playError);
-            }
-          };
-          
-          video.addEventListener('loadeddata', onLoad, { once: true });
-          
-          setTimeout(() => {
-            video.removeEventListener('loadeddata', onLoad);
-            reject(new Error('Video load timeout'));
-          }, 10000);
-        });
-      }
-      
-      setCameraPermission('granted');
-      await setupWebSocket();
-      
-      setIsDetectionActive(true);
-      detectionActiveRef.current = true;
-      
-      setTimeout(() => {
-        if (mountedRef.current && videoReadyRef.current) {
-          startFrameProcessing();
+      videoRef.current.srcObject = stream;
+      streamRef.current = stream;
+      await videoRef.current.play();
+
+      // Connect WebSocket
+      const ws = new WebSocket('ws://localhost:8000/api/live/ws');
+      wsRef.current = ws;
+
+      ws.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        if (data.accident_detected !== undefined) {
+          setDetection(data);
+          setResults(prev => [{
+            id: Date.now(),
+            type: data.accident_detected ? 'Accident' : 'Normal',
+            confidence: Math.round(data.confidence * 100),
+            time: new Date().toLocaleTimeString()
+          }, ...prev.slice(0, 4)]);
         }
-      }, 1000);
-      
-    } catch (error) {
-      let errorMessage = 'Failed to access camera';
-      
-      if (error.name === 'NotAllowedError') {
-        errorMessage = 'Camera permission denied. Please allow camera access and try again.';
-      } else if (error.name === 'NotFoundError') {
-        errorMessage = 'No camera found. Please check your device.';
-      } else if (error.name === 'NotSupportedError') {
-        errorMessage = 'Camera not supported by your browser.';
-      } else if (error.message) {
-        errorMessage = error.message;
-      }
-      
-      setCameraError(errorMessage);
-      setIsDetectionActive(false);
-    } finally {
-      setIsLoading(false);
+      };
+
+      // Start frame processing
+      intervalRef.current = setInterval(() => {
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = canvas.height = 128;
+        ctx.drawImage(videoRef.current, 0, 0, 128, 128);
+        
+        const frame = canvas.toDataURL('image/jpeg', 0.8).split(',')[1];
+        if (ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ 
+            frame, 
+            frame_id: frameCount + 1 
+          }));
+          setFrameCount(prev => prev + 1);
+        }
+      }, 2000);
+
+      setIsActive(true);
+    } catch (err) {
+      setError(err.message);
     }
   };
 
   const stopDetection = () => {
-    setIsDetectionActive(false);
-    detectionActiveRef.current = false;
-    setVideoReady(false);
-    videoReadyRef.current = false;
-    
-    if (intervalRef.current) {
-      clearInterval(intervalRef.current);
-      intervalRef.current = null;
-    }
-    
-    if (wsRef.current) {
-      wsRef.current.close();
-      wsRef.current = null;
-    }
-    
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach(track => track.stop());
-      streamRef.current = null;
-    }
-    
-    if (videoRef.current) {
-      videoRef.current.srcObject = null;
-    }
-    
-    setWsConnected(false);
-    setCameraPermission('not-requested');
-    setCurrentDetection(null);
-    frameCountRef.current = 0;
+    cleanup();
+    setIsActive(false);
+    setDetection(null);
     setFrameCount(0);
   };
 
+  const switchCamera = async () => {
+    if (switching) return;
+    setSwitching(true);
+    
+    try {
+      // Stop current stream
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(t => t.stop());
+      }
+      
+      // Switch mode and restart
+      const newMode = facingMode === 'user' ? 'environment' : 'user';
+      setFacingMode(newMode);
+      
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: newMode },
+        audio: false
+      });
+      
+      videoRef.current.srcObject = stream;
+      streamRef.current = stream;
+      
+    } catch (err) {
+      setError('Camera switch failed');
+    } finally {
+      setSwitching(false);
+    }
+  };
+
   return (
-    <div style={containerStyle}>
-      <h1 style={titleStyle}>
-        Live Accident Detection
-      </h1>
+    <div style={styles.container}>
+      {/* Header */}
+      <h1 style={styles.title}>🚨 Live Detection</h1>
 
-      {/* Connection Status */}
-      {!apiConnected && (
-        <div style={connectionStatusStyle}>
-          <div style={statusMessageStyle}>
-            ⚠️ Detection Service Unavailable
-          </div>
-          <button onClick={checkApiConnection} style={retryButtonStyle}>
-            Retry Connection
-          </button>
-        </div>
-      )}
-
-      {/* Main Content */}
-      <div style={mainContentStyle}>
+      {/* Video */}
+      <div style={styles.videoBox}>
+        <video 
+          ref={videoRef} 
+          autoPlay 
+          muted 
+          playsInline 
+          style={styles.video}
+        />
         
-        {/* Video Feed */}
-        <div style={videoContainerStyle}>
-          <video
-            ref={videoRef}
-            autoPlay
-            muted
-            playsInline
-            style={{
-              ...videoStyle,
-              display: isDetectionActive ? 'block' : 'none'
-            }}
-          />
-          
-          {!isDetectionActive && (
-            <div style={placeholderStyle}>
-              <div style={placeholderIconStyle}>📹</div>
-              <h3 style={placeholderTitleStyle}>Camera Preview</h3>
-              <p style={placeholderTextStyle}>
-                {isLoading ? 'Starting detection...' : 'Click Start Detection to begin monitoring'}
-              </p>
-            </div>
-          )}
-          
-          {/* Live Status */}
-          {isDetectionActive && (
-            <div style={liveStatusStyle}>
-              <div style={pulseDotStyle}></div>
+        {!isActive && (
+          <div style={styles.placeholder}>
+            <div style={styles.icon}>📹</div>
+            <p>Tap Start to begin</p>
+          </div>
+        )}
+
+        {isActive && (
+          <>
+            <div style={styles.liveBadge}>
+              <span style={styles.dot}></span>
               LIVE
             </div>
-          )}
-
-          {/* Detection Result Overlay */}
-          {currentDetection && isDetectionActive && (
-            <div style={{
-              ...detectionOverlayStyle,
-              backgroundColor: currentDetection.accident_detected ? 
-                'rgba(220, 53, 69, 0.95)' : 'rgba(40, 167, 69, 0.95)'
-            }}>
-              <div style={detectionHeaderStyle}>
-                <span>{currentDetection.accident_detected ? '🚨' : '✅'}</span>
-                {currentDetection.accident_detected ? 'ACCIDENT DETECTED' : 'NORMAL TRAFFIC'}
-              </div>
-              <div style={confidenceTextStyle}>
-                Confidence: {(currentDetection.confidence * 100).toFixed(1)}%
-              </div>
-            </div>
-          )}
-
-          {/* Frame Counter */}
-          {isDetectionActive && (
-            <div style={frameCounterStyle}>
-              Frames: {frameCount}
-            </div>
-          )}
-        </div>
-
-        {/* Detection Panel */}
-        <div style={panelContainerStyle}>
-          {/* Current Detection Status */}
-          <div style={{
-            ...statusCardStyle,
-            backgroundColor: currentDetection ? 
-              (currentDetection.accident_detected ? '#fff5f5' : '#f0fff4') : '#f8f9fa',
-            borderColor: currentDetection ? 
-              (currentDetection.accident_detected ? '#dc3545' : '#28a745') : '#e9ecef'
-          }}>
-            {currentDetection ? (
-              <>
-                <div style={statusIconStyle}>
-                  {currentDetection.accident_detected ? '🚨' : '✅'}
-                </div>
-                <div style={{
-                  ...statusTitleStyle,
-                  color: currentDetection.accident_detected ? '#dc3545' : '#28a745'
-                }}>
-                  {currentDetection.accident_detected ? 'ACCIDENT DETECTED' : 'NORMAL TRAFFIC'}
-                </div>
-                <div style={confidenceStyle}>
-                  Confidence: {(currentDetection.confidence * 100).toFixed(1)}%
-                </div>
-                <div style={frameInfoStyle}>
-                  Frame: {currentDetection.frame_id}
-                </div>
-              </>
-            ) : (
-              <>
-                <div style={statusIconStyle}>🤖</div>
-                <div style={statusTitleStyle}>
-                  {isDetectionActive ? 'Analyzing video feed...' : 'Detection inactive'}
-                </div>
-                {isDetectionActive && (
-                  <div style={frameInfoStyle}>
-                    Frames processed: {frameCount}
-                  </div>
-                )}
-              </>
-            )}
-          </div>
-
-          {/* Recent Results */}
-          <div style={resultsCardStyle}>
-            <h4 style={resultsTitleStyle}>Recent Results</h4>
-            
-            <div style={resultsListStyle}>
-              {detectionResults.length === 0 ? (
-                <div style={noResultsStyle}>
-                  No results yet
-                </div>
-              ) : (
-                detectionResults.map((result) => (
-                  <div 
-                    key={result.id} 
-                    style={{
-                      ...resultItemStyle,
-                      backgroundColor: result.type === 'Accident' ? '#ffe6e6' : '#e6ffe6',
-                      borderColor: result.type === 'Accident' ? '#ffb3b3' : '#b3ffb3'
-                    }}
-                  >
-                    <div style={resultHeaderStyle}>
-                      <span style={{
-                        ...resultTypeStyle,
-                        color: result.type === 'Accident' ? '#dc3545' : '#28a745'
-                      }}>
-                        {result.type === 'Accident' ? '🚨' : '✅'} {result.type}
-                      </span>
-                      <span style={resultConfidenceStyle}>
-                        {result.confidence}%
-                      </span>
-                    </div>
-                    <div style={resultTimestampStyle}>
-                      {result.timestamp}
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-        </div>
+            <div style={styles.frameCount}>Frame: {frameCount}</div>
+            <button 
+              style={styles.switchBtn} 
+              onClick={switchCamera}
+              disabled={switching}
+            >
+              {switching ? '🔄' : facingMode === 'user' ? '📷' : '🤳'}
+            </button>
+          </>
+        )}
       </div>
 
-      {/* Error Display */}
-      {cameraError && (
-        <div style={errorStyle}>
-          <strong>⚠️ {cameraError}</strong>
+      {/* Current Detection */}
+      {detection && (
+        <div style={{
+          ...styles.detectionCard,
+          backgroundColor: detection.accident_detected ? '#ff5252' : '#4caf50'
+        }}>
+          <span style={styles.detectionIcon}>
+            {detection.accident_detected ? '🚨' : '✅'}
+          </span>
+          <div>
+            <div style={styles.detectionText}>
+              {detection.accident_detected ? 'ACCIDENT DETECTED' : 'NORMAL TRAFFIC'}
+            </div>
+            <div style={styles.confidence}>
+              {(detection.confidence * 100).toFixed(1)}% confidence
+            </div>
+          </div>
         </div>
       )}
 
-      {/* Control Buttons */}
-      <div style={controlContainerStyle}>
+      {/* Recent Results */}
+      {results.length > 0 && (
+        <div style={styles.resultsBox}>
+          <h3 style={styles.resultsTitle}>Recent Results</h3>
+          {results.map(result => (
+            <div key={result.id} style={styles.resultItem}>
+              <span>{result.type === 'Accident' ? '🚨' : '✅'}</span>
+              <span>{result.type}</span>
+              <span>{result.confidence}%</span>
+              <span style={styles.time}>{result.time}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Error */}
+      {error && (
+        <div style={styles.error}>⚠️ {error}</div>
+      )}
+
+      {/* Controls */}
+      <div style={styles.controls}>
         <button 
-          onClick={startCamera}
-          disabled={isDetectionActive || isLoading || !apiConnected}
-          style={{
-            ...controlButtonStyle,
-            ...startButtonStyle,
-            ...(isDetectionActive || isLoading || !apiConnected ? disabledStyle : {})
-          }}
+          style={{...styles.btn, ...styles.startBtn}} 
+          onClick={startDetection}
+          disabled={isActive}
         >
-          {isLoading ? '🔄 Starting...' : (isDetectionActive ? '✅ Detection Active' : '🚀 Start Detection')}
+          {isActive ? '✅ Active' : '🚀 Start'}
         </button>
-        
         <button 
+          style={{...styles.btn, ...styles.stopBtn}} 
           onClick={stopDetection}
-          disabled={!isDetectionActive}
-          style={{
-            ...controlButtonStyle,
-            ...stopButtonStyle,
-            ...(!isDetectionActive ? disabledStyle : {})
-          }}
+          disabled={!isActive}
         >
-          🛑 Stop Detection
+          🛑 Stop
         </button>
       </div>
-
-      {/* Summary Stats */}
-      {(savedCount > 0 || alertsTriggered > 0) && (
-        <div style={statsContainerStyle}>
-          <div style={statItemStyle}>
-            <div style={{...statValueStyle, color: '#007bff'}}>
-              {savedCount}
-            </div>
-            <div style={statLabelStyle}>
-              Results Saved
-            </div>
-          </div>
-          <div style={statItemStyle}>
-            <div style={{...statValueStyle, color: '#dc3545'}}>
-              {alertsTriggered}
-            </div>
-            <div style={statLabelStyle}>
-              Alerts Triggered
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Navigation */}
-      <div style={navContainerStyle}>
-        <Link href="/results" style={navButtonStyle}>
-          📊 View All Results
-        </Link>
-
-        <Link 
-          href="/notification" 
-          style={{
-            ...navButtonStyle,
-            backgroundColor: alertsTriggered > 0 ? '#dc3545' : '#6c757d'
-          }}
-        >
-          🔔 Notifications
-        </Link>
-
-        <Link href="/" style={homeLinkStyle}>
-          ← Back to Home
-        </Link>
+      <div style={styles.nav}>
+        <Link href="/results" style={styles.navBtn}>📊 Results</Link>
+        <Link href="/notification" style={styles.navBtn}>🔔 Alerts</Link>
+        <Link href="/" style={styles.navBtn}>← Home</Link>
       </div>
     </div>
   );
 };
 
-// Styles with mobile responsiveness
-const containerStyle = {
-  padding: '20px',
-  maxWidth: '1200px',
-  margin: '0 auto',
-  minHeight: '100vh'
-};
+// Simplified styles
+const styles = {
+  container: {
+    padding: '1rem',
+    maxWidth: '500px',
+    margin: '0 auto',
+    minHeight: '100vh',
+    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+    color: 'white',
+    fontFamily: 'system-ui, sans-serif'
+  },
 
-const titleStyle = {
-  textAlign: 'center',
-  marginBottom: '30px',
-  fontSize: '2.2rem',
-  color: '#2c3e50',
-  fontWeight: '300'
-};
+  title: {
+    textAlign: 'center',
+    margin: '0 0 1.5rem 0',
+    fontSize: '1.5rem',
+    fontWeight: '600'
+  },
 
-const connectionStatusStyle = {
-  backgroundColor: '#fee',
-  border: '1px solid #fcc',
-  borderRadius: '8px',
-  padding: '15px',
-  marginBottom: '20px',
-  textAlign: 'center'
-};
+  videoBox: {
+    position: 'relative',
+    width: '100%',
+    height: '50vh',
+    background: '#000',
+    borderRadius: '12px',
+    overflow: 'hidden',
+    marginBottom: '1rem'
+  },
 
-const statusMessageStyle = {
-  color: '#c33',
-  fontWeight: '500',
-  marginBottom: '10px'
-};
+  video: {
+    width: '100%',
+    height: '100%',
+    objectFit: 'cover'
+  },
 
-const retryButtonStyle = {
-  backgroundColor: '#007bff',
-  color: 'white',
-  border: 'none',
-  padding: '8px 16px',
-  borderRadius: '4px',
-  cursor: 'pointer',
-  fontSize: '0.9rem'
-};
+  placeholder: {
+    position: 'absolute',
+    top: '50%',
+    left: '50%',
+    transform: 'translate(-50%, -50%)',
+    textAlign: 'center'
+  },
 
-const mainContentStyle = {
-  display: 'grid',
-  gridTemplateColumns: '2fr 1fr',
-  gap: '30px',
-  marginBottom: '30px'
-};
+  icon: {
+    fontSize: '3rem',
+    marginBottom: '0.5rem',
+    opacity: 0.7
+  },
 
-const videoContainerStyle = {
-  backgroundColor: '#000',
-  borderRadius: '12px',
-  position: 'relative',
-  overflow: 'hidden',
-  minHeight: '400px',
-  boxShadow: '0 4px 6px rgba(0,0,0,0.1)'
-};
+  liveBadge: {
+    position: 'absolute',
+    top: '1rem',
+    right: '1rem',
+    background: '#4caf50',
+    padding: '0.5rem 0.75rem',
+    borderRadius: '20px',
+    fontSize: '0.8rem',
+    fontWeight: 'bold',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '0.5rem'
+  },
 
-const videoStyle = {
-  width: '100%',
-  height: '100%',
-  objectFit: 'cover'
-};
+  dot: {
+    width: '6px',
+    height: '6px',
+    background: 'white',
+    borderRadius: '50%',
+    animation: 'pulse 1.5s infinite'
+  },
 
-const placeholderStyle = {
-  width: '100%',
-  height: '400px',
-  backgroundColor: '#1a1a1a',
-  color: '#fff',
-  display: 'flex',
-  flexDirection: 'column',
-  alignItems: 'center',
-  justifyContent: 'center'
-};
+  frameCount: {
+    position: 'absolute',
+    bottom: '1rem',
+    left: '1rem',
+    background: 'rgba(0,0,0,0.7)',
+    padding: '0.3rem 0.6rem',
+    borderRadius: '8px',
+    fontSize: '0.8rem'
+  },
 
-const placeholderIconStyle = {
-  fontSize: '4rem',
-  marginBottom: '1rem',
-  opacity: 0.7
-};
+  switchBtn: {
+    position: 'absolute',
+    bottom: '1rem',
+    right: '1rem',
+    background: 'rgba(0,0,0,0.8)',
+    border: 'none',
+    color: 'white',
+    width: '40px',
+    height: '40px',
+    borderRadius: '50%',
+    fontSize: '1.2rem',
+    cursor: 'pointer'
+  },
 
-const placeholderTitleStyle = {
-  margin: '0 0 1rem 0',
-  fontWeight: '300'
-};
+  detectionCard: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '1rem',
+    padding: '1rem',
+    borderRadius: '12px',
+    marginBottom: '1rem'
+  },
 
-const placeholderTextStyle = {
-  color: '#aaa',
-  textAlign: 'center',
-  margin: 0
-};
+  detectionIcon: {
+    fontSize: '2rem'
+  },
 
-const liveStatusStyle = {
-  position: 'absolute',
-  top: '15px',
-  right: '15px',
-  backgroundColor: '#28a745',
-  color: 'white',
-  padding: '8px 16px',
-  borderRadius: '20px',
-  fontSize: '0.9rem',
-  fontWeight: 'bold',
-  display: 'flex',
-  alignItems: 'center',
-  gap: '8px'
-};
+  detectionText: {
+    fontSize: '1.1rem',
+    fontWeight: 'bold',
+    marginBottom: '0.25rem'
+  },
 
-const pulseDotStyle = {
-  width: '8px',
-  height: '8px',
-  backgroundColor: 'white',
-  borderRadius: '50%',
-  animation: 'pulse 1.5s infinite'
-};
+  confidence: {
+    opacity: 0.9
+  },
 
-const detectionOverlayStyle = {
-  position: 'absolute',
-  top: '15px',
-  left: '15px',
-  color: 'white',
-  padding: '12px 16px',
-  borderRadius: '8px',
-  fontSize: '0.9rem',
-  fontWeight: 'bold'
-};
+  resultsBox: {
+    background: 'rgba(255,255,255,0.1)',
+    borderRadius: '12px',
+    padding: '1rem',
+    marginBottom: '1rem'
+  },
 
-const detectionHeaderStyle = {
-  display: 'flex',
-  alignItems: 'center',
-  gap: '8px',
-  marginBottom: '4px'
-};
+  resultsTitle: {
+    margin: '0 0 0.75rem 0',
+    fontSize: '1rem'
+  },
 
-const confidenceTextStyle = {
-  fontSize: '0.8rem',
-  opacity: 0.9
-};
+  resultItem: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: '0.5rem 0',
+    borderBottom: '1px solid rgba(255,255,255,0.1)',
+    fontSize: '0.9rem'
+  },
 
-const frameCounterStyle = {
-  position: 'absolute',
-  bottom: '15px',
-  left: '15px',
-  backgroundColor: 'rgba(0,0,0,0.7)',
-  color: 'white',
-  padding: '8px 12px',
-  borderRadius: '6px',
-  fontSize: '0.8rem'
-};
+  time: {
+    opacity: 0.7,
+    fontSize: '0.8rem'
+  },
 
-const panelContainerStyle = {
-  display: 'flex',
-  flexDirection: 'column',
-  gap: '20px'
-};
+  error: {
+    background: 'rgba(255,0,0,0.2)',
+    padding: '1rem',
+    borderRadius: '8px',
+    marginBottom: '1rem',
+    textAlign: 'center'
+  },
 
-const statusCardStyle = {
-  border: '2px solid',
-  borderRadius: '12px',
-  padding: '25px',
-  textAlign: 'center',
-  minHeight: '200px',
-  display: 'flex',
-  flexDirection: 'column',
-  justifyContent: 'center'
-};
+  controls: {
+    display: 'flex',
+    gap: '1rem',
+    marginBottom: '1rem'
+  },
 
-const statusIconStyle = {
-  fontSize: '3.5rem',
-  marginBottom: '15px'
-};
+  btn: {
+    flex: 1,
+    padding: '1rem',
+    border: 'none',
+    borderRadius: '8px',
+    fontSize: '1rem',
+    fontWeight: 'bold',
+    cursor: 'pointer'
+  },
 
-const statusTitleStyle = {
-  fontSize: '1.3rem',
-  fontWeight: 'bold',
-  marginBottom: '15px'
-};
+  startBtn: {
+    background: '#4caf50',
+    color: 'white'
+  },
 
-const confidenceStyle = {
-  fontSize: '1.1rem',
-  color: '#666',
-  marginBottom: '10px'
-};
+  stopBtn: {
+    background: '#f44336',
+    color: 'white'
+  },
 
-const frameInfoStyle = {
-  fontSize: '0.9rem',
-  color: '#999'
-};
+  nav: {
+    display: 'flex',
+    gap: '0.75rem'
+  },
 
-const resultsCardStyle = {
-  backgroundColor: '#fff',
-  border: '1px solid #e9ecef',
-  borderRadius: '12px',
-  padding: '20px'
+  navBtn: {
+    flex: 1,
+    padding: '0.75rem',
+    background: 'rgba(255,255,255,0.1)',
+    color: 'white',
+    textDecoration: 'none',
+    borderRadius: '8px',
+    textAlign: 'center',
+    fontSize: '0.9rem'
+  }
 };
-
-const resultsTitleStyle = {
-  margin: '0 0 15px 0',
-  color: '#495057'
-};
-
-const resultsListStyle = {
-  maxHeight: '300px',
-  overflowY: 'auto'
-};
-
-const noResultsStyle = {
-  color: '#6c757d',
-  textAlign: 'center',
-  padding: '30px 0'
-};
-
-const resultItemStyle = {
-  padding: '12px',
-  marginBottom: '8px',
-  borderRadius: '8px',
-  border: '1px solid',
-  fontSize: '0.9rem'
-};
-
-const resultHeaderStyle = {
-  display: 'flex',
-  justifyContent: 'space-between',
-  alignItems: 'center',
-  marginBottom: '4px'
-};
-
-const resultTypeStyle = {
-  fontWeight: 'bold'
-};
-
-const resultConfidenceStyle = {
-  fontSize: '0.8rem',
-  color: '#666'
-};
-
-const resultTimestampStyle = {
-  color: '#666',
-  fontSize: '0.8rem'
-};
-
-const errorStyle = {
-  backgroundColor: '#f8d7da',
-  color: '#721c24',
-  padding: '15px',
-  borderRadius: '8px',
-  border: '1px solid #f5c6cb',
-  marginBottom: '20px',
-  textAlign: 'center'
-};
-
-const controlContainerStyle = {
-  display: 'flex',
-  justifyContent: 'center',
-  gap: '20px',
-  flexWrap: 'wrap',
-  marginBottom: '30px'
-};
-
-const controlButtonStyle = {
-  border: 'none',
-  fontSize: '1.1rem',
-  padding: '15px 30px',
-  borderRadius: '8px',
-  cursor: 'pointer',
-  fontWeight: '500',
-  transition: 'all 0.2s'
-};
-
-const startButtonStyle = {
-  backgroundColor: '#28a745',
-  color: 'white'
-};
-
-const stopButtonStyle = {
-  backgroundColor: '#dc3545',
-  color: 'white'
-};
-
-const disabledStyle = {
-  backgroundColor: '#6c757d',
-  cursor: 'not-allowed',
-  opacity: 0.6
-};
-
-const statsContainerStyle = {
-  display: 'flex',
-  justifyContent: 'center',
-  gap: '30px',
-  marginBottom: '30px',
-  flexWrap: 'wrap'
-};
-
-const statItemStyle = {
-  textAlign: 'center'
-};
-
-const statValueStyle = {
-  fontSize: '2rem',
-  fontWeight: 'bold'
-};
-
-const statLabelStyle = {
-  color: '#6c757d',
-  fontSize: '0.9rem'
-};
-
-const navContainerStyle = {
-  display: 'flex',
-  justifyContent: 'center',
-  gap: '20px',
-  flexWrap: 'wrap'
-};
-
-const navButtonStyle = {
-  backgroundColor: '#007bff',
-  color: 'white',
-  border: 'none',
-  fontSize: '1rem',
-  padding: '12px 24px',
-  borderRadius: '6px',
-  textDecoration: 'none',
-  display: 'flex',
-  alignItems: 'center',
-  gap: '8px',
-  transition: 'all 0.2s'
-};
-
-const homeLinkStyle = {
-  color: '#6c757d',
-  textDecoration: 'none',
-  fontSize: '1rem',
-  padding: '12px 24px',
-  display: 'flex',
-  alignItems: 'center',
-  gap: '8px'
-};
-
-// Add responsive styles via media queries in CSS
-const responsiveStyles = `
-  <style>
-    @media (max-width: 768px) {
-      .main-content {
-        grid-template-columns: 1fr !important;
-        gap: 20px !important;
-      }
-      .title {
-        font-size: 1.8rem !important;
-      }
-      .video-container {
-        min-height: 300px !important;
-      }
-      .control-container {
-        flex-direction: column !important;
-        align-items: center !important;
-      }
-      .nav-container {
-        flex-direction: column !important;
-        align-items: center !important;
-      }
-    }
-    @media (max-width: 480px) {
-      .container {
-        padding: 10px !important;
-      }
-      .title {
-        font-size: 1.5rem !important;
-      }
-      .video-container {
-        min-height: 250px !important;
-      }
-      .status-card {
-        padding: 15px !important;
-        min-height: 140px !important;
-      }
-    }
-    @keyframes pulse {
-      0%, 100% { opacity: 1; }
-      50% { opacity: 0.5; }
-    }
-  </style>
-`;
 
 export default LiveDetection;
