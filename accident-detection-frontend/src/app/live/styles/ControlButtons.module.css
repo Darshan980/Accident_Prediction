@@ -1,0 +1,99 @@
+/* app/live/styles/ControlButtons.module.css */
+
+.controlContainer {
+  display: flex;
+  justify-content: center;
+  gap: 20px;
+  flex-wrap: wrap;
+  margin-bottom: 30px;
+}
+
+.controlButton {
+  border: none;
+  font-size: 1.1rem;
+  padding: 15px 30px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 180px;
+  justify-content: center;
+}
+
+.startButton {
+  background-color: #28a745;
+  color: white;
+}
+
+.startButton:hover:not(.disabled) {
+  background-color: #218838;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(40, 167, 69, 0.3);
+}
+
+.stopButton {
+  background-color: #dc3545;
+  color: white;
+}
+
+.stopButton:hover:not(.disabled) {
+  background-color: #c82333;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(220, 53, 69, 0.3);
+}
+
+.disabled {
+  background-color: #6c757d !important;
+  cursor: not-allowed !important;
+  opacity: 0.6;
+  transform: none !important;
+  box-shadow: none !important;
+}
+
+.spinner {
+  animation: spin 1s linear infinite;
+  display: inline-block;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Mobile Responsiveness */
+@media (max-width: 768px) {
+  .controlContainer {
+    gap: 15px;
+    margin-bottom: 20px;
+  }
+  
+  .controlButton {
+    font-size: 1rem;
+    padding: 12px 24px;
+    min-width: 160px;
+  }
+}
+
+@media (max-width: 480px) {
+  .controlContainer {
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 20px;
+  }
+  
+  .controlButton {
+    font-size: 0.95rem;
+    padding: 12px 20px;
+    min-width: 200px;
+    width: 100%;
+    max-width: 280px;
+  }
+}
