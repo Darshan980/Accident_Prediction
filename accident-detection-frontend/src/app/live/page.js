@@ -42,8 +42,13 @@ const LiveDetection = () => {
       streamRef.current = stream;
       await videoRef.current.play();
 
-      // Connect WebSocket
-      const ws = new WebSocket('ws://localhost:8000/api/live/ws');
+      // Connect WebSocket - Dynamic URL for dev/production
+      const isDev = process.env.NODE_ENV === 'development';
+      const wsUrl = isDev 
+        ? 'ws://localhost:8000/api/live/ws'
+        : 'wss://accident-prediction-7i4e.onrender.com/api/live/ws';
+      
+      const ws = new WebSocket(wsUrl);
       wsRef.current = ws;
 
       ws.onmessage = (event) => {
