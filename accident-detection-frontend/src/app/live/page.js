@@ -2,8 +2,8 @@
 'use client';
 import React, { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
-import { apiClient, getApiBaseUrl, getWebSocketUrl } from '../../lib/api';
-import notificationService from '../../lib/notificationService';
+import { apiClient, getApiBaseUrl, getWebSocketUrl } from '../lib/api';
+import notificationService from '../lib/notificationService';
 
 // Integrated Live Detection Component with Mobile Responsiveness
 const LiveDetection = () => {
