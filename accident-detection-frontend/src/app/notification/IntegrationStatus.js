@@ -5,7 +5,7 @@ const IntegrationStatus = () => {
     {
       icon: '📹',
       title: 'Live Detection',
-      description: 'Ready to receive alerts from live camera feed',
+      description: 'Ready to receive alert from live camera feed',
       status: 'ready'
     },
     {
