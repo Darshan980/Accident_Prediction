@@ -13,92 +13,39 @@ const AlertControls = ({
   onClearAll
 }) => {
   return (
-    <div style={{
-      backgroundColor: 'white',
-      borderRadius: '12px',
-      padding: '24px',
-      boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
-    }}>
-      <h2 style={{ 
-        fontSize: '1.5rem', 
-        marginBottom: '20px',
-        display: 'flex',
-        alignItems: 'center',
-        gap: '8px'
-      }}>
-        <span style={{ fontSize: '1.2rem' }}>⚙️</span>
+    <div className="mobile-controls">
+      <h2>
+        <span>⚙️</span>
         Alert Controls
       </h2>
 
       {/* Master Toggle */}
-      <div style={{
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        padding: '16px',
-        backgroundColor: '#f8f9fa',
-        borderRadius: '8px',
-        marginBottom: '16px'
-      }}>
+      <div className="mobile-master-toggle">
         <div>
           <strong>Master Alert System</strong>
-          <div style={{ color: '#666', fontSize: '0.9rem' }}>
+          <div style={{ fontSize: '0.9rem', opacity: 0.9 }}>
             Enable/disable all accident alerts
           </div>
         </div>
-        <label style={{ position: 'relative', display: 'inline-block', width: '60px', height: '34px' }}>
-          <input
-            type="checkbox"
-            checked={isAlertsEnabled}
-            onChange={(e) => setIsAlertsEnabled(e.target.checked)}
-            style={{ opacity: 0, width: 0, height: 0 }}
-          />
-          <span style={{
-            position: 'absolute',
-            cursor: 'pointer',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            backgroundColor: isAlertsEnabled ? '#28a745' : '#ccc',
-            borderRadius: '34px',
-            transition: '0.3s'
-          }}>
-            <div style={{
-              position: 'absolute',
-              height: '26px',
-              width: '26px',
-              left: isAlertsEnabled ? '30px' : '4px',
-              bottom: '4px',
-              backgroundColor: 'white',
-              borderRadius: '50%',
-              transition: '0.3s'
-            }} />
-          </span>
-        </label>
+        <div 
+          className={`mobile-toggle-switch ${isAlertsEnabled ? 'active' : ''}`}
+          onClick={() => setIsAlertsEnabled(!isAlertsEnabled)}
+        >
+          <div className="mobile-toggle-slider" />
+        </div>
       </div>
 
       {/* Notification Types */}
-      <div style={{ marginBottom: '20px' }}>
+      <div className="mobile-notification-types">
         <h4 style={{ marginBottom: '12px' }}>Notification Types</h4>
         
         {/* Modal Notifications */}
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          padding: '12px',
-          border: '1px solid #e0e0e0',
-          borderRadius: '6px',
-          marginBottom: '8px'
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <div className="mobile-notification-item">
+          <div className="mobile-notification-info">
             <span>🖥️</span>
-            <div>
+            <div className="mobile-notification-text">
               <strong>Modal Alerts</strong>
-              <div style={{ color: '#666', fontSize: '0.8rem' }}>
-                Full-screen popup alerts
-              </div>
+              <small>Full-screen popup alerts</small>
             </div>
           </div>
           <button
@@ -106,37 +53,19 @@ const AlertControls = ({
               ...prev,
               modalNotifications: !prev.modalNotifications
             }))}
-            style={{
-              backgroundColor: alertSettings.modalNotifications ? '#28a745' : '#dc3545',
-              color: 'white',
-              border: 'none',
-              padding: '4px 8px',
-              borderRadius: '4px',
-              cursor: 'pointer',
-              fontSize: '0.7rem'
-            }}
+            className={`mobile-toggle-button ${alertSettings.modalNotifications ? 'on' : 'off'}`}
           >
             {alertSettings.modalNotifications ? 'ON' : 'OFF'}
           </button>
         </div>
 
         {/* Desktop Notifications */}
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          padding: '12px',
-          border: '1px solid #e0e0e0',
-          borderRadius: '6px',
-          marginBottom: '8px'
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <div className="mobile-notification-item">
+          <div className="mobile-notification-info">
             <span>🔔</span>
-            <div>
+            <div className="mobile-notification-text">
               <strong>Desktop Notifications</strong>
-              <div style={{ color: '#666', fontSize: '0.8rem' }}>
-                Browser notifications
-              </div>
+              <small>Browser notifications</small>
             </div>
           </div>
           {notificationPermission === 'granted' ? (
@@ -145,30 +74,14 @@ const AlertControls = ({
                 ...prev,
                 desktopNotifications: !prev.desktopNotifications
               }))}
-              style={{
-                backgroundColor: alertSettings.desktopNotifications ? '#28a745' : '#dc3545',
-                color: 'white',
-                border: 'none',
-                padding: '4px 8px',
-                borderRadius: '4px',
-                cursor: 'pointer',
-                fontSize: '0.7rem'
-              }}
+              className={`mobile-toggle-button ${alertSettings.desktopNotifications ? 'on' : 'off'}`}
             >
               {alertSettings.desktopNotifications ? 'ON' : 'OFF'}
             </button>
           ) : (
             <button
               onClick={requestNotificationPermission}
-              style={{
-                backgroundColor: '#0070f3',
-                color: 'white',
-                border: 'none',
-                padding: '4px 8px',
-                borderRadius: '4px',
-                cursor: 'pointer',
-                fontSize: '0.7rem'
-              }}
+              className="mobile-toggle-button enable"
             >
               ENABLE
             </button>
@@ -176,34 +89,17 @@ const AlertControls = ({
         </div>
 
         {/* Sound Alerts */}
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          padding: '12px',
-          border: '1px solid #e0e0e0',
-          borderRadius: '6px'
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <div className="mobile-notification-item">
+          <div className="mobile-notification-info">
             <span>{soundEnabled ? '🔊' : '🔇'}</span>
-            <div>
+            <div className="mobile-notification-text">
               <strong>Audio Alerts</strong>
-              <div style={{ color: '#666', fontSize: '0.8rem' }}>
-                Play alarm sound
-              </div>
+              <small>Play alarm sound</small>
             </div>
           </div>
           <button
             onClick={() => setSoundEnabled(!soundEnabled)}
-            style={{
-              backgroundColor: soundEnabled ? '#28a745' : '#dc3545',
-              color: 'white',
-              border: 'none',
-              padding: '4px 8px',
-              borderRadius: '4px',
-              cursor: 'pointer',
-              fontSize: '0.7rem'
-            }}
+            className={`mobile-toggle-button ${soundEnabled ? 'on' : 'off'}`}
           >
             {soundEnabled ? 'ON' : 'OFF'}
           </button>
@@ -211,48 +107,29 @@ const AlertControls = ({
       </div>
 
       {/* Test and Clear Buttons */}
-      <div style={{ display: 'flex', gap: '8px', marginBottom: '20px' }}>
+      <div className="mobile-action-buttons">
         <button
           onClick={onTestAlert}
           disabled={!isAlertsEnabled}
-          style={{
-            backgroundColor: isAlertsEnabled ? '#dc3545' : '#6c757d',
-            color: 'white',
-            border: 'none',
-            padding: '8px 12px',
-            borderRadius: '4px',
-            cursor: isAlertsEnabled ? 'pointer' : 'not-allowed',
-            fontSize: '0.8rem',
-            fontWeight: 'bold',
-            flex: 1
-          }}
+          className="mobile-action-button test"
         >
           🚨 TEST ALERT
         </button>
         
         <button
           onClick={onClearAll}
-          style={{
-            backgroundColor: '#6c757d',
-            color: 'white',
-            border: 'none',
-            padding: '8px 12px',
-            borderRadius: '4px',
-            cursor: 'pointer',
-            fontSize: '0.8rem',
-            flex: 1
-          }}
+          className="mobile-action-button clear"
         >
           🗑️ CLEAR ALL
         </button>
       </div>
 
       {/* Settings */}
-      <div style={{ paddingTop: '20px', borderTop: '1px solid #e0e0e0' }}>
+      <div className="mobile-settings">
         <h4 style={{ marginBottom: '12px' }}>Alert Settings</h4>
         
-        <div style={{ marginBottom: '12px' }}>
-          <label style={{ display: 'block', marginBottom: '4px', fontSize: '0.9rem' }}>
+        <div className="mobile-setting-item">
+          <label className="mobile-setting-label">
             Cooldown Time: {alertSettings.cooldownTime}s
           </label>
           <input
@@ -264,12 +141,12 @@ const AlertControls = ({
               ...prev,
               cooldownTime: parseInt(e.target.value)
             }))}
-            style={{ width: '100%' }}
+            className="mobile-slider"
           />
         </div>
 
-        <div style={{ marginBottom: '12px' }}>
-          <label style={{ display: 'block', marginBottom: '4px', fontSize: '0.9rem' }}>
+        <div className="mobile-setting-item">
+          <label className="mobile-setting-label">
             Alert Duration: {alertSettings.alertDuration}s
           </label>
           <input
@@ -281,18 +158,12 @@ const AlertControls = ({
               ...prev,
               alertDuration: parseInt(e.target.value)
             }))}
-            style={{ width: '100%' }}
+            className="mobile-slider"
           />
         </div>
 
-        <div style={{ marginBottom: '12px' }}>
-          <label style={{ 
-            display: 'flex', 
-            alignItems: 'center', 
-            gap: '8px',
-            fontSize: '0.9rem',
-            cursor: 'pointer'
-          }}>
+        <div className="mobile-setting-item">
+          <label className="mobile-checkbox">
             <input
               type="checkbox"
               checked={alertSettings.autoAcknowledge}
