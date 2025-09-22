@@ -386,7 +386,7 @@ const AdminResultsPage = () => {
         .page-container {
           min-height: 100vh;
           background-color: #f9fafb;
-          padding: 32px 0;
+          padding: 31px 0;
         }
 
         .main-content {
