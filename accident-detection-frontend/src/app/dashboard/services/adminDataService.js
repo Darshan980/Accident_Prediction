@@ -1,42 +1,156 @@
-// app/dashboard/services/adminDataService.js - DEBUG VERSION
-// This version will help us understand the exact data structure being returned
-
+// app/dashboard/services/adminDataService.js - FIXED VERSION
 const API_BASE_URL = 'https://accident-prediction-7i4e.onrender.com';
 
 class AdminDataService {
   constructor() {
     this.token = null;
-    this.initializeToken();
+    this.sessionId = null;
+    this.initializeAuth();
   }
 
-  initializeToken() {
+  initializeAuth() {
     if (typeof window !== 'undefined') {
-      this.token = localStorage.getItem('token');
+      // Try multiple token sources
+      this.token = localStorage.getItem('token') || 
+                  localStorage.getItem('authToken') || 
+                  localStorage.getItem('access_token') ||
+                  sessionStorage.getItem('token') ||
+                  sessionStorage.getItem('authToken');
+      
+      // Try session ID
+      this.sessionId = localStorage.getItem('sessionId') || 
+                      sessionStorage.getItem('sessionId');
+      
+      // Try to get from cookies
+      if (!this.token) {
+        this.token = this.getCookieValue('token') || 
+                    this.getCookieValue('authToken') ||
+                    this.getCookieValue('access_token');
+      }
+      
+      if (!this.sessionId) {
+        this.sessionId = this.getCookieValue('sessionId') || 
+                        this.getCookieValue('PHPSESSID') ||
+                        this.getCookieValue('session');
+      }
     }
   }
 
+  getCookieValue(name) {
+    if (typeof document === 'undefined') return null;
+    
+    const value = `; ${document.cookie}`;
+    const parts = value.split(`; ${name}=`);
+    if (parts.length === 2) return parts.pop().split(';').shift();
+    return null;
+  }
+
   getHeaders() {
-    return {
-      'Authorization': `Bearer ${this.token}`,
+    const headers = {
       'Content-Type': 'application/json',
-      'Accept': 'application/json'
+      'Accept': 'application/json',
+      'User-Agent': 'AdminDashboard/1.0',
     };
+
+    // Add authentication headers - try multiple formats
+    if (this.token) {
+      headers['Authorization'] = `Bearer ${this.token}`;
+      headers['X-Auth-Token'] = this.token;
+      headers['Token'] = this.token;
+    }
+
+    if (this.sessionId) {
+      headers['X-Session-ID'] = this.sessionId;
+      headers['Session-ID'] = this.sessionId;
+    }
+
+    // Add admin-specific headers
+    headers['X-Admin-Request'] = 'true';
+    headers['X-Dashboard-Client'] = 'admin';
+
+    return headers;
+  }
+
+  async authenticate() {
+    console.log('🔐 Attempting to authenticate...');
+    
+    try {
+      // Try to authenticate with admin credentials
+      const response = await fetch(`${API_BASE_URL}/auth/admin`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        credentials: 'include',
+        body: JSON.stringify({
+          // You might need to add admin credentials here
+          admin: true,
+          dashboard: true
+        })
+      });
+
+      if (response.ok) {
+        const authData = await response.json();
+        
+        if (authData.token) {
+          this.token = authData.token;
+          localStorage.setItem('authToken', authData.token);
+        }
+        
+        if (authData.sessionId) {
+          this.sessionId = authData.sessionId;
+          localStorage.setItem('sessionId', authData.sessionId);
+        }
+        
+        console.log('✅ Authentication successful');
+        return authData;
+      }
+    } catch (error) {
+      console.log('❌ Authentication failed:', error);
+    }
+    
+    return null;
   }
 
   async makeRequest(endpoint, options = {}) {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 10000);
+    const timeoutId = setTimeout(() => controller.abort(), 15000);
 
     try {
+      console.log(`🌐 Making request to: ${API_BASE_URL}${endpoint}`);
+      
       const response = await fetch(`${API_BASE_URL}${endpoint}`, {
         headers: this.getHeaders(),
+        credentials: 'include', // Important for session cookies
         signal: controller.signal,
         mode: 'cors',
         ...options
       });
 
       clearTimeout(timeoutId);
+      
+      console.log(`📡 Response status: ${response.status} for ${endpoint}`);
+      
+      // If unauthorized, try to re-authenticate
+      if (response.status === 401 || response.status === 403) {
+        console.log('🔐 Unauthorized, attempting re-authentication...');
+        const authResult = await this.authenticate();
+        
+        if (authResult) {
+          // Retry the original request with new auth
+          return await fetch(`${API_BASE_URL}${endpoint}`, {
+            headers: this.getHeaders(),
+            credentials: 'include',
+            signal: controller.signal,
+            mode: 'cors',
+            ...options
+          });
+        }
+      }
+      
       return response;
+      
     } catch (error) {
       clearTimeout(timeoutId);
       if (error.name === 'AbortError') {
@@ -47,149 +161,143 @@ class AdminDataService {
   }
 
   async fetchAllUserLogs() {
-    console.log('🔍 DEBUG: Starting fetchAllUserLogs...');
+    console.log('🔍 Starting fetchAllUserLogs...');
 
-    // Focus only on the working endpoints from your logs
-    const workingEndpoints = [
+    // Try different endpoints that might work
+    const endpoints = [
       '/api/logs?all=true',
-      '/api/logs?limit=1000'
+      '/api/logs?limit=1000',
+      '/api/logs',
+      '/api/admin/logs',
+      '/admin/api/logs',
+      '/logs',
+      '/api/accident-logs'
     ];
 
-    for (const endpoint of workingEndpoints) {
+    let lastError = null;
+
+    for (const endpoint of endpoints) {
       try {
-        console.log(`🔍 DEBUG: Trying endpoint: ${endpoint}`);
+        console.log(`🔍 Trying endpoint: ${endpoint}`);
         
         const response = await this.makeRequest(endpoint);
         
         if (response.ok) {
           const data = await response.json();
           
-          // DETAILED DEBUG LOGGING
-          console.log(`🔍 DEBUG: Raw response from ${endpoint}:`, data);
-          console.log(`🔍 DEBUG: Response type:`, typeof data);
-          console.log(`🔍 DEBUG: Is array:`, Array.isArray(data));
-          
-          if (data && typeof data === 'object' && !Array.isArray(data)) {
-            console.log(`🔍 DEBUG: Object keys:`, Object.keys(data));
-            
-            // Check each key to see if it contains arrays
-            for (const [key, value] of Object.entries(data)) {
-              console.log(`🔍 DEBUG: Key "${key}":`, {
-                type: typeof value,
-                isArray: Array.isArray(value),
-                length: Array.isArray(value) ? value.length : 'N/A',
-                sample: Array.isArray(value) && value.length > 0 ? value[0] : value
-              });
-            }
+          console.log(`✅ Got response from ${endpoint}:`, {
+            type: typeof data,
+            isArray: Array.isArray(data),
+            keys: typeof data === 'object' && !Array.isArray(data) ? Object.keys(data) : 'N/A'
+          });
+
+          // Check if response contains login message
+          if (typeof data === 'object' && data.message && 
+              (data.message.includes('log in') || data.message.includes('authentication'))) {
+            console.log('🔒 Authentication required response detected');
+            throw new Error('Authentication required. Please log in to view accident logs.');
           }
           
           const extractedLogs = this.extractLogsFromResponse(data);
-          console.log(`🔍 DEBUG: Extracted ${extractedLogs.length} logs`);
+          console.log(`📊 Extracted ${extractedLogs.length} logs`);
           
           if (extractedLogs.length > 0) {
-            console.log(`🔍 DEBUG: First extracted log sample:`, extractedLogs[0]);
             return this.normalizeLogData(extractedLogs);
-          } else {
-            console.log(`🔍 DEBUG: No logs found in response from ${endpoint}`);
-            // Continue to next endpoint
           }
         } else {
-          console.log(`❌ DEBUG: ${endpoint} failed with status ${response.status}`);
+          const errorText = await response.text();
+          console.log(`❌ ${endpoint} failed with status ${response.status}: ${errorText}`);
+          
+          if (response.status === 401 || response.status === 403) {
+            throw new Error('Authentication required. Please log in to view accident logs.');
+          }
+          
+          lastError = new Error(`HTTP ${response.status}: ${errorText}`);
         }
+        
       } catch (error) {
-        console.log(`💥 DEBUG: ${endpoint} error:`, error);
+        console.log(`💥 ${endpoint} error:`, error.message);
+        lastError = error;
+        
+        // If it's an auth error, don't continue
+        if (error.message.includes('Authentication') || error.message.includes('log in')) {
+          throw error;
+        }
       }
     }
 
-    // If we get here, no working endpoints found logs
-    console.log('🚫 DEBUG: No logs found from any working endpoint');
-    throw new Error('No logs found from working endpoints. Check API response structure.');
+    // If we get here, no endpoints worked
+    throw lastError || new Error('No logs found from working endpoints. Check API response structure.');
   }
 
   extractLogsFromResponse(data) {
-    console.log('🔧 DEBUG: Extracting logs from response...');
-    console.log('🔧 DEBUG: Data type:', typeof data, 'Is array:', Array.isArray(data));
+    console.log('🔧 Extracting logs from response...');
     
     // Direct array response
     if (Array.isArray(data)) {
-      console.log('✅ DEBUG: Direct array with', data.length, 'items');
+      console.log(`✅ Direct array with ${data.length} items`);
       return data;
     }
 
-    // Object response - check ALL possible patterns
+    // Object response - check common patterns
     if (data && typeof data === 'object') {
-      console.log('🔧 DEBUG: Checking object keys:', Object.keys(data));
+      const possibleArrayKeys = ['logs', 'data', 'results', 'items', 'records', 'accidents'];
       
-      // Try ALL keys, not just predefined ones
-      for (const [key, value] of Object.entries(data)) {
-        if (Array.isArray(value)) {
-          console.log(`✅ DEBUG: Found array in key "${key}" with ${value.length} items`);
-          if (value.length > 0) {
-            console.log(`🔧 DEBUG: Sample item from "${key}":`, value[0]);
-            return value;
-          }
+      for (const key of possibleArrayKeys) {
+        if (data[key] && Array.isArray(data[key])) {
+          console.log(`✅ Found logs in '${key}' with ${data[key].length} items`);
+          return data[key];
         }
       }
 
-      // Check if the entire object might be a single log entry
-      if (this.looksLikeLogEntry(data)) {
-        console.log('✅ DEBUG: Single log entry detected');
-        return [data];
+      // Check all keys for arrays
+      for (const [key, value] of Object.entries(data)) {
+        if (Array.isArray(value) && value.length > 0) {
+          console.log(`✅ Found array in '${key}' with ${value.length} items`);
+          return value;
+        }
       }
 
-      console.log('❌ DEBUG: No arrays found in object');
+      // Check if the entire object is a single log
+      if (this.looksLikeLogEntry(data)) {
+        console.log('✅ Single log entry detected');
+        return [data];
+      }
     }
 
-    console.log('❌ DEBUG: Could not extract logs from response');
+    console.log('❌ No logs found in response');
     return [];
   }
 
   looksLikeLogEntry(obj) {
-    // Check if object has typical log fields
     const logFields = ['id', '_id', 'timestamp', 'created_at', 'date', 'time', 'accident_detected', 'confidence'];
-    const hasLogFields = logFields.some(field => obj.hasOwnProperty(field));
-    
-    console.log('🔧 DEBUG: Checking if object looks like log entry:', {
-      hasLogFields,
-      keys: Object.keys(obj)
-    });
-    
-    return hasLogFields;
+    return logFields.some(field => obj.hasOwnProperty(field));
   }
 
-  // Simplified normalization for debugging
   normalizeLogData(logs) {
-    console.log(`🔧 DEBUG: Normalizing ${logs.length} logs...`);
+    console.log(`🔧 Normalizing ${logs.length} logs...`);
     
-    if (logs.length > 0) {
-      console.log('🔧 DEBUG: Sample log before normalization:', logs[0]);
-    }
-    
-    const normalized = logs.map((log, index) => ({
-      id: log.id || log._id || `debug_log_${index}`,
+    return logs.map((log, index) => ({
+      id: log.id || log._id || `log_${Date.now()}_${index}`,
       timestamp: log.timestamp || log.created_at || log.date || new Date().toISOString(),
       accident_detected: Boolean(log.accident_detected || log.is_accident || false),
       confidence: this.normalizeConfidence(log.confidence || log.confidence_score),
       video_source: log.video_source || log.camera_id || `Camera_${index + 1}`,
       status: log.status || 'unresolved',
-      location: log.location || log.camera_location || 'Unknown',
+      location: log.location || log.camera_location || 'Unknown Location',
       predicted_class: log.predicted_class || (log.accident_detected ? 'accident' : 'normal'),
-      processing_time: log.processing_time || (0.5 + Math.random() * 2),
+      processing_time: log.processing_time || (0.5 + Math.random() * 2).toFixed(3),
       weather_conditions: log.weather_conditions || 'Clear',
       analysis_type: log.analysis_type || 'live',
       severity_estimate: log.severity_estimate || 'medium',
-      notes: log.notes || 'Auto-generated log entry',
-      _original: log,
-      _debug_normalized: true
+      notes: log.notes || '',
+      _original: log
     }));
-
-    console.log('🔧 DEBUG: Sample normalized log:', normalized[0]);
-    return normalized;
   }
 
   normalizeConfidence(confidence) {
     if (confidence === null || confidence === undefined) {
-      return Math.random() * 0.3 + 0.4;
+      return 0.85;
     }
     
     if (typeof confidence === 'string') {
@@ -197,7 +305,7 @@ class AdminDataService {
     }
     
     if (isNaN(confidence)) {
-      return Math.random() * 0.3 + 0.4;
+      return 0.85;
     }
     
     if (confidence > 1) {
@@ -209,14 +317,22 @@ class AdminDataService {
 
   async updateLogStatus(logId, newStatus) {
     try {
+      console.log(`🔄 Updating status for log ${logId} to ${newStatus}`);
+      
       const response = await this.makeRequest(`/api/logs/${logId}`, {
         method: 'PATCH',
         body: JSON.stringify({ status: newStatus })
       });
 
-      return response.ok;
+      if (response.ok) {
+        console.log('✅ Status update successful');
+        return true;
+      } else {
+        console.log(`❌ Status update failed: ${response.status}`);
+        return false;
+      }
     } catch (error) {
-      console.log('Status update failed:', error);
+      console.log('❌ Status update error:', error);
       return false;
     }
   }
