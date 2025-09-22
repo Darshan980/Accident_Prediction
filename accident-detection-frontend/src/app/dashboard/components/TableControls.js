@@ -9,13 +9,6 @@ const TableControls = ({
   filteredCount, 
   totalCount 
 }) => {
-  const handleLogout = () => {
-    if (confirm('Are you sure you want to logout?')) {
-      localStorage.clear();
-      window.location.href = '/auth/admin';
-    }
-  };
-
   return (
     <div style={{ 
       display: 'flex', 
@@ -60,20 +53,6 @@ const TableControls = ({
         }}
       >
         {isRefreshing ? 'Refreshing...' : 'Refresh Data'}
-      </button>
-
-      <button
-        onClick={handleLogout}
-        style={{
-          backgroundColor: '#dc3545',
-          color: 'white',
-          border: 'none',
-          padding: '0.5rem 1rem',
-          borderRadius: '4px',
-          cursor: 'pointer'
-        }}
-      >
-        Logout
       </button>
 
       <div style={{ marginLeft: 'auto', color: '#666', fontSize: '0.9rem' }}>
