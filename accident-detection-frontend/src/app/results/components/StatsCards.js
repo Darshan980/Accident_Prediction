@@ -17,6 +17,7 @@ const StatsCards = ({ results }) => {
       label: 'Accidents Detected',
       color: 'red'
     },
+    
     {
       icon: CheckCircle,
       value: results.filter(r => !r.accident_detected).length,
