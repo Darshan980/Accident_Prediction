@@ -2,152 +2,152 @@
 /* Updated to align with the new design template */
 
 .quickActions {
-  background: white;
-  border-radius: 16px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08); /* Consistent, subtle shadow */
-  padding: 24px;
-  margin-top: 32px;
-  font-family: "Inter", "Roboto", "Helvetica Neue", sans-serif;
+  background: white;
+  border-radius: 16px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08); /* Consistent, subtle shadow */
+  padding: 24px;
+  margin-top: 32px;
+  font-family: "Inter", "Roboto", "Helvetica Neue", sans-serif;
 }
 
 .quickActionsContent {
-  display: flex;
-  gap: 16px;
-  justify-content: center;
-  flex-wrap: wrap;
+  display: flex;
+  gap: 16px;
+  justify-content: center;
+  flex-wrap: wrap;
 }
 
 /* Button styles refined for a formal look */
 .btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  padding: 16px 24px;
-  border: none;
-  border-radius: 12px;
-  font-size: 16px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  text-decoration: none;
-  white-space: nowrap;
-  min-height: 56px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 16px 24px;
+  border: none;
+  border-radius: 12px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  text-decoration: none;
+  white-space: nowrap;
+  min-height: 56px;
 }
 
 .btnLg {
-  padding: 18px 28px;
-  font-size: 16px;
+  padding: 18px 28px;
+  font-size: 16px;
 }
 
 .btnPrimary {
-  background: #1E3A8A; /* Primary brand color */
-  color: white;
+  background: #1E3A8A; /* Primary brand color */
+  color: white;
 }
 
 .btnPrimary:hover {
-  background: #2563EB; /* Secondary color on hover */
-  transform: translateY(-2px);
-  box-shadow: 0 8px 24px rgba(30, 58, 138, 0.2); /* Shadow with primary color tint */
+  background: #2563EB; /* Secondary color on hover */
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(30, 58, 138, 0.2); /* Shadow with primary color tint */
 }
 
 .btnSuccess {
-  background: #065F46; /* Deeper, more formal green */
-  color: white;
+  background: #065F46; /* Deeper, more formal green */
+  color: white;
 }
 
 .btnSuccess:hover {
-  background: #047857;
-  transform: translateY(-2px);
-  box-shadow: 0 8px 24px rgba(6, 95, 70, 0.2);
+  background: #047857;
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(6, 95, 70, 0.2);
 }
 
 .btnWarning {
-  background: #92400E; /* Deeper, more formal orange */
-  color: white;
+  background: #92400E; /* Deeper, more formal orange */
+  color: white;
 }
 
 .btnWarning:hover {
-  background: #B45309;
-  transform: translateY(-2px);
-  box-shadow: 0 8px 24px rgba(146, 64, 14, 0.2);
+  background: #B45309;
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(146, 64, 14, 0.2);
 }
 
 /* Media Queries remain the same, ensuring responsiveness */
 @media (max-width: 768px) {
-  .quickActions {
-    padding: 20px 16px;
-    margin-top: 24px;
-  }
+  .quickActions {
+    padding: 20px 16px;
+    margin-top: 24px;
+  }
 
-  .quickActionsContent {
-    gap: 12px;
-  }
+  .quickActionsContent {
+    gap: 12px;
+  }
 
-  .btn {
-    padding: 14px 20px;
-    font-size: 15px;
-    flex: 1;
-    min-width: 140px;
-  }
+  .btn {
+    padding: 14px 20px;
+    font-size: 15px;
+    flex: 1;
+    min-width: 140px;
+  }
 
-  .btnLg {
-    padding: 14px 20px;
-  }
+  .btnLg {
+    padding: 14px 20px;
+  }
 }
 
 @media (max-width: 640px) {
-  .quickActionsContent {
-    flex-direction: column;
-  }
+  .quickActionsContent {
+    flex-direction: column;
+  }
 
-  .btn {
-    width: 100%;
-    min-width: auto;
-  }
+  .btn {
+    width: 100%;
+    min-width: auto;
+  }
 }
 
 /* Dark mode support */
 @media (prefers-color-scheme: dark) {
-  .quickActions {
-    background: #1F2937;
-    border: 1px solid #374151;
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
-  }
+  .quickActions {
+    background: #1F2937;
+    border: 1px solid #374151;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+  }
 
-  .btnPrimary {
-    background: #1C335A;
-  }
+  .btnPrimary {
+    background: #1C335A;
+  }
 
-  .btnPrimary:hover {
-    background: #2563EB;
-    box-shadow: 0 8px 24px rgba(37, 99, 235, 0.3);
-  }
+  .btnPrimary:hover {
+    background: #2563EB;
+    box-shadow: 0 8px 24px rgba(37, 99, 235, 0.3);
+  }
 
-  .btnSuccess {
-    background: #044B36;
-  }
+  .btnSuccess {
+    background: #044B36;
+  }
 
-  .btnSuccess:hover {
-    background: #065F46;
-    box-shadow: 0 8px 24px rgba(6, 95, 70, 0.3);
-  }
+  .btnSuccess:hover {
+    background: #065F46;
+    box-shadow: 0 8px 24px rgba(6, 95, 70, 0.3);
+  }
 
-  .btnWarning {
-    background: #5C320A;
-  }
+  .btnWarning {
+    background: #5C320A;
+  }
 
-  .btnWarning:hover {
-    background: #92400E;
-    box-shadow: 0 8px 24px rgba(146, 64, 14, 0.3);
-  }
+  .btnWarning:hover {
+    background: #92400E;
+    box-shadow: 0 8px 24px rgba(146, 64, 14, 0.3);
+  }
 }
 
 /* Reduced Motion support */
 @media (prefers-reduced-motion: reduce) {
-  .btn, .btn:hover {
-    transition: none;
-    transform: none;
-    box-shadow: none;
-  }
+  .btn, .btn:hover {
+    transition: none;
+    transform: none;
+    box-shadow: none;
+  }
 }
