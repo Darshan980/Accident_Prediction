@@ -10,7 +10,7 @@ const StatsCards = ({ results }) => {
       value: results.length,
       label: 'Total Analyses',
       color: 'blue'
-    },
+    }, 
     {
       icon: AlertTriangle,
       value: results.filter(r => r.accident_detected).length,
