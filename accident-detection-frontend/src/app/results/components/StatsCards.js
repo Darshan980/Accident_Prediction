@@ -1,7 +1,7 @@
 // result/components/StatsCards.js
 import React from 'react'
 import { FileText, AlertTriangle, CheckCircle, Camera } from 'lucide-react'
-import styles from '../styles/StatsCards.module.css'
+import styles from '../styles/StatsCards.css'
 
 const StatsCards = ({ results }) => {
   const stats = [
