@@ -1,4 +1,4 @@
-// app/live/page.js - Truly Simplified Live Detection
+// app/live/page.js - Professional Live Detection with Color Template
 'use client';
 import React, { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
@@ -237,138 +237,214 @@ const LiveDetection = () => {
   return (
     <div style={styles.container}>
       {/* Header */}
-      <h1 style={styles.title}>🚨 Live Detection</h1>
-
-      {/* Video */}
-      <div style={styles.videoBox}>
-        <video 
-          ref={videoRef} 
-          autoPlay 
-          muted 
-          playsInline 
-          style={styles.video}
-        />
-        
-        {!isActive && (
-          <div style={styles.placeholder}>
-            <div style={styles.icon}>📹</div>
-            <p>Tap Start to begin</p>
-          </div>
-        )}
-
-        {isActive && (
-          <>
-            <div style={styles.liveBadge}>
-              <span style={styles.dot}></span>
-              LIVE
-            </div>
-            <div style={styles.frameCount}>Frame: {frameCount}</div>
-            <button 
-              style={styles.switchBtn} 
-              onClick={switchCamera}
-              disabled={switching}
-            >
-              {switching ? '🔄' : facingMode === 'user' ? '📷' : '🤳'}
-            </button>
-          </>
-        )}
+      <div style={styles.header}>
+        <h1 style={styles.title}>Live Traffic Detection</h1>
+        <p style={styles.subtitle}>Real-time accident monitoring system</p>
       </div>
 
-      {/* Current Detection */}
+      {/* Video Feed */}
+      <div style={styles.videoContainer}>
+        <div style={styles.videoBox}>
+          <video 
+            ref={videoRef} 
+            autoPlay 
+            muted 
+            playsInline 
+            style={styles.video}
+          />
+          
+          {!isActive && (
+            <div style={styles.placeholder}>
+              <div style={styles.placeholderIcon}>📹</div>
+              <p style={styles.placeholderText}>Camera Ready</p>
+              <p style={styles.placeholderSubtext}>Click Start Detection to begin monitoring</p>
+            </div>
+          )}
+
+          {isActive && (
+            <>
+              <div style={styles.liveBadge}>
+                <span style={styles.pulseDot}></span>
+                <span style={styles.liveText}>LIVE</span>
+              </div>
+              <div style={styles.frameCounter}>
+                <span style={styles.frameLabel}>Frame:</span>
+                <span style={styles.frameNumber}>{frameCount}</span>
+              </div>
+              <button 
+                style={styles.switchCameraBtn} 
+                onClick={switchCamera}
+                disabled={switching}
+                title="Switch Camera"
+              >
+                {switching ? '⟳' : facingMode === 'user' ? '📷' : '🤳'}
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* Current Detection Status */}
       {detection && (
         <div style={{
-          ...styles.detectionCard,
-          backgroundColor: detection.accident_detected ? '#ff5252' : '#4caf50'
+          ...styles.detectionStatus,
+          backgroundColor: detection.accident_detected ? styles.colors.danger : styles.colors.success,
+          borderColor: detection.accident_detected ? '#B91C1C' : '#15803D'
         }}>
-          <span style={styles.detectionIcon}>
+          <div style={styles.detectionIcon}>
             {detection.accident_detected ? '🚨' : '✅'}
-          </span>
-          <div>
-            <div style={styles.detectionText}>
+          </div>
+          <div style={styles.detectionInfo}>
+            <div style={styles.detectionTitle}>
               {detection.accident_detected ? 'ACCIDENT DETECTED' : 'NORMAL TRAFFIC'}
             </div>
-            <div style={styles.confidence}>
-              {(detection.confidence * 100).toFixed(1)}% confidence
+            <div style={styles.detectionConfidence}>
+              Confidence: {(detection.confidence * 100).toFixed(1)}%
             </div>
           </div>
         </div>
       )}
 
-      {/* Recent Results */}
+      {/* Recent Detection History */}
       {results.length > 0 && (
-        <div style={styles.resultsBox}>
-          <h3 style={styles.resultsTitle}>Recent Results</h3>
-          {results.map(result => (
-            <div key={result.id} style={styles.resultItem}>
-              <span>{result.type === 'Accident' ? '🚨' : '✅'}</span>
-              <span>{result.type}</span>
-              <span>{result.confidence}%</span>
-              <span style={styles.time}>{result.time}</span>
-            </div>
-          ))}
+        <div style={styles.resultsSection}>
+          <h3 style={styles.sectionTitle}>Recent Detections</h3>
+          <div style={styles.resultsList}>
+            {results.map(result => (
+              <div key={result.id} style={styles.resultItem}>
+                <div style={styles.resultIcon}>
+                  {result.type === 'Accident' ? '🚨' : '✅'}
+                </div>
+                <div style={styles.resultContent}>
+                  <span style={styles.resultType}>{result.type}</span>
+                  <span style={styles.resultTime}>{result.time}</span>
+                </div>
+                <div style={styles.resultConfidence}>
+                  {result.confidence}%
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
-      {/* Error */}
+      {/* Error Message */}
       {error && (
-        <div style={styles.error}>⚠️ {error}</div>
+        <div style={styles.errorMessage}>
+          <span style={styles.errorIcon}>⚠️</span>
+          <span style={styles.errorText}>{error}</span>
+        </div>
       )}
 
-      {/* Controls */}
-      <div style={styles.controls}>
+      {/* Control Buttons */}
+      <div style={styles.controlsSection}>
         <button 
-          style={{...styles.btn, ...styles.startBtn}} 
+          style={isActive ? styles.activeButton : styles.startButton} 
           onClick={startDetection}
           disabled={isActive}
         >
-          {isActive ? '✅ Active' : '🚀 Start'}
+          {isActive ? (
+            <>
+              <span style={styles.buttonIcon}>✓</span>
+              <span>Detection Active</span>
+            </>
+          ) : (
+            <>
+              <span style={styles.buttonIcon}>▶</span>
+              <span>Start Detection</span>
+            </>
+          )}
         </button>
+        
         <button 
-          style={{...styles.btn, ...styles.stopBtn}} 
+          style={isActive ? styles.stopButton : styles.disabledButton} 
           onClick={stopDetection}
           disabled={!isActive}
         >
-          🛑 Stop
+          <span style={styles.buttonIcon}>⏹</span>
+          <span>Stop Detection</span>
         </button>
       </div>
 
       {/* Navigation */}
-      <div style={styles.nav}>
-        <Link href="/results" style={styles.navBtn}>📊 Results</Link>
-        <Link href="/notification" style={styles.navBtn}>🔔 Alerts</Link>
-        <Link href="/" style={styles.navBtn}>← Home</Link>
+      <div style={styles.navigationSection}>
+        <Link href="/results" style={styles.navButton}>
+          <span style={styles.navIcon}>📊</span>
+          <span>View Results</span>
+        </Link>
+        <Link href="/notification" style={styles.navButton}>
+          <span style={styles.navIcon}>🔔</span>
+          <span>Notifications</span>
+        </Link>
+        <Link href="/" style={styles.navButton}>
+          <span style={styles.navIcon}>🏠</span>
+          <span>Dashboard</span>
+        </Link>
       </div>
     </div>
   );
 };
 
-// Simplified styles
+// Professional styling with color template
 const styles = {
+  colors: {
+    primary: '#1E3A8A',      // Navy Blue
+    secondary: '#2563EB',     // Medium Blue
+    success: '#16A34A',       // Green
+    warning: '#D97706',       // Amber
+    danger: '#DC2626',        // Red
+    neutral: '#F9FAFB',       // Light Gray
+    textDark: '#111827',      // Almost Black
+    textLight: '#FFFFFF',     // White
+    textMuted: '#6B7280',     // Gray
+    disabled: '#9CA3AF'       // Gray
+  },
+
   container: {
-    padding: '1rem',
-    maxWidth: '500px',
-    margin: '0 auto',
     minHeight: '100vh',
-    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-    color: 'white',
-    fontFamily: 'system-ui, sans-serif'
+    backgroundColor: '#F9FAFB',
+    fontFamily: '"Inter", "Roboto", "Helvetica Neue", sans-serif',
+    color: '#111827',
+    padding: '24px',
+    maxWidth: '600px',
+    margin: '0 auto'
+  },
+
+  header: {
+    textAlign: 'center',
+    marginBottom: '32px',
+    paddingBottom: '16px',
+    borderBottom: '1px solid #E5E7EB'
   },
 
   title: {
-    textAlign: 'center',
-    margin: '0 0 1.5rem 0',
-    fontSize: '1.5rem',
-    fontWeight: '600'
+    fontSize: '28px',
+    fontWeight: '700',
+    color: '#1E3A8A',
+    margin: '0 0 8px 0',
+    lineHeight: '1.3'
+  },
+
+  subtitle: {
+    fontSize: '16px',
+    color: '#6B7280',
+    margin: '0',
+    fontWeight: '400'
+  },
+
+  videoContainer: {
+    marginBottom: '24px'
   },
 
   videoBox: {
     position: 'relative',
     width: '100%',
-    height: '50vh',
-    background: '#000',
+    height: '400px',
+    backgroundColor: '#000000',
     borderRadius: '12px',
     overflow: 'hidden',
-    marginBottom: '1rem'
+    border: '2px solid #E5E7EB',
+    boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
   },
 
   video: {
@@ -382,159 +458,343 @@ const styles = {
     top: '50%',
     left: '50%',
     transform: 'translate(-50%, -50%)',
-    textAlign: 'center'
+    textAlign: 'center',
+    color: '#FFFFFF'
   },
 
-  icon: {
-    fontSize: '3rem',
-    marginBottom: '0.5rem',
-    opacity: 0.7
+  placeholderIcon: {
+    fontSize: '48px',
+    marginBottom: '16px',
+    opacity: '0.8'
+  },
+
+  placeholderText: {
+    fontSize: '18px',
+    fontWeight: '600',
+    margin: '0 0 8px 0'
+  },
+
+  placeholderSubtext: {
+    fontSize: '14px',
+    opacity: '0.7',
+    margin: '0'
   },
 
   liveBadge: {
     position: 'absolute',
-    top: '1rem',
-    right: '1rem',
-    background: '#4caf50',
-    padding: '0.5rem 0.75rem',
+    top: '16px',
+    right: '16px',
+    backgroundColor: '#16A34A',
+    color: '#FFFFFF',
+    padding: '8px 16px',
     borderRadius: '20px',
-    fontSize: '0.8rem',
-    fontWeight: 'bold',
+    fontSize: '14px',
+    fontWeight: '600',
     display: 'flex',
     alignItems: 'center',
-    gap: '0.5rem'
+    gap: '8px',
+    boxShadow: '0 2px 4px rgba(0, 0, 0, 0.2)'
   },
 
-  dot: {
-    width: '6px',
-    height: '6px',
-    background: 'white',
+  pulseDot: {
+    width: '8px',
+    height: '8px',
+    backgroundColor: '#FFFFFF',
     borderRadius: '50%',
-    animation: 'pulse 1.5s infinite'
+    animation: 'pulse 1.5s ease-in-out infinite'
   },
 
-  frameCount: {
+  liveText: {
+    fontSize: '12px',
+    fontWeight: '700',
+    letterSpacing: '0.5px'
+  },
+
+  frameCounter: {
     position: 'absolute',
-    bottom: '1rem',
-    left: '1rem',
-    background: 'rgba(0,0,0,0.7)',
-    padding: '0.3rem 0.6rem',
+    bottom: '16px',
+    left: '16px',
+    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    color: '#FFFFFF',
+    padding: '6px 12px',
     borderRadius: '8px',
-    fontSize: '0.8rem'
+    fontSize: '14px',
+    fontWeight: '500'
   },
 
-  switchBtn: {
+  frameLabel: {
+    opacity: '0.8'
+  },
+
+  frameNumber: {
+    fontWeight: '700',
+    marginLeft: '4px'
+  },
+
+  switchCameraBtn: {
     position: 'absolute',
-    bottom: '1rem',
-    right: '1rem',
-    background: 'rgba(0,0,0,0.8)',
+    bottom: '16px',
+    right: '16px',
+    backgroundColor: 'rgba(30, 58, 138, 0.9)',
     border: 'none',
-    color: 'white',
-    width: '40px',
-    height: '40px',
+    color: '#FFFFFF',
+    width: '48px',
+    height: '48px',
     borderRadius: '50%',
-    fontSize: '1.2rem',
-    cursor: 'pointer'
-  },
-
-  detectionCard: {
+    fontSize: '20px',
+    cursor: 'pointer',
     display: 'flex',
     alignItems: 'center',
-    gap: '1rem',
-    padding: '1rem',
+    justifyContent: 'center',
+    transition: 'all 0.2s ease',
+    boxShadow: '0 2px 4px rgba(0, 0, 0, 0.2)'
+  },
+
+  detectionStatus: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '16px',
+    padding: '20px',
     borderRadius: '12px',
-    marginBottom: '1rem'
+    marginBottom: '24px',
+    border: '2px solid',
+    color: '#FFFFFF',
+    fontWeight: '500'
   },
 
   detectionIcon: {
-    fontSize: '2rem'
+    fontSize: '32px',
+    flexShrink: 0
   },
 
-  detectionText: {
-    fontSize: '1.1rem',
-    fontWeight: 'bold',
-    marginBottom: '0.25rem'
+  detectionInfo: {
+    flex: 1
   },
 
-  confidence: {
-    opacity: 0.9
+  detectionTitle: {
+    fontSize: '18px',
+    fontWeight: '700',
+    marginBottom: '4px',
+    letterSpacing: '0.5px'
   },
 
-  resultsBox: {
-    background: 'rgba(255,255,255,0.1)',
+  detectionConfidence: {
+    fontSize: '14px',
+    opacity: '0.9'
+  },
+
+  resultsSection: {
+    marginBottom: '24px'
+  },
+
+  sectionTitle: {
+    fontSize: '18px',
+    fontWeight: '600',
+    color: '#1E3A8A',
+    marginBottom: '16px',
+    margin: '0 0 16px 0'
+  },
+
+  resultsList: {
+    backgroundColor: '#FFFFFF',
     borderRadius: '12px',
-    padding: '1rem',
-    marginBottom: '1rem'
-  },
-
-  resultsTitle: {
-    margin: '0 0 0.75rem 0',
-    fontSize: '1rem'
+    border: '1px solid #E5E7EB',
+    overflow: 'hidden'
   },
 
   resultItem: {
     display: 'flex',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    padding: '0.5rem 0',
-    borderBottom: '1px solid rgba(255,255,255,0.1)',
-    fontSize: '0.9rem'
+    gap: '16px',
+    padding: '16px',
+    borderBottom: '1px solid #F3F4F6',
+    transition: 'background-color 0.2s ease'
   },
 
-  time: {
-    opacity: 0.7,
-    fontSize: '0.8rem'
+  resultIcon: {
+    fontSize: '24px',
+    flexShrink: 0
   },
 
-  error: {
-    background: 'rgba(255,0,0,0.2)',
-    padding: '1rem',
+  resultContent: {
+    flex: 1,
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '4px'
+  },
+
+  resultType: {
+    fontSize: '16px',
+    fontWeight: '600',
+    color: '#111827'
+  },
+
+  resultTime: {
+    fontSize: '14px',
+    color: '#6B7280'
+  },
+
+  resultConfidence: {
+    fontSize: '16px',
+    fontWeight: '600',
+    color: '#1E3A8A',
+    minWidth: '60px',
+    textAlign: 'right'
+  },
+
+  errorMessage: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '12px',
+    backgroundColor: '#FEF2F2',
+    color: '#DC2626',
+    padding: '16px',
     borderRadius: '8px',
-    marginBottom: '1rem',
+    border: '1px solid #FECACA',
+    marginBottom: '24px'
+  },
+
+  errorIcon: {
+    fontSize: '20px',
+    flexShrink: 0
+  },
+
+  errorText: {
+    fontSize: '16px',
+    fontWeight: '500'
+  },
+
+  controlsSection: {
+    display: 'flex',
+    gap: '16px',
+    marginBottom: '24px'
+  },
+
+  startButton: {
+    flex: 1,
+    backgroundColor: '#1E3A8A',
+    color: '#FFFFFF',
+    border: 'none',
+    borderRadius: '8px',
+    padding: '16px 20px',
+    fontSize: '16px',
+    fontWeight: '600',
+    cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: '8px',
+    transition: 'all 0.2s ease',
+    boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)'
+  },
+
+  activeButton: {
+    flex: 1,
+    backgroundColor: '#16A34A',
+    color: '#FFFFFF',
+    border: 'none',
+    borderRadius: '8px',
+    padding: '16px 20px',
+    fontSize: '16px',
+    fontWeight: '600',
+    cursor: 'not-allowed',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: '8px',
+    opacity: '0.8'
+  },
+
+  stopButton: {
+    flex: 1,
+    backgroundColor: '#DC2626',
+    color: '#FFFFFF',
+    border: 'none',
+    borderRadius: '8px',
+    padding: '16px 20px',
+    fontSize: '16px',
+    fontWeight: '600',
+    cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: '8px',
+    transition: 'all 0.2s ease',
+    boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)'
+  },
+
+  disabledButton: {
+    flex: 1,
+    backgroundColor: '#9CA3AF',
+    color: '#FFFFFF',
+    border: 'none',
+    borderRadius: '8px',
+    padding: '16px 20px',
+    fontSize: '16px',
+    fontWeight: '600',
+    cursor: 'not-allowed',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: '8px',
+    opacity: '0.6'
+  },
+
+  buttonIcon: {
+    fontSize: '18px'
+  },
+
+  navigationSection: {
+    display: 'flex',
+    gap: '12px'
+  },
+
+  navButton: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+    color: '#1E3A8A',
+    textDecoration: 'none',
+    border: '2px solid #E5E7EB',
+    borderRadius: '8px',
+    padding: '16px 12px',
+    fontSize: '14px',
+    fontWeight: '500',
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    gap: '6px',
+    transition: 'all 0.2s ease',
     textAlign: 'center'
   },
 
-  controls: {
-    display: 'flex',
-    gap: '1rem',
-    marginBottom: '1rem'
-  },
-
-  btn: {
-    flex: 1,
-    padding: '1rem',
-    border: 'none',
-    borderRadius: '8px',
-    fontSize: '1rem',
-    fontWeight: 'bold',
-    cursor: 'pointer'
-  },
-
-  startBtn: {
-    background: '#4caf50',
-    color: 'white'
-  },
-
-  stopBtn: {
-    background: '#f44336',
-    color: 'white'
-  },
-
-  nav: {
-    display: 'flex',
-    gap: '0.75rem'
-  },
-
-  navBtn: {
-    flex: 1,
-    padding: '0.75rem',
-    background: 'rgba(255,255,255,0.1)',
-    color: 'white',
-    textDecoration: 'none',
-    borderRadius: '8px',
-    textAlign: 'center',
-    fontSize: '0.9rem'
+  navIcon: {
+    fontSize: '20px'
   }
 };
+
+// Add CSS animations
+const styleSheet = document.createElement("style");
+styleSheet.type = "text/css";
+styleSheet.innerText = `
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+  }
+  
+  button:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15) !important;
+  }
+  
+  a:hover {
+    background-color: #F3F4F6 !important;
+    border-color: #1E3A8A !important;
+  }
+  
+  .result-item:last-child {
+    border-bottom: none !important;
+  }
+`;
+document.head.appendChild(styleSheet);
 
 export default LiveDetection;
