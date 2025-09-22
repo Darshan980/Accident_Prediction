@@ -2,494 +2,494 @@
 /* app/dashboard/styles/Dashboard.module.css */
 
 .pageContainer {
-  min-height: 100vh;
-  /* Template: Neutral background */
-  background-color: #F9FAFB; /* Light Gray */
-  padding: 16px;
-  font-family: "Inter", "Roboto", "Helvetica Neue", sans-serif;
+  min-height: 100vh;
+  /* Template: Neutral background */
+  background-color: #F9FAFB; /* Light Gray */
+  padding: 16px;
+  font-family: "Inter", "Roboto", "Helvetica Neue", sans-serif;
 }
 
 .mainContent {
-  max-width: 1200px;
-  margin: 0 auto;
+  max-width: 1200px;
+  margin: 0 auto;
 }
 
 /* Header Section */
 .header {
-  margin-bottom: 24px;
+  margin-bottom: 24px;
 }
 
 .backBtn {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  /* Template: Formal button styling */
-  padding: 10px 16px;
-  background: #FFFFFF;
-  border: 1px solid #E5E7EB;
-  border-radius: 8px; /* Subtle roundness */
-  color: #111827; /* Dark text for readability */
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  text-decoration: none;
-  margin-bottom: 16px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  /* Template: Formal button styling */
+  padding: 10px 16px;
+  background: #FFFFFF;
+  border: 1px solid #E5E7EB;
+  border-radius: 8px; /* Subtle roundness */
+  color: #111827; /* Dark text for readability */
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  text-decoration: none;
+  margin-bottom: 16px;
 }
 
 .backBtn:hover {
-  /* Template: Secondary color for hover */
-  background: #2563EB;
-  color: #FFFFFF;
-  border-color: #2563EB;
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  /* Template: Secondary color for hover */
+  background: #2563EB;
+  color: #FFFFFF;
+  border-color: #2563EB;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 }
 
 .backBtnIcon {
-  width: 16px;
-  height: 16px;
+  width: 16px;
+  height: 16px;
 }
 
 .backBtnText {
-  display: none;
+  display: none;
 }
 
 .headerContent {
-  background: white;
-  padding: 20px;
-  border-radius: 12px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  background: white;
+  padding: 20px;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
 }
 
 .headerLeft {
-  margin-bottom: 16px;
+  margin-bottom: 16px;
 }
 
 .headerTitle {
-  /* Template: Heading styles */
-  font-size: 24px;
-  font-weight: 700;
-  color: #111827;
-  margin: 0 0 8px 0;
-  line-height: 1.2;
+  /* Template: Heading styles */
+  font-size: 24px;
+  font-weight: 700;
+  color: #111827;
+  margin: 0 0 8px 0;
+  line-height: 1.2;
 }
 
 .headerSubtitle {
-  font-size: 14px;
-  color: #6B7280; /* Gray for body text */
-  margin: 0;
-  line-height: 1.4;
+  font-size: 14px;
+  color: #6B7280; /* Gray for body text */
+  margin: 0;
+  line-height: 1.4;
 }
 
 .headerRight {
-  border-top: 1px solid #E5E7EB;
-  padding-top: 16px;
+  border-top: 1px solid #E5E7EB;
+  padding-top: 16px;
 }
 
 .userInfo {
-  text-align: left;
+  text-align: left;
 }
 
 .userInfoLabel {
-  font-size: 12px;
-  color: #9CA3AF;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  margin-bottom: 4px;
+  font-size: 12px;
+  color: #9CA3AF;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 4px;
 }
 
 .userInfoName {
-  font-size: 16px;
-  font-weight: 600;
-  color: #111827;
-  margin-bottom: 2px;
+  font-size: 16px;
+  font-weight: 600;
+  color: #111827;
+  margin-bottom: 2px;
 }
 
 .userInfoRole {
-  font-size: 13px;
-  color: #1E3A8A; /* Primary color */
-  background: #EBF8FF; /* Light blue tint */
-  padding: 2px 8px;
-  border-radius: 12px;
-  display: inline-block;
+  font-size: 13px;
+  color: #1E3A8A; /* Primary color */
+  background: #EBF8FF; /* Light blue tint */
+  padding: 2px 8px;
+  border-radius: 12px;
+  display: inline-block;
 }
 
 /* Results List */
 .resultsList {
-  margin-bottom: 32px;
+  margin-bottom: 32px;
 }
 
 /* Authentication Required */
 .authRequired {
-  text-align: center;
-  background: white;
-  padding: 40px 20px;
-  border-radius: 16px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
-  max-width: 400px;
-  margin: 0 auto;
+  text-align: center;
+  background: white;
+  padding: 40px 20px;
+  border-radius: 16px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+  max-width: 400px;
+  margin: 0 auto;
 }
 
 .authRequiredIcon {
-  font-size: 48px;
-  margin-bottom: 20px;
+  font-size: 48px;
+  margin-bottom: 20px;
 }
 
 .authRequiredTitle {
-  font-size: 24px;
-  font-weight: 700;
-  color: #111827;
-  margin: 0 0 12px 0;
+  font-size: 24px;
+  font-weight: 700;
+  color: #111827;
+  margin: 0 0 12px 0;
 }
 
 .authRequiredText {
-  font-size: 16px;
-  color: #6B7280;
-  margin: 0 0 24px 0;
-  line-height: 1.5;
+  font-size: 16px;
+  color: #6B7280;
+  margin: 0 0 24px 0;
+  line-height: 1.5;
 }
 
 /* Loading State */
 .loading {
-  text-align: center;
-  background: white;
-  padding: 40px 20px;
-  border-radius: 16px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
-  max-width: 400px;
-  margin: 0 auto;
+  text-align: center;
+  background: white;
+  padding: 40px 20px;
+  border-radius: 16px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+  max-width: 400px;
+  margin: 0 auto;
 }
 
 .loadingSpinner {
-  width: 40px;
-  height: 40px;
-  margin: 0 auto 20px;
-  border: 3px solid #E5E7EB;
-  border-top: 3px solid #1E3A8A; /* Primary color for spinner */
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
+  width: 40px;
+  height: 40px;
+  margin: 0 auto 20px;
+  border: 3px solid #E5E7EB;
+  border-top: 3px solid #1E3A8A; /* Primary color for spinner */
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
 }
 
 @keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
 }
 
 .loadingText {
-  font-size: 16px;
-  color: #6B7280;
-  margin: 0;
+  font-size: 16px;
+  color: #6B7280;
+  margin: 0;
 }
 
 /* Error State */
 .error {
-  text-align: center;
-  /* Template: Danger color for error state */
-  background: #FEF2F2;
-  border: 1px solid #FCA5A5;
-  padding: 40px 20px;
-  border-radius: 16px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
-  max-width: 400px;
-  margin: 0 auto;
+  text-align: center;
+  /* Template: Danger color for error state */
+  background: #FEF2F2;
+  border: 1px solid #FCA5A5;
+  padding: 40px 20px;
+  border-radius: 16px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+  max-width: 400px;
+  margin: 0 auto;
 }
 
 .errorIcon {
-  font-size: 48px;
-  margin-bottom: 20px;
-  color: #DC2626; /* Danger color */
+  font-size: 48px;
+  margin-bottom: 20px;
+  color: #DC2626; /* Danger color */
 }
 
 .errorTitle {
-  font-size: 24px;
-  font-weight: 700;
-  color: #DC2626; /* Danger color */
-  margin: 0 0 12px 0;
+  font-size: 24px;
+  font-weight: 700;
+  color: #DC2626; /* Danger color */
+  margin: 0 0 12px 0;
 }
 
 .errorText {
-  font-size: 16px;
-  color: #6B7280;
-  margin: 0 0 24px 0;
-  line-height: 1.5;
+  font-size: 16px;
+  color: #6B7280;
+  margin: 0 0 24px 0;
+  line-height: 1.5;
 }
 
 /* Buttons */
 .btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  padding: 12px 20px;
-  border: none;
-  border-radius: 8px;
-  font-size: 16px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  text-decoration: none;
-  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 20px;
+  border: none;
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  text-decoration: none;
+  white-space: nowrap;
 }
 
 .btnPrimary {
-  /* Template: Primary button styling */
-  background: #1E3A8A;
-  color: #FFFFFF;
+  /* Template: Primary button styling */
+  background: #1E3A8A;
+  color: #FFFFFF;
 }
 
 .btnPrimary:hover {
-  /* Template: Secondary color on hover */
-  background: #2563EB;
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  /* Template: Secondary color on hover */
+  background: #2563EB;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 }
 
 .btnSecondary {
-  background: #E5E7EB;
-  color: #374151;
-  border: 1px solid #D1D5DB;
+  background: #E5E7EB;
+  color: #374151;
+  border: 1px solid #D1D5DB;
 }
 
 .btnSecondary:hover {
-  background: #D1D5DB;
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  background: #D1D5DB;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 }
 
 /* Tablet Styles */
 @media (min-width: 768px) {
-  .pageContainer {
-    padding: 24px;
-  }
+  .pageContainer {
+    padding: 24px;
+  }
 
-  .header {
-    margin-bottom: 32px;
-  }
+  .header {
+    margin-bottom: 32px;
+  }
 
-  .backBtn {
-    padding: 12px 20px;
-    font-size: 16px;
-  }
+  .backBtn {
+    padding: 12px 20px;
+    font-size: 16px;
+  }
 
-  .backBtnText {
-    display: inline;
-  }
+  .backBtnText {
+    display: inline;
+  }
 
-  .backBtnIcon {
-    width: 18px;
-    height: 18px;
-  }
+  .backBtnIcon {
+    width: 18px;
+    height: 18px;
+  }
 
-  .headerContent {
-    padding: 24px;
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-  }
+  .headerContent {
+    padding: 24px;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+  }
 
-  .headerLeft {
-    margin-bottom: 0;
-    flex: 1;
-  }
+  .headerLeft {
+    margin-bottom: 0;
+    flex: 1;
+  }
 
-  .headerTitle {
-    font-size: 28px;
-  }
+  .headerTitle {
+    font-size: 28px;
+  }
 
-  .headerSubtitle {
-    font-size: 16px;
-  }
+  .headerSubtitle {
+    font-size: 16px;
+  }
 
-  .headerRight {
-    border-top: none;
-    border-left: 1px solid #E5E7EB;
-    padding-top: 0;
-    padding-left: 24px;
-    margin-left: 24px;
-  }
+  .headerRight {
+    border-top: none;
+    border-left: 1px solid #E5E7EB;
+    padding-top: 0;
+    padding-left: 24px;
+    margin-left: 24px;
+  }
 
-  .userInfo {
-    text-align: right;
-  }
+  .userInfo {
+    text-align: right;
+  }
 
-  .userInfoName {
-    font-size: 18px;
-  }
+  .userInfoName {
+    font-size: 18px;
+  }
 
-  .userInfoRole {
-    font-size: 14px;
-  }
+  .userInfoRole {
+    font-size: 14px;
+  }
 }
 
 /* Desktop Styles */
 @media (min-width: 1024px) {
-  .pageContainer {
-    padding: 32px;
-  }
+  .pageContainer {
+    padding: 32px;
+  }
 
-  .headerContent {
-    padding: 32px;
-  }
+  .headerContent {
+    padding: 32px;
+  }
 
-  .headerTitle {
-    font-size: 32px;
-  }
+  .headerTitle {
+    font-size: 32px;
+  }
 
-  .headerSubtitle {
-    font-size: 18px;
-  }
+  .headerSubtitle {
+    font-size: 18px;
+  }
 }
 
 /* Mobile specific adjustments */
 @media (max-width: 640px) {
-  .pageContainer {
-    padding: 12px;
-  }
+  .pageContainer {
+    padding: 12px;
+  }
 
-  .header {
-    margin-bottom: 20px;
-  }
+  .header {
+    margin-bottom: 20px;
+  }
 
-  .backBtn {
-    padding: 10px 14px;
-    font-size: 14px;
-    margin-bottom: 12px;
-  }
+  .backBtn {
+    padding: 10px 14px;
+    font-size: 14px;
+    margin-bottom: 12px;
+  }
 
-  .headerContent {
-    padding: 16px;
-  }
+  .headerContent {
+    padding: 16px;
+  }
 
-  .headerTitle {
-    font-size: 20px;
-  }
+  .headerTitle {
+    font-size: 20px;
+  }
 
-  .headerSubtitle {
-    font-size: 13px;
-  }
+  .headerSubtitle {
+    font-size: 13px;
+  }
 
-  .headerRight {
-    padding-top: 12px;
-  }
+  .headerRight {
+    padding-top: 12px;
+  }
 
-  .userInfoName {
-    font-size: 15px;
-  }
+  .userInfoName {
+    font-size: 15px;
+  }
 
-  .userInfoRole {
-    font-size: 12px;
-    padding: 2px 6px;
-  }
+  .userInfoRole {
+    font-size: 12px;
+    padding: 2px 6px;
+  }
 
-  /* Responsive text adjustments */
-  .authRequiredTitle,
-  .errorTitle {
-    font-size: 20px;
-  }
+  /* Responsive text adjustments */
+  .authRequiredTitle,
+  .errorTitle {
+    font-size: 20px;
+  }
 
-  .authRequiredText,
-  .errorText {
-    font-size: 14px;
-  }
+  .authRequiredText,
+  .errorText {
+    font-size: 14px;
+  }
 
-  .btn {
-    padding: 12px 18px;
-    font-size: 14px;
-  }
+  .btn {
+    padding: 12px 18px;
+    font-size: 14px;
+  }
 }
 
 /* Extra small screens */
 @media (max-width: 480px) {
-  .pageContainer {
-    padding: 8px;
-  }
+  .pageContainer {
+    padding: 8px;
+  }
 
-  .headerContent {
-    padding: 12px;
-  }
+  .headerContent {
+    padding: 12px;
+  }
 
-  .headerTitle {
-    font-size: 18px;
-    line-height: 1.3;
-  }
+  .headerTitle {
+    font-size: 18px;
+    line-height: 1.3;
+  }
 
-  .headerSubtitle {
-    font-size: 12px;
-  }
+  .headerSubtitle {
+    font-size: 12px;
+  }
 
-  .authRequired,
-  .loading,
-  .error {
-    padding: 30px 16px;
-  }
+  .authRequired,
+  .loading,
+  .error {
+    padding: 30px 16px;
+  }
 
-  .authRequiredIcon,
-  .errorIcon {
-    font-size: 40px;
-    margin-bottom: 16px;
-  }
+  .authRequiredIcon,
+  .errorIcon {
+    font-size: 40px;
+    margin-bottom: 16px;
+  }
 
-  .loadingSpinner {
-    width: 32px;
-    height: 32px;
-    margin-bottom: 16px;
-  }
+  .loadingSpinner {
+    width: 32px;
+    height: 32px;
+    margin-bottom: 16px;
+  }
 }
 
 /* Dark mode support (if needed) */
 @media (prefers-color-scheme: dark) {
-  .pageContainer {
-    background: #111827;
-  }
+  .pageContainer {
+    background: #111827;
+  }
 
-  .headerContent,
-  .authRequired,
-  .loading,
-  .error {
-    background: #1F2937;
-    border: 1px solid #374151;
-  }
+  .headerContent,
+  .authRequired,
+  .loading,
+  .error {
+    background: #1F2937;
+    border: 1px solid #374151;
+  }
 
-  .headerTitle,
-  .authRequiredTitle {
-    color: #F3F4F6;
-  }
+  .headerTitle,
+  .authRequiredTitle {
+    color: #F3F4F6;
+  }
 
-  .headerSubtitle,
-  .authRequiredText,
-  .loadingText,
-  .errorText {
-    color: #9CA3AF;
-  }
+  .headerSubtitle,
+  .authRequiredText,
+  .loadingText,
+  .errorText {
+    color: #9CA3AF;
+  }
 
-  .userInfoName {
-    color: #F3F4F6;
-  }
+  .userInfoName {
+    color: #F3F4F6;
+  }
 
-  .userInfoRole {
-    background: #374151;
-    color: #9CA3AF;
-  }
+  .userInfoRole {
+    background: #374151;
+    color: #9CA3AF;
+  }
 
-  .backBtn {
-    background: #1F2937;
-    border-color: #374151;
-    color: #9CA3AF;
-  }
+  .backBtn {
+    background: #1F2937;
+    border-color: #374151;
+    color: #9CA3AF;
+  }
 
-  .backBtn:hover {
-    background: #374151;
-    border-color: #2563EB;
-    color: #2563EB;
-  }
+  .backBtn:hover {
+    background: #374151;
+    border-color: #2563EB;
+    color: #2563EB;
+  }
 }
 
 /* Reduced Motion support */
 @media (prefers-reduced-motion: reduce) {
-  .btn, .backBtn, .backBtn:hover, .loadingSpinner {
-    transition: none;
-    transform: none;
-    animation: none;
-  }
+  .btn, .backBtn, .backBtn:hover, .loadingSpinner {
+    transition: none;
+    transform: none;
+    animation: none;
+  }
 }
