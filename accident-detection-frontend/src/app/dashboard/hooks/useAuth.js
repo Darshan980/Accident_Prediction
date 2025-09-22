@@ -12,25 +12,34 @@ export const useAuth = () => {
 
   const checkAuth = async () => {
     try {
-      const token = localStorage.getItem('token');
-      const userStr = localStorage.getItem('user');
-      
-      if (!token || !userStr) {
-        setError('Please log in as admin to access this page.');
-        setTimeout(() => window.location.href = '/auth/admin', 2000);
-        return;
-      }
+      // Check if global auth context is available
+      if (typeof window !== 'undefined') {
+        // Wait a bit for global auth to initialize
+        await new Promise(resolve => setTimeout(resolve, 100));
+        
+        const token = localStorage.getItem('token');
+        const userStr = localStorage.getItem('user');
+        
+        if (!token || !userStr) {
+          setError('Please log in as admin to access this page.');
+          setTimeout(() => window.location.href = '/auth/admin', 2000);
+          return;
+        }
 
-      const userData = JSON.parse(userStr);
-      if (userData.role !== 'admin') {
-        setError('Admin access required.');
-        setTimeout(() => window.location.href = '/auth/admin', 2000);
-        return;
-      }
+        const userData = JSON.parse(userStr);
+        
+        // Check if user has admin privileges (admin or superadmin)
+        if (userData.role !== 'admin' && userData.role !== 'superadmin') {
+          setError('Admin access required.');
+          setTimeout(() => window.location.href = '/auth/admin', 2000);
+          return;
+        }
 
-      setUser(userData);
-      setError(null);
+        setUser(userData);
+        setError(null);
+      }
     } catch (e) {
+      console.error('Dashboard auth error:', e);
       setError('Authentication error. Please log in again.');
       setTimeout(() => {
         localStorage.clear();
@@ -44,6 +53,10 @@ export const useAuth = () => {
   const logout = () => {
     if (confirm('Are you sure you want to logout?')) {
       localStorage.clear();
+      // Clear any global auth state if available
+      if (window.globalAuth && window.globalAuth.logout) {
+        window.globalAuth.logout();
+      }
       window.location.href = '/auth/admin';
     }
   };
