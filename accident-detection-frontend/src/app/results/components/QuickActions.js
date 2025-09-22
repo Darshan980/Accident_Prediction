@@ -1,7 +1,7 @@
 
 // result/components/QuickActions.js
 import React from 'react'
-import styles from '../styles/QuickActions.module.css'
+import styles from '../styles/QuickActions.css'
 
 const QuickActions = () => {
   const actions = [
