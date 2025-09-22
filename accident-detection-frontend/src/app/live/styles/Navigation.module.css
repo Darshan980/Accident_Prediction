@@ -1,0 +1,96 @@
+/* app/live/styles/Navigation.module.css */
+.navContainer {
+  display: flex;
+  justify-content: center;
+  gap: 20px;
+  flex-wrap: wrap;
+  font-family: "Inter", "Roboto", "Helvetica Neue", sans-serif;
+}
+
+.navButton {
+  /* Template: Primary button styling */
+  background-color: #1E3A8A;
+  color: #FFFFFF;
+  border: none;
+  font-size: 16px;
+  font-weight: 600;
+  padding: 12px 20px; /* Matched to template */
+  border-radius: 8px;
+  text-decoration: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.3s ease;
+}
+
+.navButton:hover {
+  /* Template: Secondary color on hover */
+  background-color: #2563EB;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.alertActive {
+  /* Template: Danger color for alerts */
+  background-color: #DC2626 !important;
+}
+
+.alertActive:hover {
+  background-color: #B91C1C !important;
+  box-shadow: 0 2px 4px rgba(220, 38, 38, 0.3) !important;
+}
+
+.alertInactive {
+  /* Template: Gray for inactive/disabled states */
+  background-color: #9CA3AF !important;
+}
+
+.alertInactive:hover {
+  background-color: #6B7280 !important;
+  box-shadow: 0 2px 4px rgba(156, 163, 175, 0.3) !important;
+}
+
+.homeLink {
+  color: #111827; /* Dark text color from template */
+  text-decoration: none;
+  font-size: 16px;
+  font-weight: 500;
+  padding: 12px 20px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: color 0.2s ease;
+}
+
+.homeLink:hover {
+  color: #1E3A8A; /* Primary color on hover for visual feedback */
+}
+
+@media (max-width: 768px) {
+  .navContainer {
+    gap: 15px;
+  }
+  
+  .navButton,
+  .homeLink {
+    font-size: 14px;
+    padding: 10px 18px;
+  }
+}
+
+@media (max-width: 480px) {
+  .navContainer {
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+  }
+  
+  .navButton,
+  .homeLink {
+    font-size: 14px;
+    padding: 10px 18px;
+    width: 100%;
+    max-width: 280px;
+    justify-content: center;
+  }
+}
