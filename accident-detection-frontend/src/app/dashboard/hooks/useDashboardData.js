@@ -1,9 +1,8 @@
-// app/dashboard/hooks/useDashboardData.js
+// app/dashboard/hooks/useDashboardData.js - Updated version
 import { useState, useEffect } from 'react';
+import AdminDataService from '../services/adminDataService';
 import { generateSampleData } from '../utils/sampleData';
 import { calculateStatsFromLogs } from '../utils/statsCalculator';
-
-const API_BASE_URL = 'https://accident-prediction-7i4e.onrender.com';
 
 export const useDashboardData = () => {
   const [logs, setLogs] = useState([]);
@@ -11,6 +10,7 @@ export const useDashboardData = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [statusUpdateLoading, setStatusUpdateLoading] = useState(null);
+  const [dataService] = useState(() => new AdminDataService());
 
   useEffect(() => {
     loadDashboardData();
@@ -25,79 +25,33 @@ export const useDashboardData = () => {
   }, [logs]);
 
   const loadDashboardData = async () => {
+    setLoading(true);
+    
     try {
-      const token = localStorage.getItem('token');
+      console.log('Loading admin dashboard data...');
       
-      if (token) {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 15000);
-        
-        try {
-          const response = await fetch(`${API_BASE_URL}/api/logs?limit=100`, {
-            headers: {
-              'Authorization': `Bearer ${token}`,
-              'Content-Type': 'application/json',
-              'Accept': 'application/json'
-            },
-            signal: controller.signal,
-            mode: 'cors'
-          });
-
-          clearTimeout(timeoutId);
-          
-          if (response.ok) {
-            const rawResponseText = await response.text();
-            let apiResponse;
-            
-            try {
-              apiResponse = JSON.parse(rawResponseText);
-            } catch (jsonError) {
-              throw new Error(`Invalid JSON response: ${jsonError.message}`);
-            }
-
-            let logsData = extractLogsFromResponse(apiResponse);
-            const updatedData = applyLocalStatusUpdates(logsData);
-            setLogs(updatedData);
-            setError(null);
-            return;
-            
-          } else {
-            const errorText = await response.text();
-            throw new Error(`API returned ${response.status}: ${response.statusText}`);
-          }
-        } catch (fetchError) {
-          clearTimeout(timeoutId);
-          if (fetchError.name === 'AbortError') {
-            throw new Error('Request timeout');
-          }
-          throw fetchError;
-        }
-      } else {
-        throw new Error('No authentication token available');
-      }
+      // Try to fetch all user logs via the admin data service
+      const allLogs = await dataService.fetchAllUserLogs();
+      
+      // Apply any local status updates
+      const updatedData = applyLocalStatusUpdates(allLogs);
+      
+      setLogs(updatedData);
+      setError(null);
+      
+      console.log(`Successfully loaded ${updatedData.length} logs for admin dashboard`);
+      
     } catch (err) {
-      // Fallback to sample data
-      const sampleData = generateSampleData();
+      console.error('Failed to load admin dashboard data:', err);
+      setError(err.message);
+      
+      // Fallback to sample data if API fails
+      console.log('Falling back to sample data...');
+      const sampleData = generateSampleData(50); // Generate more sample data for admin view
       const updatedSampleData = applyLocalStatusUpdates(sampleData);
       setLogs(updatedSampleData);
-    }
-  };
-
-  const extractLogsFromResponse = (apiResponse) => {
-    if (Array.isArray(apiResponse)) {
-      return apiResponse;
-    } else if (apiResponse && Array.isArray(apiResponse.logs)) {
-      return apiResponse.logs;
-    } else if (apiResponse && typeof apiResponse === 'object') {
-      const possibleArrayKeys = ['data', 'results', 'items', 'records'];
-      for (const key of possibleArrayKeys) {
-        if (Array.isArray(apiResponse[key])) {
-          return apiResponse[key];
-        }
-      }
-      throw new Error('No logs array found in API response');
-    } else {
-      throw new Error('Unexpected API response structure');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -120,32 +74,21 @@ export const useDashboardData = () => {
     setStatusUpdateLoading(logId);
     
     try {
-      const token = localStorage.getItem('token');
+      console.log(`Updating status for log ${logId} to ${newStatus}`);
       
-      // Try to update via API first
-      if (token) {
-        try {
-          const response = await fetch(`${API_BASE_URL}/api/logs/${logId}/status`, {
-            method: 'PUT',
-            headers: {
-              'Authorization': `Bearer ${token}`,
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ status: newStatus })
-          });
-          
-          if (!response.ok) {
-            throw new Error('API update failed');
-          }
-        } catch (apiError) {
-          // Continue with local update if API fails
-        }
+      // Try to update via API
+      const apiUpdateSuccessful = await dataService.updateLogStatus(logId, newStatus);
+      
+      if (apiUpdateSuccessful) {
+        console.log('Status updated successfully via API');
+      } else {
+        console.log('API update failed, saving locally only');
       }
       
       // Always save locally for persistence
       saveStatusUpdate(logId, newStatus);
       
-      // Update local state
+      // Update local state immediately
       setLogs(prevLogs => 
         prevLogs.map(log => 
           log.id === logId ? { ...log, status: newStatus } : log
@@ -153,16 +96,23 @@ export const useDashboardData = () => {
       );
       
     } catch (error) {
+      console.error('Status update error:', error);
       setError(`Failed to update status: ${error.message}`);
+      
+      // Still try to update locally
+      saveStatusUpdate(logId, newStatus);
+      setLogs(prevLogs => 
+        prevLogs.map(log => 
+          log.id === logId ? { ...log, status: newStatus } : log
+        )
+      );
     } finally {
       setStatusUpdateLoading(null);
     }
   };
 
   const refreshData = async () => {
-    setLoading(true);
     await loadDashboardData();
-    setLoading(false);
   };
 
   return {
