@@ -1,6 +1,6 @@
 import React from 'react'
 import { Search } from 'lucide-react'
-import styles from '../styles/FilterBar.module.css'
+import styles from '../styles/FilterBar.css'
 
 const FilterBar = ({ results, filter, setFilter, searchTerm, setSearchTerm }) => {
   const filterOptions = [
