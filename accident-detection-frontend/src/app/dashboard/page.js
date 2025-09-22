@@ -35,15 +35,25 @@ const AccidentDashboard = () => {
     paginatedLogs
   } = useLogFilters(logs);
 
-  const loading = authLoading || dataLoading;
+  // Only show loading if auth is actually loading AND we don't have user data
+  const loading = authLoading && !user;
   const error = authError || dataError;
 
+  // Show loading only if we're actually waiting for authentication
   if (loading) {
-    return <LoadingSpinner message="Loading admin dashboard..." />;
+    return <LoadingSpinner message="Checking authentication..." />;
   }
 
   if (error && error.includes('Authentication')) {
     return <ErrorDisplay error={error} showLoginButton={true} />;
+  }
+
+  // If no user but no loading, redirect to login
+  if (!user && !authLoading) {
+    if (typeof window !== 'undefined') {
+      window.location.href = '/auth/admin';
+    }
+    return <LoadingSpinner message="Redirecting to login..." />;
   }
 
   // Mobile Layout
