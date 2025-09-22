@@ -102,6 +102,32 @@ const LiveDetection = () => {
             } catch (err) {
               console.error('Failed to log to dashboard:', err);
             }
+
+            // INTEGRATE WITH NOTIFICATION SYSTEM
+            try {
+              if (window.GlobalNotificationSystem && window.GlobalNotificationSystem.triggerAlert) {
+                const notificationData = {
+                  accident_detected: true,
+                  confidence: data.confidence,
+                  source: 'Live Detection Camera',
+                  location: 'Camera Feed',
+                  analysis_type: 'live_detection',
+                  filename: `live_frame_${frameCount + 1}.jpg`,
+                  timestamp: new Date().toISOString(),
+                  image: imageData,
+                  frame_id: frameCount + 1,
+                  processing_time: data.processing_time || 0,
+                  predicted_class: data.predicted_class || 'accident'
+                };
+                
+                window.GlobalNotificationSystem.triggerAlert(notificationData);
+                console.log('Accident sent to notification system');
+              } else {
+                console.warn('GlobalNotificationSystem not available');
+              }
+            } catch (notificationError) {
+              console.error('Failed to send notification:', notificationError);
+            }
           }
           
           // Save to results page (for both accidents and normal)
