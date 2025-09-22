@@ -24,19 +24,19 @@ export const useDashboardData = () => {
   }, [logs]);
 
   const ensureAuthentication = async () => {
-    // Check if we have auth token
-    let token = localStorage.getItem('authToken') || 
-               localStorage.getItem('token') || 
-               sessionStorage.getItem('authToken');
+    // Check if we have auth token - updated to match your useAuth hook
+    let token = localStorage.getItem('token') || 
+               localStorage.getItem('authToken') || 
+               sessionStorage.getItem('token');
     
     if (!token) {
       // Try to get from cookies
       const cookies = document.cookie.split(';');
       for (let cookie of cookies) {
         const [name, value] = cookie.trim().split('=');
-        if (name === 'authToken' || name === 'token') {
+        if (name === 'token' || name === 'authToken') {
           token = value;
-          localStorage.setItem('authToken', token);
+          localStorage.setItem('token', token); // Store as 'token' to match useAuth
           break;
         }
       }
@@ -47,7 +47,7 @@ export const useDashboardData = () => {
       try {
         const authResult = await dataService.authenticate();
         if (authResult && authResult.token) {
-          localStorage.setItem('authToken', authResult.token);
+          localStorage.setItem('token', authResult.token); // Store as 'token'
           token = authResult.token;
         }
       } catch (authError) {
@@ -110,15 +110,16 @@ export const useDashboardData = () => {
       if (err.message.includes('Authentication') || err.message.includes('log in')) {
         setError('Authentication required');
         
-        // Clear auth data
-        localStorage.removeItem('authToken');
+        // Clear auth data - updated to match your useAuth hook
         localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        localStorage.removeItem('authToken');
         sessionStorage.clear();
         
-        // Redirect to login
+        // Redirect to login - FIXED: changed from /auth/admin to /auth
         setTimeout(() => {
           if (typeof window !== 'undefined') {
-            window.location.href = '/auth/admin';
+            window.location.href = '/auth'; // Changed this line!
           }
         }, 1000);
       } else {
