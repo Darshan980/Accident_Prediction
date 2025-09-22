@@ -1,4 +1,4 @@
-// app/dashboard/services/adminDataService.js - FIXED VERSION
+// app/dashboard/services/adminDataService.js - CORS FIXED VERSION
 const API_BASE_URL = 'https://accident-prediction-7i4e.onrender.com';
 
 class AdminDataService {
@@ -49,68 +49,14 @@ class AdminDataService {
     const headers = {
       'Content-Type': 'application/json',
       'Accept': 'application/json',
-      'User-Agent': 'AdminDashboard/1.0',
     };
 
-    // Add authentication headers - try multiple formats
+    // ONLY use Authorization header - remove custom headers that cause CORS issues
     if (this.token) {
       headers['Authorization'] = `Bearer ${this.token}`;
-      headers['X-Auth-Token'] = this.token;
-      headers['Token'] = this.token;
     }
-
-    if (this.sessionId) {
-      headers['X-Session-ID'] = this.sessionId;
-      headers['Session-ID'] = this.sessionId;
-    }
-
-    // Add admin-specific headers
-    headers['X-Admin-Request'] = 'true';
-    headers['X-Dashboard-Client'] = 'admin';
 
     return headers;
-  }
-
-  async authenticate() {
-    console.log('🔐 Attempting to authenticate...');
-    
-    try {
-      // Try to authenticate with admin credentials
-      const response = await fetch(`${API_BASE_URL}/auth/admin`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json'
-        },
-        credentials: 'include',
-        body: JSON.stringify({
-          // You might need to add admin credentials here
-          admin: true,
-          dashboard: true
-        })
-      });
-
-      if (response.ok) {
-        const authData = await response.json();
-        
-        if (authData.token) {
-          this.token = authData.token;
-          localStorage.setItem('authToken', authData.token);
-        }
-        
-        if (authData.sessionId) {
-          this.sessionId = authData.sessionId;
-          localStorage.setItem('sessionId', authData.sessionId);
-        }
-        
-        console.log('✅ Authentication successful');
-        return authData;
-      }
-    } catch (error) {
-      console.log('❌ Authentication failed:', error);
-    }
-    
-    return null;
   }
 
   async makeRequest(endpoint, options = {}) {
@@ -120,7 +66,14 @@ class AdminDataService {
     try {
       console.log(`🌐 Making request to: ${API_BASE_URL}${endpoint}`);
       
-      const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+      // Add token as URL parameter if no Authorization header works
+      let url = `${API_BASE_URL}${endpoint}`;
+      if (this.token && !options.method) {
+        const separator = endpoint.includes('?') ? '&' : '?';
+        url += `${separator}token=${encodeURIComponent(this.token)}`;
+      }
+      
+      const response = await fetch(url, {
         headers: this.getHeaders(),
         credentials: 'include', // Important for session cookies
         signal: controller.signal,
@@ -131,23 +84,6 @@ class AdminDataService {
       clearTimeout(timeoutId);
       
       console.log(`📡 Response status: ${response.status} for ${endpoint}`);
-      
-      // If unauthorized, try to re-authenticate
-      if (response.status === 401 || response.status === 403) {
-        console.log('🔐 Unauthorized, attempting re-authentication...');
-        const authResult = await this.authenticate();
-        
-        if (authResult) {
-          // Retry the original request with new auth
-          return await fetch(`${API_BASE_URL}${endpoint}`, {
-            headers: this.getHeaders(),
-            credentials: 'include',
-            signal: controller.signal,
-            mode: 'cors',
-            ...options
-          });
-        }
-      }
       
       return response;
       
@@ -163,15 +99,12 @@ class AdminDataService {
   async fetchAllUserLogs() {
     console.log('🔍 Starting fetchAllUserLogs...');
 
-    // Try different endpoints that might work
+    // Simple endpoints without custom headers
     const endpoints = [
       '/api/logs?all=true',
       '/api/logs?limit=1000',
       '/api/logs',
-      '/api/admin/logs',
-      '/admin/api/logs',
-      '/logs',
-      '/api/accident-logs'
+      '/logs'
     ];
 
     let lastError = null;
@@ -227,7 +160,7 @@ class AdminDataService {
     }
 
     // If we get here, no endpoints worked
-    throw lastError || new Error('No logs found from working endpoints. Check API response structure.');
+    throw lastError || new Error('CORS issue: API server needs to allow requests from this domain');
   }
 
   extractLogsFromResponse(data) {
