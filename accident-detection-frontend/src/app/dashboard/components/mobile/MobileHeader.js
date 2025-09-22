@@ -4,13 +4,6 @@ import React, { useState } from 'react';
 const MobileHeader = ({ user, onRefresh, isRefreshing, onShowFilters }) => {
   const [showMenu, setShowMenu] = useState(false);
 
-  const handleLogout = () => {
-    if (confirm('Are you sure you want to logout?')) {
-      localStorage.clear();
-      window.location.href = '/auth/admin';
-    }
-  };
-
   return (
     <>
       <div style={{
@@ -140,21 +133,6 @@ const MobileHeader = ({ user, onRefresh, isRefreshing, onShowFilters }) => {
               }}
             >
               🔍 Filters & Search
-            </button>
-
-            <button
-              onClick={handleLogout}
-              style={{
-                width: '100%',
-                padding: '1rem',
-                backgroundColor: '#dc3545',
-                color: 'white',
-                border: 'none',
-                borderRadius: '8px',
-                cursor: 'pointer'
-              }}
-            >
-              Logout
             </button>
           </div>
         </div>
