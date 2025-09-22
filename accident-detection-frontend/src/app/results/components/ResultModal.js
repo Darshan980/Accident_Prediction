@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react'
 import { AlertTriangle, CheckCircle, Download, X } from 'lucide-react'
 import { formatFileSize, truncateFilename } from '../utils/resultUtils'
-import styles from '../styles/ResultModal.module.css'
+import styles from '../styles/ResultModal.css'
 
 const ResultModal = ({ result, onClose, onDownload }) => {
   // Handle escape key press
