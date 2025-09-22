@@ -1,6 +1,6 @@
 // result/components/NoResults.js
 import React from 'react'
-import styles from '../styles/NoResults.module.css'
+import styles from '../styles/NoResults.css'
 
 const NoResults = ({ results }) => {
   return (
