@@ -1,7 +1,7 @@
 import React from 'react'
 import { AlertTriangle, CheckCircle, Clock, FileText, Download } from 'lucide-react'
 import { formatFileSize, truncateFilename } from '../utils/resultUtils'
-import styles from '../styles/ResultCard.module.css'
+import styles from '../styles/ResultCard.css'
 
 const ResultCard = ({ result, onViewDetails, onDownload }) => {
   const getResultIcon = () => {
