@@ -69,6 +69,7 @@ const UserUploadPage = () => {
             max-width: 1200px;
             margin: 0 auto;
             padding: 1.5rem;
+            font-family: "Inter", "Roboto", "Helvetica Neue", sans-serif;
           }
           
           .loading-container {
@@ -82,24 +83,27 @@ const UserUploadPage = () => {
           .loading-card {
             padding: 2rem;
             text-align: center;
-            background-color: #f8f9fa;
+            background-color: #FFFFFF;
             border-radius: 8px;
-            border: 1px solid #dee2e6;
+            border: 1px solid #E5E7EB;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
           }
           
           .spinner {
             width: 40px;
             height: 40px;
-            border: 3px solid #e3f2fd;
-            border-top: 3px solid #007bff;
+            border: 3px solid #E5E7EB;
+            border-top: 3px solid #1E3A8A;
             border-radius: 50%;
             animation: spin 1s linear infinite;
             margin: 0 auto 1rem;
           }
           
           .loading-text {
-            color: #666;
+            color: #6B7280;
             margin: 0;
+            font-size: 16px;
+            font-weight: 500;
           }
           
           @keyframes spin {
@@ -120,24 +124,30 @@ const UserUploadPage = () => {
           max-width: 64rem;
           margin: 0 auto;
           padding: 1.5rem;
-          background-color: #f9fafb;
+          background: linear-gradient(135deg, #F9FAFB 0%, #E5E7EB 100%);
           min-height: 100vh;
+          font-family: "Inter", "Roboto", "Helvetica Neue", sans-serif;
         }
         
         .page-title {
-          font-size: 1.875rem;
-          font-weight: bold;
+          font-size: 30px;
+          font-weight: 700;
           margin-bottom: 2rem;
-          color: #374151;
+          color: #111827;
           text-align: center;
+          background: linear-gradient(135deg, #1E3A8A 0%, #2563EB 100%);
+          -webkit-background-clip: text;
+          -webkit-text-fill-color: transparent;
+          background-clip: text;
         }
         
         .auth-error {
           margin-bottom: 2rem;
           padding: 1.5rem;
-          background-color: #fef2f2;
-          border-radius: 0.75rem;
-          border: 1px solid #fecaca;
+          background-color: #FFFFFF;
+          border-radius: 8px;
+          border: 2px solid #DC2626;
+          box-shadow: 0 4px 16px rgba(220, 38, 38, 0.1);
         }
         
         .auth-error-content {
@@ -147,15 +157,18 @@ const UserUploadPage = () => {
         }
         
         .auth-error-title {
-          font-size: 1.25rem;
-          font-weight: bold;
-          color: #991b1b;
+          font-size: 20px;
+          font-weight: 600;
+          color: #DC2626;
           margin-bottom: 0.5rem;
         }
         
         .auth-error-text {
-          color: #b91c1c;
+          color: #111827;
           margin-bottom: 1rem;
+          font-size: 16px;
+          font-weight: 400;
+          line-height: 1.5;
         }
         
         .auth-error-buttons {
@@ -164,31 +177,138 @@ const UserUploadPage = () => {
         }
         
         .btn {
-          padding: 0.5rem 1rem;
-          border-radius: 0.25rem;
-          font-weight: 500;
+          padding: 12px 20px;
+          border-radius: 8px;
+          font-weight: 600;
+          font-size: 16px;
           text-decoration: none;
           cursor: pointer;
-          border: none;
-          transition: background-color 0.2s;
+          border: 2px solid transparent;
+          transition: all 0.2s ease;
+          display: inline-block;
+        }
+        
+        .btn:hover {
+          transform: translateY(-1px);
+          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
         }
         
         .btn-red {
-          background-color: #dc2626;
-          color: white;
+          background-color: #DC2626;
+          color: #FFFFFF;
+          border-color: #DC2626;
         }
         
         .btn-red:hover {
-          background-color: #b91c1c;
+          background-color: #B91C1C;
+          border-color: #B91C1C;
         }
         
         .btn-gray {
-          background-color: #4b5563;
-          color: white;
+          background-color: #FFFFFF;
+          color: #111827;
+          border-color: #E5E7EB;
         }
         
         .btn-gray:hover {
-          background-color: #374151;
+          background-color: #F9FAFB;
+          border-color: #D1D5DB;
+        }
+        
+        /* Mobile Responsive */
+        @media (max-width: 768px) {
+          .main-container {
+            padding: 1rem;
+          }
+          
+          .page-title {
+            font-size: 24px;
+            margin-bottom: 1.5rem;
+          }
+          
+          .auth-error {
+            padding: 1rem;
+          }
+          
+          .auth-error-content {
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 0.75rem;
+          }
+          
+          .auth-error-title {
+            font-size: 18px;
+          }
+          
+          .auth-error-text {
+            font-size: 14px;
+          }
+          
+          .auth-error-buttons {
+            flex-direction: column;
+            width: 100%;
+            gap: 0.5rem;
+          }
+          
+          .btn {
+            width: 100%;
+            text-align: center;
+            padding: 14px 16px;
+          }
+        }
+        
+        @media (max-width: 480px) {
+          .main-container {
+            padding: 0.75rem;
+          }
+          
+          .page-title {
+            font-size: 20px;
+          }
+          
+          .auth-error {
+            border-radius: 8px;
+          }
+        }
+        
+        /* High contrast mode */
+        @media (prefers-contrast: high) {
+          .auth-error,
+          .loading-card,
+          .btn {
+            border-width: 2px;
+          }
+          
+          .btn-red,
+          .btn-gray {
+            border-width: 3px;
+          }
+        }
+        
+        /* Reduced motion */
+        @media (prefers-reduced-motion: reduce) {
+          .btn,
+          .spinner {
+            transition: none;
+            transform: none;
+            animation: none;
+          }
+        }
+        
+        /* Print styles */
+        @media print {
+          .main-container {
+            background: #FFFFFF;
+          }
+          
+          .auth-error-buttons {
+            display: none;
+          }
+          
+          .page-title {
+            color: #111827 !important;
+            -webkit-text-fill-color: #111827 !important;
+          }
         }
       `}</style>
 
@@ -200,7 +320,7 @@ const UserUploadPage = () => {
       {!isAuthenticated && (
         <div className="auth-error">
           <div className="auth-error-content">
-            <XCircle style={{width: '3rem', height: '3rem', color: '#dc2626'}} />
+            <XCircle style={{width: '3rem', height: '3rem', color: '#DC2626'}} />
             <div>
               <h2 className="auth-error-title">Authentication Required</h2>
               <p className="auth-error-text">You must be logged in to upload files for accident detection analysis.</p>
