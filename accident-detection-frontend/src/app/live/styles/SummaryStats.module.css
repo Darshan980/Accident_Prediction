@@ -1,0 +1,68 @@
+/* app/live/styles/SummaryStats.module.css */
+.statsContainer {
+  display: flex;
+  justify-content: center;
+  gap: 30px;
+  margin-bottom: 30px;
+  flex-wrap: wrap;
+  font-family: "Inter", "Roboto", "Helvetica Neue", sans-serif;
+}
+
+.statItem {
+  text-align: center;
+  background-color: #F9FAFB; /* Neutral background */
+  padding: 20px;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.statValue {
+  font-size: 28px; /* Heading size */
+  font-weight: 700; /* Bold */
+  margin-bottom: 5px;
+  color: #1E3A8A; /* Primary color */
+}
+
+/* Specific colors for different states based on your original file */
+.statValue.positive {
+  color: #16A34A; /* Success color */
+}
+
+.statValue.negative {
+  color: #DC2626; /* Danger color */
+}
+
+.statLabel {
+  color: #6c757d; /* Neutral gray for labels */
+  font-size: 14px; /* Body text size */
+}
+
+@media (max-width: 768px) {
+  .statsContainer {
+    gap: 20px;
+    margin-bottom: 20px;
+  }
+  
+  .statValue {
+    font-size: 24px;
+  }
+  
+  .statLabel {
+    font-size: 14px;
+  }
+}
+
+@media (max-width: 480px) {
+  .statsContainer {
+    gap: 15px;
+    margin-bottom: 15px;
+  }
+  
+  .statValue {
+    font-size: 20px;
+  }
+  
+  .statLabel {
+    font-size: 14px;
+  }
+}
