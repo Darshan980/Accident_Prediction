@@ -15,6 +15,7 @@ import { useResponsive } from './hooks/useResponsive';
 
 const AccidentDashboard = () => {
   const { user, loading: authLoading, error: authError } = useAuth();
+  const { isMobile } = useResponsive();
   const { 
     logs, 
     stats, 
@@ -45,6 +46,28 @@ const AccidentDashboard = () => {
     return <ErrorDisplay error={error} showLoginButton={true} />;
   }
 
+  // Mobile Layout
+  if (isMobile) {
+    return (
+      <MobileDashboard
+        user={user}
+        logs={logs}
+        stats={stats}
+        filter={filter}
+        setFilter={setFilter}
+        currentPage={currentPage}
+        setCurrentPage={setCurrentPage}
+        totalPages={totalPages}
+        paginatedLogs={paginatedLogs}
+        filteredLogs={filteredLogs}
+        onUpdateStatus={updateLogStatus}
+        onRefresh={refreshData}
+        isRefreshing={dataLoading}
+      />
+    );
+  }
+
+  // Desktop Layout
   return (
     <div style={{ padding: '20px', maxWidth: '1400px', margin: '0 auto', minHeight: '100vh' }}>
       <DashboardHeader user={user} onRefresh={refreshData} isRefreshing={dataLoading} />
