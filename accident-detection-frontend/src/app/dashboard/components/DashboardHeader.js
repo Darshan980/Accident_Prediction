@@ -2,13 +2,6 @@
 import React from 'react';
 
 const DashboardHeader = ({ user, onRefresh, isRefreshing }) => {
-  const handleLogout = () => {
-    if (confirm('Are you sure you want to logout?')) {
-      localStorage.clear();
-      window.location.href = '/auth/admin';
-    }
-  };
-
   return (
     <div style={{ marginBottom: '2rem' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1rem' }}>
@@ -47,20 +40,6 @@ const DashboardHeader = ({ user, onRefresh, isRefreshing }) => {
             }}
           >
             {isRefreshing ? 'Refreshing...' : 'Refresh Data'}
-          </button>
-
-          <button
-            onClick={handleLogout}
-            style={{
-              backgroundColor: '#dc3545',
-              color: 'white',
-              border: 'none',
-              padding: '0.75rem 1.5rem',
-              borderRadius: '4px',
-              cursor: 'pointer'
-            }}
-          >
-            Logout
           </button>
         </div>
       </div>
