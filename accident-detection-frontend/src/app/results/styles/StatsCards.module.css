@@ -1,4 +1,6 @@
 /* result/styles/StatsCards.module.css */
+/* Updated to align with the new design template */
+
 .statsGrid {
   display: grid;
   grid-template-columns: 1fr;
@@ -8,15 +10,17 @@
 
 .statCard {
   background: white;
+  border: 1px solid #E5E7EB; /* Subtle border for definition */
   border-radius: 12px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06); /* Lighter, more modern shadow */
   overflow: hidden;
-  transition: all 0.2s ease;
+  transition: all 0.3s ease;
+  font-family: "Inter", "Roboto", "Helvetica Neue", sans-serif;
 }
 
 .statCard:hover {
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
-  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
+  transform: translateY(-4px); /* More pronounced lift on hover */
 }
 
 .statCardContent {
@@ -27,33 +31,35 @@
 }
 
 .statCardIcon {
-  width: 48px;
-  height: 48px;
+  width: 52px; /* Slightly larger icon */
+  height: 52px;
   border-radius: 12px;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
+  font-size: 24px; /* Icon size */
 }
 
-.statCardIconBlue {
-  background: #dbeafe;
-  color: #3b82f6;
+/* Updated color scheme from template */
+.statCardIconPrimary {
+  background: #EBF8FF;
+  color: #1E3A8A;
 }
 
-.statCardIconRed {
-  background: #fecaca;
-  color: #ef4444;
+.statCardIconDanger {
+  background: #FEE2E2;
+  color: #DC2626;
 }
 
-.statCardIconGreen {
-  background: #d1fae5;
-  color: #10b981;
+.statCardIconSuccess {
+  background: #D1FAE5;
+  color: #10B981;
 }
 
-.statCardIconPurple {
-  background: #e9d5ff;
-  color: #8b5cf6;
+.statCardIconWarning {
+  background: #FEF3C7;
+  color: #D97706;
 }
 
 .statCardInfo {
@@ -61,16 +67,16 @@
 }
 
 .statCardValue {
-  font-size: 28px;
+  font-size: 32px; /* Matched to template heading size */
   font-weight: 700;
-  color: #1f2937;
+  color: #111827; /* Dark text for contrast */
   line-height: 1;
   margin-bottom: 4px;
 }
 
 .statCardLabel {
   font-size: 14px;
-  color: #6b7280;
+  color: #6B7280; /* Neutral gray for labels */
   font-weight: 500;
 }
 
@@ -96,12 +102,13 @@
   }
 
   .statCardIcon {
-    width: 40px;
-    height: 40px;
+    width: 44px;
+    height: 44px;
+    font-size: 20px;
   }
 
   .statCardValue {
-    font-size: 24px;
+    font-size: 28px;
   }
 
   .statCardLabel {
@@ -109,3 +116,23 @@
   }
 }
 
+/* Dark mode support */
+@media (prefers-color-scheme: dark) {
+  .statCard {
+    background: #1F2937;
+    border-color: #374151;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  }
+
+  .statCard:hover {
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  }
+  
+  .statCardValue {
+    color: #F3F4F6;
+  }
+  
+  .statCardLabel {
+    color: #9CA3AF;
+  }
+}
