@@ -1113,67 +1113,7 @@
   }
 }
 
-/* Dark mode support */
-@media (prefers-color-scheme: dark) {
-  .dashboard-container {
-    background: linear-gradient(135deg, #111827 0%, #1F2937 100%);
-  }
 
-  .header-card,
-  .filters-card,
-  .alerts-section,
-  .alert-card,
-  .modal-content {
-    background: rgba(31, 41, 55, 0.95);
-    border-color: rgba(75, 85, 99, 0.3);
-  }
-
-  .header-title,
-  .alert-title,
-  .empty-title,
-  .modal-title,
-  .detail-title {
-    color: #F9FAFB;
-  }
-
-  .header-subtitle,
-  .alert-message,
-  .empty-subtitle,
-  .stat-label,
-  .metadata-item,
-  .detail-content {
-    color: #D1D5DB;
-  }
-
-  .icon-button,
-  .filter-button,
-  .action-button,
-  .modal-button.secondary,
-  .modal-close {
-    background: rgba(55, 65, 81, 0.8);
-    color: #F9FAFB;
-    border-color: rgba(107, 114, 128, 0.3);
-  }
-
-  .modal-header,
-  .modal-footer,
-  .detail-section,
-  .last-update {
-    background: rgba(17, 24, 39, 0.8);
-    border-color: rgba(75, 85, 99, 0.3);
-  }
-
-  .stat-number,
-  .last-update-time,
-  .detail-item strong {
-    color: #F9FAFB;
-  }
-
-  .snapshot-container {
-    background: rgba(17, 24, 39, 0.5);
-    border-color: rgba(75, 85, 99, 0.5);
-  }
-}
 
 /* High contrast mode */
 @media (prefers-contrast: high) {
