@@ -17,7 +17,7 @@ import QuickActions from './components/QuickActions'
 import { useUserResults } from './hooks/useUserResults'
 
 // Styles
-import styles from './styles/page.css'
+import styles from './styles/page.module.css'
 
 const UserResultsPage = () => {
   const { user, isAuthenticated } = useAuth()
