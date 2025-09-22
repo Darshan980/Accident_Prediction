@@ -1,6 +1,6 @@
 'use client';
 import React, { useState, useEffect } from 'react';
-import { useAuth } from '../../contexts/AuthContext';
+import { useAuth } from '../contexts/AuthContext';
 import MobileProfileCard from './components/MobileProfileCard';
 import MobileFormCard from './components/MobileFormCard';
 import MobilePasswordCard from './components/MobilePasswordCard';
