@@ -310,8 +310,11 @@ const LiveDetection = () => {
         <div style={styles.resultsSection}>
           <h3 style={styles.sectionTitle}>Recent Detections</h3>
           <div style={styles.resultsList}>
-            {results.map(result => (
-              <div key={result.id} style={styles.resultItem}>
+            {results.map((result, index) => (
+              <div key={result.id} style={{
+                ...styles.resultItem,
+                borderBottom: index === results.length - 1 ? 'none' : '1px solid #F3F4F6'
+              }}>
                 <div style={styles.resultIcon}>
                   {result.type === 'Accident' ? '🚨' : '✅'}
                 </div>
@@ -501,7 +504,7 @@ const styles = {
     height: '8px',
     backgroundColor: '#FFFFFF',
     borderRadius: '50%',
-    animation: 'pulse 1.5s ease-in-out infinite'
+    animation: typeof window !== 'undefined' ? 'pulse 1.5s ease-in-out infinite' : 'none'
   },
 
   liveText: {
@@ -772,29 +775,35 @@ const styles = {
   }
 };
 
-// Add CSS animations
-const styleSheet = document.createElement("style");
-styleSheet.type = "text/css";
-styleSheet.innerText = `
-  @keyframes pulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.3; }
+// Add CSS animations only on client side
+useEffect(() => {
+  if (typeof document !== 'undefined') {
+    const styleSheet = document.createElement("style");
+    styleSheet.type = "text/css";
+    styleSheet.innerText = `
+      @keyframes pulse {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.3; }
+      }
+      
+      button:hover:not(:disabled) {
+        transform: translateY(-1px);
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15) !important;
+      }
+      
+      a:hover {
+        background-color: #F3F4F6 !important;
+        border-color: #1E3A8A !important;
+      }
+    `;
+    document.head.appendChild(styleSheet);
+    
+    return () => {
+      if (document.head.contains(styleSheet)) {
+        document.head.removeChild(styleSheet);
+      }
+    };
   }
-  
-  button:hover:not(:disabled) {
-    transform: translateY(-1px);
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15) !important;
-  }
-  
-  a:hover {
-    background-color: #F3F4F6 !important;
-    border-color: #1E3A8A !important;
-  }
-  
-  .result-item:last-child {
-    border-bottom: none !important;
-  }
-`;
-document.head.appendChild(styleSheet);
+}, []);
 
 export default LiveDetection;
