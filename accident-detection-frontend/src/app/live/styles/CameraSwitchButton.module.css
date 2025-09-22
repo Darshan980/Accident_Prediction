@@ -1,119 +1,132 @@
 /* app/live/styles/CameraSwitchButton.module.css */
 
 .switchButton {
-  position: absolute;
-  bottom: 15px;
-  right: 15px;
-  background-color: rgba(0, 0, 0, 0.8);
-  color: white;
-  border: none;
-  border-radius: 25px;
-  padding: 10px 16px;
-  font-size: 0.9rem;
-  font-weight: 500;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  transition: all 0.3s ease;
-  backdrop-filter: blur(10px);
-  z-index: 10;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  /* Positioning and layout */
+  position: absolute;
+  bottom: 15px;
+  right: 15px;
+  display: flex;
+  align-items: center;
+  justify-content: center; /* Center content horizontally */
+  gap: 8px;
+  z-index: 10;
+  cursor: pointer;
+  white-space: nowrap; /* Prevent text from wrapping */
+
+  /* Colors and background */
+  background-color: #1E3A8A; /* Primary color from template (Navy Blue) */
+  color: #FFFFFF; /* Light text color for contrast */
+  border: none;
+  backdrop-filter: blur(10px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+
+  /* Sizing and shape */
+  border-radius: 8px; /* Subtle roundness from template */
+  padding: 12px 20px; /* Formal padding from template */
+
+  /* Typography */
+  font-family: "Inter", "Roboto", "Helvetica Neue", sans-serif;
+  font-size: 16px; /* Font size from template */
+  font-weight: 600; /* Font weight from template */
+
+  /* Animation */
+  transition: background-color 0.3s ease, transform 0.3s ease, box-shadow 0.3s ease;
 }
 
 .switchButton:hover:not(.switching) {
-  background-color: rgba(0, 0, 0, 0.9);
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  background-color: #2563EB; /* Secondary color for hover effect */
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
 }
 
 .switchButton:active:not(.switching) {
-  transform: translateY(0);
+  transform: translateY(0);
+  background-color: #1E3A8A; /* Revert to primary color on active */
 }
 
 .switching {
-  cursor: not-allowed;
-  opacity: 0.7;
+  cursor: not-allowed;
+  opacity: 0.7;
+  background-color: #9CA3AF; /* Disabled gray from template */
 }
 
 .cameraIcon {
-  font-size: 1.1rem;
-  line-height: 1;
+  font-size: 1.1rem;
+  line-height: 1;
 }
 
 .buttonText {
-  font-size: 0.85rem;
-  white-space: nowrap;
+  font-size: 16px; /* Match button's font size */
 }
 
 .spinner {
-  animation: spin 1s linear infinite;
-  font-size: 1rem;
+  animation: spin 1s linear infinite;
+  font-size: 1rem;
 }
 
 @keyframes spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
-/* Mobile Responsiveness */
+---
+
+## Mobile Responsiveness & Accessibility
+
+The original media queries have been adjusted to better align with the new design's padding and font sizes, and accessibility features have been maintained or improved to meet the new template's standards.
+
+### Mobile Adjustments
+
 @media (max-width: 768px) {
-  .switchButton {
-    bottom: 12px;
-    right: 12px;
-    padding: 8px 14px;
-    border-radius: 20px;
-  }
-  
-  .buttonText {
-    font-size: 0.8rem;
-  }
-  
-  .cameraIcon {
-    font-size: 1rem;
-  }
+  .switchButton {
+    bottom: 12px;
+    right: 12px;
+    padding: 10px 18px; /* Adjusted padding for medium screens */
+  }
 }
 
 @media (max-width: 480px) {
-  .switchButton {
-    bottom: 10px;
-    right: 10px;
-    padding: 6px 12px;
-    border-radius: 18px;
-  }
-  
-  .buttonText {
-    display: none; /* Hide text on very small screens */
-  }
-  
-  .cameraIcon {
-    font-size: 1.2rem;
-  }
+  .switchButton {
+    bottom: 10px;
+    right: 10px;
+    padding: 8px 16px; /* Adjusted padding for small screens */
+  }
+  
+  .buttonText {
+    display: none; /* Hide text on very small screens, keeping icon only */
+  }
 }
 
-/* High contrast mode support */
+### Accessibility Enhancements
+
 @media (prefers-contrast: high) {
-  .switchButton {
-    background-color: #000;
-    border: 2px solid #fff;
-  }
+  .switchButton {
+    background-color: #000;
+    border: 2px solid #fff;
+    box-shadow: none; /* Remove shadow for better contrast */
+  }
+  
+  .switchButton:hover {
+    background-color: #000; /* Maintain black background */
+  }
 }
 
-/* Reduced motion support */
 @media (prefers-reduced-motion: reduce) {
-  .switchButton {
-    transition: none;
-  }
-  
-  .switchButton:hover {
-    transform: none;
-  }
-  
-  .spinner {
-    animation: none;
-  }
+  .switchButton {
+    transition: none;
+  }
+  
+  .switchButton:hover {
+    transform: none;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3); /* Remove hover shadow transition */
+  }
+  
+  .spinner {
+    animation: none;
+  }
 }
+
