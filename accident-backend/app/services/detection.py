@@ -44,20 +44,20 @@ class AccidentDetectionModel:
         possible_paths = [
             # Assuming detection.py is in backend/app/service/
             # Navigate to backend/model/
-            os.path.join(current_dir, "..", "..", "..", "model", "transfer_mobilenetv2_20250830_120140_best.keras"),
-            os.path.join(current_dir, "..", "..", "..", "model", "transfer_mobilenetv2_20250830_120140_final.keras"),
+            os.path.join(current_dir, "..", "..", "..", "models", "transfer_mobilenetv2_20250830_120140_best.keras"),
+            os.path.join(current_dir, "..", "..", "..", "models", "transfer_mobilenetv2_20250830_120140_final.keras"),
             
             # Alternative paths in case of different structure
-            os.path.join(current_dir, "..", "..", "model", "transfer_mobilenetv2_20250830_120140_best.keras"),
-            os.path.join(current_dir, "..", "model", "transfer_mobilenetv2_20250830_120140_best.keras"),
+            os.path.join(current_dir, "..", "..", "models", "transfer_mobilenetv2_20250830_120140_best.keras"),
+            os.path.join(current_dir, "..", "models", "transfer_mobilenetv2_20250830_120140_best.keras"),
             
             # From project root
-            os.path.join("backend", "model", "transfer_mobilenetv2_20250830_120140_best.keras"),
-            os.path.join("model", "transfer_mobilenetv2_20250830_120140_best.keras"),
+            os.path.join("backend", "models", "transfer_mobilenetv2_20250830_120140_best.keras"),
+            os.path.join("models", "transfer_mobilenetv2_20250830_120140_best.keras"),
             
             # Current working directory approaches
-            os.path.join(os.getcwd(), "backend", "model", "transfer_mobilenetv2_20250830_120140_best.keras"),
-            os.path.join(os.getcwd(), "model", "transfer_mobilenetv2_20250830_120140_best.keras"),
+            os.path.join(os.getcwd(), "backend", "models", "transfer_mobilenetv2_20250830_120140_best.keras"),
+            os.path.join(os.getcwd(), "models", "transfer_mobilenetv2_20250830_120140_best.keras"),
         ]
         
         # Find the first existing model
@@ -67,7 +67,7 @@ class AccidentDetectionModel:
                 return path
         
         # If no model found, return the most likely path
-        default_path = os.path.join(current_dir, "..", "..", "..", "model", "transfer_mobilenetv2_20250830_120140_best.keras")
+        default_path = os.path.join(current_dir, "..", "..", "..", "models", "transfer_mobilenetv2_20250830_120140_best.keras")
         logger.warning(f"No model found. Using default path: {default_path}")
         return default_path
     
