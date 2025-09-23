@@ -18,7 +18,7 @@ python-multipart==0.0.12
 # Image and Video Processing
 opencv-python-headless==4.10.0.84
 Pillow==11.0.0
-numpy==2.1.3
+numpy==1.26.4
 
 # HTTP and Networking
 httpx==0.27.2
