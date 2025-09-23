@@ -1,5 +1,5 @@
 # requirements.txt - Fixed for Python 3.13 and bcrypt compatibility
-tflite-runtime==2.14.0
+tensorflow==2.15.0
 
 # Core FastAPI
 fastapi==0.115.0
