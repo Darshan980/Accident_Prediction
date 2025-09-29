@@ -537,8 +537,16 @@ def cleanup_thread_pool():
     """Cleanup the thread pool executor gracefully"""
     logger.info("Shutting down ML thread pool...")
     try:
-        ml_thread_pool.shutdown(wait=True, timeout=10)
+        # Python 3.9+ compatible shutdown without timeout parameter
+        ml_thread_pool.shutdown(wait=True, cancel_futures=False)
         logger.info("ML thread pool shutdown completed")
+    except TypeError:
+        # Fallback for older Python versions that don't support cancel_futures
+        try:
+            ml_thread_pool.shutdown(wait=True)
+            logger.info("ML thread pool shutdown completed (legacy mode)")
+        except Exception as e:
+            logger.error(f"Error during thread pool cleanup: {str(e)}")
     except Exception as e:
         logger.error(f"Error during thread pool cleanup: {str(e)}")
 
